@@ -62,6 +62,16 @@ export const api = {
     return res.json() as Promise<KpiDefinition>
   },
 
+  deleteKpi: async (name: string): Promise<{ name: string; removedValues: number }> => {
+    const res = await fetch(`${BASE}/kpi-definitions/${name}`, { method: 'DELETE' })
+    if (!res.ok) {
+      let detail = res.statusText
+      try { detail = (await res.json()).message ?? detail } catch { /* no JSON body */ }
+      throw new Error(detail)
+    }
+    return res.json() as Promise<{ name: string; removedValues: number }>
+  },
+
   clearThresholds: async (name: string): Promise<KpiDefinition> => {
     const res = await fetch(`${BASE}/kpi-definitions/${name}/thresholds`, { method: 'DELETE' })
     if (!res.ok) throw new Error(`${res.status}: ${res.statusText}`)

@@ -58,8 +58,9 @@ public final class Dtos {
     public record ThresholdDto(int ordinal, Double lowerBound, Double upperBound,
                                String color, String label, String severity) {}
 
+    /** seeded = shipped with the product, so it has a default scale and is not deletable. */
     public record KpiDefinitionDto(String name, String displayName, String unit, String category,
                                    String technology, String direction, String source,
-                                   int decimals, String description,
+                                   int decimals, String description, boolean seeded,
                                    List<ThresholdDto> thresholds) {}
 }

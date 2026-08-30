@@ -18,7 +18,7 @@ const SEVERITIES = ['NORMAL', 'WARNING', 'CRITICAL'] as const
  * reference tool's own phrasing, which keeps an edited bin reading exactly like a
  * seeded one.
  */
-export function LegendEditor({ def, proposed, onClose, onSaved }: {
+export function LegendEditor({ def, proposed, onClose, onSaved, onDeleted }: {
   def: KpiDefinition
   /**
    * The bins currently painting the map when the KPI has none configured. Opening
@@ -28,6 +28,7 @@ export function LegendEditor({ def, proposed, onClose, onSaved }: {
   proposed?: Threshold[]
   onClose: () => void
   onSaved: (updated: KpiDefinition) => void
+  onDeleted?: (name: string) => void
 }) {
   const start = () => (def.thresholds.length ? def.thresholds : proposed ?? []).map((t) => ({ ...t }))
   const [bins, setBins] = useState<Threshold[]>(start)
@@ -82,6 +83,27 @@ export function LegendEditor({ def, proposed, onClose, onSaved }: {
     } catch (e) {
       setError(String(e instanceof Error ? e.message : e))
     } finally {
+      setBusy(false)
+    }
+  }
+
+  // Import can define KPIs, so a mistyped header would otherwise sit in the
+  // catalogue forever. Built-in KPIs are not offered: the screens name them.
+  const removeKpi = async () => {
+    if (!window.confirm(
+      `Delete the KPI "${def.displayName}" and every value recorded under it?`)) return
+    setBusy(true)
+    setError(null)
+    try {
+      const { removedValues } = await api.deleteKpi(def.name)
+      onDeleted?.(def.name)
+      onClose()
+      if (removedValues > 0) {
+        window.setTimeout(() => window.alert(
+          `Deleted ${def.displayName} and ${removedValues.toLocaleString()} recorded values.`), 0)
+      }
+    } catch (e) {
+      setError(String(e instanceof Error ? e.message : e))
       setBusy(false)
     }
   }
@@ -174,7 +196,9 @@ export function LegendEditor({ def, proposed, onClose, onSaved }: {
         {error && <div className="error">{error}</div>}
 
         <footer>
-          <button onClick={reset} disabled={busy}>Reset to default</button>
+          {def.seeded
+            ? <button onClick={reset} disabled={busy}>Reset to default</button>
+            : <button className="danger" onClick={removeKpi} disabled={busy}>Delete KPI</button>}
           {def.thresholds.length > 0 && (
             <button onClick={clear} disabled={busy}
                     title="Drop the fixed bins and colour by each session's own distribution">

@@ -49,11 +49,12 @@ public class ImportService {
     public record ImportResult(
             long jobId, Long sessionId, String status, long rowsRead, long samplesLoaded,
             long kpisLoaded, List<String> mappedKpis, List<String> ignoredColumns,
-            String message) {}
+            List<String> createdKpis, String message) {}
 
     @Transactional
     public ImportResult importCsv(MultipartFile file, String sessionName, String device,
-                                  String operator, String technology, char delimiter) {
+                                  String operator, String technology, char delimiter,
+                                  boolean createUnknownColumns) {
         long jobId = createJob(file.getOriginalFilename());
         try (BufferedReader reader = new BufferedReader(
                 new InputStreamReader(file.getInputStream(), StandardCharsets.UTF_8))) {
@@ -63,6 +64,12 @@ public class ImportService {
             String[] header = split(headerLine, delimiter);
 
             Layout layout = resolveLayout(header);
+            // Without this the file is imported minus whatever this catalogue has
+            // never seen, and the only trace is a list of names in the result. A
+            // column the user chose to bring is data; dropping it silently is not a
+            // defensible default, so they can ask for it to be defined instead.
+            List<String> created = createUnknownColumns
+                    ? defineUnknownColumns(header, layout) : List.of();
             if (layout.latIdx < 0 || layout.lonIdx < 0) {
                 throw new IllegalArgumentException(
                         "Could not find latitude and longitude columns. Header was: "
@@ -76,7 +83,9 @@ public class ImportService {
             long sessionId = createSession(sessionName, device, operator, technology,
                     file.getOriginalFilename());
 
-            Counters counters = loadRows(reader, delimiter, layout, sessionId);
+            Counters counters = loadRows(reader, delimiter, layout, sessionId,
+                    new HashSet<>(created));
+            applyObservedDecimals(counters, created);
             finaliseSession(sessionId, counters);
             finishJob(jobId, sessionId, counters, "COMPLETED", null);
 
@@ -85,7 +94,7 @@ public class ImportService {
             return new ImportResult(jobId, sessionId, "COMPLETED", counters.rows,
                     counters.samples, counters.kpis,
                     layout.kpiColumns.values().stream().sorted().toList(),
-                    layout.ignored, null);
+                    layout.ignored, created, null);
 
         } catch (IOException | RuntimeException e) {
             finishJob(jobId, null, new Counters(), "FAILED", e.getMessage());
@@ -137,6 +146,68 @@ public class ImportService {
         return new Layout(ts, lat, lon, speed, pci, kpis, ignored);
     }
 
+    /**
+     * Defines a KPI for every column this catalogue did not recognise, and folds
+     * them into the layout so the same pass loads their values.
+     *
+     * Direction defaults to NEUTRAL: nobody has told us whether more of this column
+     * is better, and guessing would put a green-to-red judgement on data that may
+     * not carry one. The owner can set it afterwards; until then AutoScale paints it
+     * as a magnitude.
+     */
+    private List<String> defineUnknownColumns(String[] header, Layout layout) {
+        List<String> created = new ArrayList<>();
+        Set<String> known = knownKpiNames();
+        for (int i = 0; i < header.length; i++) {
+            String raw = header[i].trim();
+            if (raw.isEmpty() || layout.kpiColumns.containsKey(i)) continue;
+            if (!layout.ignored.contains(raw)) continue;
+
+            String name = normalise(raw);
+            if (name.isEmpty() || !name.matches("[A-Z][A-Z0-9_]{0,59}")) continue;
+            if (!known.contains(name)) {
+                // "MAC throughput (Mbps)" is the near-universal header convention, so
+                // the parenthetical becomes the unit and the grid can label the value.
+                String display = raw;
+                String unit = "";
+                var m = java.util.regex.Pattern.compile("^(.*?)\\s*\\(([^()]{1,12})\\)$")
+                        .matcher(raw);
+                if (m.matches()) {
+                    display = m.group(1).trim();
+                    unit = m.group(2).trim();
+                }
+                jdbc.update("""
+                        INSERT INTO kpi_definition (name, display_name, unit, category,
+                            technology, direction, decimals, description, source)
+                        VALUES (?,?,?,?,?,?,?,?,?)
+                        ON CONFLICT (name) DO NOTHING
+                        """, name, display, unit, "Imported", "Unknown", "NEUTRAL", 2,
+                        "Created on import from column \"" + raw + "\".", "UE");
+                known.add(name);
+                created.add(name);
+            }
+            layout.kpiColumns.put(i, name);
+        }
+        layout.ignored.removeIf(x -> created.contains(normalise(x)));
+        return created;
+    }
+
+    /**
+     * Sets each newly defined KPI's decimals to what its values actually carry.
+     *
+     * An imported integer column shown as "13.00" reads as false precision, and a
+     * column of 0.001 steps rounded to two places reads as a flat line.
+     */
+    private void applyObservedDecimals(Counters c, List<String> created) {
+        for (String name : created) {
+            Integer places = c.decimals.get(name);
+            if (places != null) {
+                jdbc.update("UPDATE kpi_definition SET decimals = ? WHERE name = ?",
+                        Math.min(4, Math.max(0, places)), name);
+            }
+        }
+    }
+
     private Set<String> knownKpiNames() {
         Set<String> names = new HashSet<>();
         catalog.all().forEach(d -> names.add(d.getName()));
@@ -147,10 +218,12 @@ public class ImportService {
 
     private static final class Counters {
         long rows, samples, kpis;
+        /** Most decimal places seen per newly defined KPI, so its display matches its data. */
+        final Map<String, Integer> decimals = new HashMap<>();
     }
 
     private Counters loadRows(BufferedReader reader, char delimiter, Layout layout,
-                              long sessionId) throws IOException {
+                              long sessionId, Set<String> observeDecimals) throws IOException {
         Counters c = new Counters();
         List<Object[]> sampleBatch = new ArrayList<>(BATCH);
         List<Object[]> kpiBatch = new ArrayList<>(BATCH * 4);
@@ -177,6 +250,9 @@ public class ImportService {
                 if (v == null) continue;
                 kpiBatch.add(new Object[]{sessionId, seq, sqlTs, e.getValue(), v});
                 c.kpis++;
+                if (observeDecimals.contains(e.getValue())) {
+                    c.decimals.merge(e.getValue(), decimalPlaces(cells[e.getKey()]), Math::max);
+                }
             }
             seq++;
 
@@ -184,6 +260,16 @@ public class ImportService {
         }
         flush(sampleBatch, kpiBatch);
         return c;
+    }
+
+    /** Decimal places written in the file itself, which is what the column means. */
+    private static int decimalPlaces(String cell) {
+        String t = cell == null ? "" : cell.trim();
+        int dot = t.indexOf('.');
+        if (dot < 0) return 0;
+        int places = 0;
+        for (int i = dot + 1; i < t.length() && Character.isDigit(t.charAt(i)); i++) places++;
+        return Math.min(4, places);
     }
 
     private void flush(List<Object[]> samples, List<Object[]> kpis) {

@@ -99,7 +99,10 @@ export interface Threshold {
 export interface KpiDefinition {
   name: string; displayName: string; unit: string; category: string
   technology: string; direction: string; decimals: number
-  description: string | null; thresholds: Threshold[]
+  description: string | null
+  /** shipped with the product: it has a default scale and cannot be deleted */
+  seeded: boolean
+  thresholds: Threshold[]
 }
 
 // ---------------------------------------------------------------- lab domain
@@ -162,5 +165,6 @@ export interface CoverageIssue {
 export interface ImportResult {
   jobId: number; sessionId: number | null; status: string
   rowsRead: number; samplesLoaded: number; kpisLoaded: number
-  mappedKpis: string[]; ignoredColumns: string[]; message: string | null
+  mappedKpis: string[]; ignoredColumns: string[]; createdKpis: string[]
+  message: string | null
 }

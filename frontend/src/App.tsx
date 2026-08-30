@@ -432,6 +432,10 @@ export function App() {
                         severity: b.severity,
                       }))}
                       onClose={() => setEditingScale(false)}
+                      onDeleted={(name) => {
+                        setDefs((prev) => prev.filter((d) => d.name !== name))
+                        if (kpi === name) setKpi('RSRP')
+                      }}
                       onSaved={(updated) => {
                         setDefs((prev) => prev.map((d) => (d.name === updated.name ? updated : d)))
                         setScaleVersion((v) => v + 1)
@@ -446,7 +450,13 @@ export function App() {
         </div></div>
       ) : mode === 'import' ? (
         <div className="body"><div className="center">
-          <ImportView onImported={() => api.sessions().then(setSessions).catch(fail)} />
+          <ImportView onImported={() => {
+            api.sessions().then(setSessions).catch(fail)
+            // An import can define KPIs, so the catalogue is reloaded too - otherwise
+            // the parameter tree keeps showing the set that existed at page load and
+            // the columns the user just chose to keep are invisible.
+            api.kpiDefinitions().then(setDefs).catch(fail)
+          }} />
         </div></div>
       ) : (
         <>

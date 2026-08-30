@@ -310,3 +310,5 @@ input.boundary { width: 76px; text-align: right; }
   color: #6b5310; background: #fff8e6; border: 1px solid #e6d8a8; border-radius: 2px;
 }
 .verdict-NO-VERDICT { color: var(--text-dim); font-style: italic; }
+.modal > footer button.danger { border-color: #c9636f; color: #a3212f; }
+.modal > footer button.danger:hover { background: #fbeaec; }

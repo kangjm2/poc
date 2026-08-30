@@ -7,7 +7,8 @@ import type { ImportResult } from '../api/types'
  *
  * The result deliberately reports which columns were mapped to KPIs and which were
  * ignored: a header the tool does not recognise is the most common reason an import
- * looks like it worked but produced nothing useful.
+ * looks like it worked but produced nothing useful. The catalogue is no longer fixed,
+ * so the same screen can define the missing KPIs instead of only naming them.
  */
 export function ImportView({ onImported }: { onImported: () => void }) {
   const fileRef = useRef<HTMLInputElement>(null)
@@ -19,6 +20,7 @@ export function ImportView({ onImported }: { onImported: () => void }) {
   const [result, setResult] = useState<ImportResult | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [knownKpis, setKnownKpis] = useState<string[]>([])
+  const [createUnknown, setCreateUnknown] = useState(false)
   const [jobs, setJobs] = useState<Array<Record<string, unknown>>>([])
 
   const reloadJobs = () => { api.importJobs().then(setJobs).catch(() => {}) }
@@ -38,6 +40,7 @@ export function ImportView({ onImported }: { onImported: () => void }) {
     if (device) form.append('device', device)
     if (operator) form.append('operator', operator)
     if (technology) form.append('technology', technology)
+    if (createUnknown) form.append('createUnknownColumns', 'true')
     try {
       setResult(await api.importCsv(form))
       onImported()
@@ -55,6 +58,18 @@ export function ImportView({ onImported }: { onImported: () => void }) {
         <header><span className="title">Import measurement data (CSV)</span></header>
         <div style={{ padding: 10, display: 'grid', gap: 8, maxWidth: 620 }}>
           <label>File<br /><input ref={fileRef} type="file" accept=".csv,.txt,text/csv" /></label>
+          <label style={{ display: 'flex', gap: 6, alignItems: 'flex-start' }}>
+            <input type="checkbox" checked={createUnknown} style={{ marginTop: 2 }}
+                   onChange={(e) => setCreateUnknown(e.target.checked)} />
+            <span>
+              <b>Define a KPI for every unrecognised column</b><br />
+              <span style={{ color: '#666' }}>
+                Otherwise those columns are dropped. New KPIs start with no
+                thresholds, so they are coloured by each session&rsquo;s own
+                distribution until you pin a scale.
+              </span>
+            </span>
+          </label>
           <label>Session name<br />
             <input value={name} onChange={(e) => setName(e.target.value)}
                    placeholder="defaults to the file name" style={{ width: '100%' }} /></label>
@@ -144,6 +159,12 @@ export function ImportView({ onImported }: { onImported: () => void }) {
               <tr><td>Samples loaded</td><td className="num">{result.samplesLoaded}</td></tr>
               <tr><td>KPI values loaded</td><td className="num">{result.kpisLoaded}</td></tr>
               <tr><td>Mapped KPI columns</td><td>{result.mappedKpis.join(', ') || '-'}</td></tr>
+              {result.createdKpis.length > 0 && (
+                <tr>
+                  <td>KPIs defined</td>
+                  <td>{result.createdKpis.join(', ')}</td>
+                </tr>
+              )}
               <tr>
                 <td>Ignored columns</td>
                 <td className={result.ignoredColumns.length ? 'sev-WARNING' : ''}>

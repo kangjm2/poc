@@ -7,6 +7,7 @@ import com.vdt.analyzer.domain.KpiThreshold;
 import com.vdt.analyzer.repo.KpiDefinitionRepo;
 import com.vdt.analyzer.seed.KpiSeed;
 import com.vdt.analyzer.service.KpiCatalog;
+import com.vdt.analyzer.service.KpiDefinitionForm;
 import com.vdt.analyzer.service.ThresholdScale;
 import jakarta.transaction.Transactional;
 import org.springframework.web.bind.annotation.*;
@@ -21,10 +22,13 @@ public class KpiController {
 
     private final KpiCatalog catalog;
     private final KpiDefinitionRepo repo;
+    private final org.springframework.jdbc.core.JdbcTemplate jdbc;
 
-    public KpiController(KpiCatalog catalog, KpiDefinitionRepo repo) {
+    public KpiController(KpiCatalog catalog, KpiDefinitionRepo repo,
+                         org.springframework.jdbc.core.JdbcTemplate jdbc) {
         this.catalog = catalog;
         this.repo = repo;
+        this.jdbc = jdbc;
     }
 
     @GetMapping
@@ -65,6 +69,34 @@ public class KpiController {
     }
 
     /**
+     * Defines a new KPI.
+     *
+     * The catalogue was seed-only, so any column outside the eighteen built-in names
+     * was dropped on import - the reason the import result had to report ignored
+     * columns at all. A definition created here starts with no thresholds and is
+     * coloured by AutoScale until someone pins a scale.
+     */
+    @PostMapping
+    @Transactional
+    public KpiDefinitionDto create(@RequestBody KpiDefinitionDto body) {
+        KpiDefinitionDto form = KpiDefinitionForm.validate(body);
+        if (repo.existsById(form.name())) {
+            throw new IllegalArgumentException("KPI already exists: " + form.name());
+        }
+        KpiDefinition def = new KpiDefinition();
+        def.setName(form.name());
+        def.setDisplayName(form.displayName());
+        def.setUnit(form.unit());
+        def.setCategory(form.category());
+        def.setTechnology(form.technology());
+        def.setDirection(form.direction());
+        def.setSource(form.source());
+        def.setDecimals(form.decimals());
+        def.setDescription(form.description());
+        return toDto(repo.saveAndFlush(def));
+    }
+
+    /**
      * Drops the configured scale so the KPI falls back to bins derived from each
      * session's own distribution. The other direction of the same loop as saving:
      * the auto scale proposes, Save pins it, this releases it again.
@@ -90,6 +122,29 @@ public class KpiController {
                 .toList());
     }
 
+    /** Names shipped in the seed; everything else was defined by a user or an import. */
+    private static final java.util.Set<String> SEEDED = KpiSeed.definitions().stream()
+            .map(KpiDefinition::getName).collect(java.util.stream.Collectors.toSet());
+
+    /**
+     * Removes a KPI the catalogue should not have, together with the values recorded
+     * under it. Import can define KPIs now, so a mistyped header would otherwise
+     * lodge in the catalogue permanently. Seeded KPIs are refused: the product's own
+     * screens reference them by name.
+     */
+    @DeleteMapping("/{name}")
+    @Transactional
+    public java.util.Map<String, Object> delete(@PathVariable String name) {
+        KpiDefinition def = catalog.require(name);
+        if (SEEDED.contains(def.getName())) {
+            throw new IllegalArgumentException(
+                    "Built-in KPI cannot be deleted: " + def.getName());
+        }
+        int removed = jdbc.update("DELETE FROM sample_kpi WHERE kpi_name = ?", def.getName());
+        repo.delete(def);
+        return java.util.Map.of("name", def.getName(), "removedValues", removed);
+    }
+
     private static KpiDefinitionDto toDto(KpiDefinition d) {
         List<ThresholdDto> ts = new ArrayList<>();
         for (KpiThreshold t : d.getThresholds()) {
@@ -98,6 +153,6 @@ public class KpiController {
         }
         return new KpiDefinitionDto(d.getName(), d.getDisplayName(), d.getUnit(), d.getCategory(),
                 d.getTechnology(), d.getDirection(), d.getSource(), d.getDecimals(),
-                d.getDescription(), ts);
+                d.getDescription(), SEEDED.contains(d.getName()), ts);
     }
 }

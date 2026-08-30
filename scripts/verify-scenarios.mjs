@@ -16,6 +16,7 @@
  *   S8  Responsiveness budget       (every analysis endpoint answers inside its budget)
  *   S9  Colour scale personalisation (edit the bins -> every view repaints -> reset)
  *   S10 Unconfigured KPI            (auto scale: readable, stable under filtering, honest)
+ *   S11 Lossless import             (unknown columns become KPIs, analysable straight away)
  *
  * Scale beyond the seed is covered separately by scripts/load-test.sh.
  */
@@ -591,6 +592,100 @@ scenario('S10 · Unconfigured KPI falls back to an auto scale')
     await page.locator('.toolbar select').nth(1).selectOption({ label: 'RSRP (NR SpCell)' })
     await page.waitForTimeout(1200)
   }
+}
+
+// ─── S11 · Importing a file with columns this catalogue has never seen ───────
+scenario('S11 · Unknown columns become KPIs instead of being dropped')
+{
+  const src = sessions.find((s) => s.name === CITY_B)
+  const csv = await (await page.request.get(`${API}/api/sessions/${src.id}/export.csv`)).text()
+  const lines = csv.trim().split('\n')
+  // Two columns no catalogue of ours has ever contained: one integer, one with
+  // two decimals and a unit in the conventional parenthetical form.
+  lines[0] = `${lines[0]},Beam SSB index,Custom margin (dB)`
+  for (let i = 1; i < lines.length; i++) {
+    lines[i] = `${lines[i]},${i % 8},${(3.25 + i * 0.01).toFixed(2)}`
+  }
+  const withUnknown = lines.join('\n')
+
+  const importFile = async (name, createUnknown) => {
+    await openMode('Import')
+    await page.locator('input[type=file]').setInputFiles({
+      name: `${name}.csv`, mimeType: 'text/csv', buffer: Buffer.from(withUnknown),
+    })
+    await page.locator('label:has-text("Session name") input').fill(name)
+    const box = page.locator('.panels label:has-text("Define a KPI") input[type=checkbox]')
+    if (createUnknown) await box.check(); else await box.uncheck()
+    await page.locator('.panels button', { hasText: 'Import' }).click()
+    await page.waitForSelector('.panel header .title:text("Import result")', { timeout: 30000 })
+    await page.waitForTimeout(400)
+    return page.locator('.panel:has(header .title:text("Import result"))').innerText()
+  }
+
+  const off = await importFile('S11 dropped', false)
+  step('by default an unrecognised column is reported as dropped',
+    /Ignored columns\s+Beam SSB index, Custom margin \(dB\)/.test(off)
+    && !/KPIs defined/.test(off))
+
+  const on = await importFile('S11 defined', true)
+  step('with the option the columns are defined instead',
+    /KPIs defined\s+BEAM_SSB_INDEX, CUSTOM_MARGIN/.test(on) && /Ignored columns\s+none/.test(on),
+    (on.match(/KPIs defined.*/) ?? ['-'])[0])
+
+  const defs = await apiGet('/api/kpi-definitions')
+  const beam = defs.find((d) => d.name === 'BEAM_SSB_INDEX')
+  const margin = defs.find((d) => d.name.startsWith('CUSTOM_MARGIN'))
+  step('a new KPI is NEUTRAL until someone says which end is good',
+    beam?.direction === 'NEUTRAL' && margin?.direction === 'NEUTRAL',
+    `${beam?.direction} / ${margin?.direction}`)
+  step('decimals follow the values, and a parenthetical header gives the unit',
+    beam?.decimals === 0 && margin?.decimals === 2 && margin?.unit === 'dB',
+    `beam ${beam?.decimals}dp, margin ${margin?.decimals}dp unit="${margin?.unit}"`)
+
+  // The point of defining them: they are analysable like any other KPI.
+  await openMode('Analysis')
+  await selectSession('S11 defined')
+  const tree = await page.locator('.dock .tree').innerText()
+  step('new KPIs appear in the parameter tree', /Beam SSB index/.test(tree) && /Imported/.test(tree))
+
+  await page.locator('.tree .kpi', { hasText: 'Beam SSB index' }).click()
+  await page.waitForTimeout(1800)
+  const segments = await page.locator('path.leaflet-interactive').count()
+  const note = await page.locator('.dock.right .legend-note').count()
+  step('a brand-new KPI paints the map on its auto scale', segments > 50 && note === 1,
+    `${segments} segments`)
+
+  // A KPI defined by mistake has to be removable, or a typo'd header lodges in the
+  // catalogue permanently. Built-in KPIs are refused for the same reason.
+  const refused = await page.request.delete(`${API}/api/kpi-definitions/RSRP`)
+  step('a built-in KPI cannot be deleted', refused.status() === 400,
+    `HTTP ${refused.status()}`)
+
+  await page.locator('.legend-edit').click()
+  await page.waitForSelector('.modal', { timeout: 5000 })
+  const hasDelete = await page.locator('.modal footer button', { hasText: 'Delete KPI' }).count()
+  const hasReset = await page.locator('.modal footer button', { hasText: 'Reset to default' }).count()
+  step('the editor offers Delete for a defined KPI and Reset only for built-ins',
+    hasDelete === 1 && hasReset === 0)
+  page.once('dialog', (d) => d.accept())
+  await page.locator('.modal footer button', { hasText: 'Delete KPI' }).click()
+  await page.waitForTimeout(1500)
+  page.once('dialog', (d) => d.accept())
+  await page.waitForTimeout(600)
+  const afterDelete = await apiGet('/api/kpi-definitions')
+  step('deleting a KPI removes it from the catalogue',
+    !afterDelete.some((d) => d.name === 'BEAM_SSB_INDEX'),
+    `${afterDelete.length} KPIs left`)
+
+  await page.request.delete(`${API}/api/kpi-definitions/CUSTOM_MARGIN_DB`)
+  const imported = await apiGet('/api/sessions')
+  for (const name of ['S11 dropped', 'S11 defined']) {
+    const s = imported.find((x) => x.name === name)
+    if (s) await page.request.delete(`${API}/api/sessions/${s.id}`)
+  }
+  await selectSession(CITY_A)
+  await page.locator('.toolbar select').nth(1).selectOption({ label: 'RSRP (NR SpCell)' })
+  await page.waitForTimeout(1000)
 }
 
 // ─── wrap-up ─────────────────────────────────────────────────────────────────
