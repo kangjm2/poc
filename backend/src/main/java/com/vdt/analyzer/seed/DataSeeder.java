@@ -105,6 +105,11 @@ public class DataSeeder implements ApplicationRunner {
                 new DriveTestGenerator(20260827L, HIGHWAY_SITES, HIGHWAY_ROUTE, 900, 0.0, 1.5, null),
                 "High speed run with sparse site density and frequent handovers.");
 
+        // A lab run injected at the O-RAN 7.2x fronthaul rather than over RF. The radio
+        // side replays the recorded city route; the fronthaul counters are what only this
+        // injection point can produce.
+        seedFronthaulSession(base.plus(5, ChronoUnit.DAYS));
+
         // Attach a lab campaign so the field-to-lab side of the tool has real content.
         List<Long> ids = jdbc.queryForList(
                 "SELECT id FROM measurement_session ORDER BY id", Long.class);
@@ -180,6 +185,93 @@ public class DataSeeder implements ApplicationRunner {
                 + " VALUES (?,?,?,?,?)", kpiRows);
 
         seedEventsAndMessages(sid, start, points);
+    }
+
+    /**
+     * A fronthaul-injected replay of the city route.
+     *
+     * Carries a deliberate timing-window fault in the middle of the run: RX_LATE rises
+     * and RX_ON_TIME falls while the radio KPIs stay healthy. That combination is the
+     * point of the scenario - the fault is in the fronthaul transport, and an RF-only
+     * view would show nothing wrong.
+     */
+    private void seedFronthaulSession(Instant start) {
+        DriveTestGenerator gen = new DriveTestGenerator(
+                20260901L, CITY_SITES, CITY_ROUTE, 1200, 0.5, 2.5, null);
+        List<Point> points = gen.generate();
+
+        MeasurementSession s = new MeasurementSession();
+        s.setName("Lab fronthaul replay - O-DU under test");
+        s.setDevice("Emulated UE x1");
+        s.setOperator("Operator A");
+        s.setTechnology("5G NR SA");
+        s.setScenario("Fronthaul injection");
+        s.setBuildLabel("1.5.0");
+        s.setStartedAt(start);
+        s.setEndedAt(start.plusSeconds(points.size()));
+        s.setLocationName("Lab (replay of Oulu city centre)");
+        s.setNotes("Emulated UE injected at the O-RAN 7.2x fronthaul; the O-DU is real "
+                + "hardware. Contains a fronthaul timing-window fault around 09:20.");
+        long sid = sessions.saveAndFlush(s).getId();
+
+        int faultFrom = 380, faultTo = 520;
+        List<Object[]> sampleRows = new ArrayList<>(points.size());
+        List<Object[]> kpiRows = new ArrayList<>(points.size() * 15);
+        for (Point p : points) {
+            java.sql.Timestamp ts = java.sql.Timestamp.from(start.plusSeconds(p.seq()));
+            sampleRows.add(new Object[]{sid, ts, p.seq(), p.lat(), p.lon(),
+                    p.speedKmh(), p.servingPci()});
+
+            addKpi(kpiRows, sid, p.seq(), ts, "RSRP", p.rsrp());
+            addKpi(kpiRows, sid, p.seq(), ts, "SINR", p.sinr());
+            addKpi(kpiRows, sid, p.seq(), ts, "MAC_DL_THROUGHPUT", p.dlThroughput());
+            addKpi(kpiRows, sid, p.seq(), ts, "DL_BLER", p.bler());
+            addKpi(kpiRows, sid, p.seq(), ts, "DU_PRB_UTILISATION", p.prbUtilisation());
+            addKpi(kpiRows, sid, p.seq(), ts, "DU_HARQ_RETX_RATE", p.harqRetxRate());
+
+            boolean inFault = p.seq() >= faultFrom && p.seq() <= faultTo;
+            double total = 9000 + Math.round(400 * Math.sin(p.seq() / 40.0));
+            double late = inFault
+                    ? 200 + 900 * Math.sin(Math.PI * (p.seq() - faultFrom)
+                        / (double) (faultTo - faultFrom + 1))
+                    : Math.max(0, Math.round(Math.sin(p.seq() / 13.0) + 1));
+            double early = Math.max(0, Math.round(2 * Math.abs(Math.cos(p.seq() / 21.0))));
+            double corrupt = inFault ? Math.round(4 * Math.abs(Math.sin(p.seq() / 9.0))) : 0;
+            double onTime = Math.max(80.0,
+                    100.0 - ((late + early + corrupt) * 100.0 / Math.max(1, total)));
+
+            addKpi(kpiRows, sid, p.seq(), ts, "FH_RX_TOTAL", total);
+            addKpi(kpiRows, sid, p.seq(), ts, "FH_RX_LATE", Math.round(late));
+            addKpi(kpiRows, sid, p.seq(), ts, "FH_RX_EARLY", early);
+            addKpi(kpiRows, sid, p.seq(), ts, "FH_RX_CORRUPT", corrupt);
+            addKpi(kpiRows, sid, p.seq(), ts, "FH_RX_ON_TIME",
+                    Math.round(onTime * 100.0) / 100.0);
+        }
+        jdbc.batchUpdate("INSERT INTO sample (session_id, ts, seq, latitude, longitude,"
+                + " speed_kmh, serving_pci) VALUES (?,?,?,?,?,?,?)", sampleRows);
+        jdbc.batchUpdate("INSERT INTO sample_kpi (session_id, seq, ts, kpi_name, value)"
+                + " VALUES (?,?,?,?,?)", kpiRows);
+
+        for (Site site : CITY_SITES) {
+            CellRef c = new CellRef();
+            c.setSessionId(sid);
+            c.setPci(site.pci());
+            c.setArfcn(site.arfcn());
+            c.setBand(site.band());
+            c.setGscn(site.gscn());
+            c.setCellType("SCG PSCell");
+            c.setLatitude(site.lat());
+            c.setLongitude(site.lon());
+            c.setAzimuthDeg(site.azimuth());
+            cells.save(c);
+        }
+
+        addEvent(sid, start.plusSeconds(faultFrom), "FRONTHAUL_TIMING", "CRITICAL",
+                "C/U-plane packets arriving outside the O-RAN reception window",
+                points.get(faultFrom));
+        addMessage(sid, start.plusSeconds(faultFrom), "DL", "M-PLANE", "NETCONF",
+                "notification", "o-ran-fm:alarm-notif severity=MAJOR "
+                        + "fault-source=cus-plane-rx-window");
     }
 
     private static void addKpi(List<Object[]> rows, long sessionId, int seq,

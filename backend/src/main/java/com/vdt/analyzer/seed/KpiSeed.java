@@ -120,6 +120,48 @@ public final class KpiSeed {
                 bin(20.0, 30.0, ORANGE, ">= 20 and < 30", "WARNING"),
                 bin(30.0, null, RED, ">= 30", "CRITICAL")));
 
+        // Open fronthaul counters. When the emulated UE is injected at the O-RAN 7.2x
+        // fronthaul instead of over RF, the DU's downlink transmissions are classified
+        // against the O-RAN reception windows. This KPI family has no RF equivalent:
+        // "late" is a timing-window violation, not a radio impairment, and an RF-only
+        // schema cannot express it.
+        out.add(kpi("FH_RX_ON_TIME", "CUS RX on time", "%", "Fronthaul", "O-RAN 7.2x",
+                "HIGHER_IS_BETTER", 2,
+                "Share of received C/U-plane packets inside the O-RAN reception window.",
+                "FRONTHAUL",
+                bin(null, 95.0, RED, "< 95", "CRITICAL"),
+                bin(95.0, 99.0, ORANGE, ">= 95 and < 99", "WARNING"),
+                bin(99.0, 99.9, YELLOW, ">= 99 and < 99.9", "NORMAL"),
+                bin(99.9, null, GREEN, ">= 99.9", "NORMAL")));
+
+        out.add(kpi("FH_RX_EARLY", "CUS RX early", "pkt/s", "Fronthaul", "O-RAN 7.2x",
+                "LOWER_IS_BETTER", 0,
+                "Packets arriving before the reception window opens.", "FRONTHAUL",
+                bin(null, 1.0, GREEN, "< 1", "NORMAL"),
+                bin(1.0, 50.0, YELLOW, ">= 1 and < 50", "NORMAL"),
+                bin(50.0, null, ORANGE, ">= 50", "WARNING")));
+
+        out.add(kpi("FH_RX_LATE", "CUS RX late", "pkt/s", "Fronthaul", "O-RAN 7.2x",
+                "LOWER_IS_BETTER", 0,
+                "Packets arriving after the reception window closes; the DU cannot use them.",
+                "FRONTHAUL",
+                bin(null, 1.0, GREEN, "< 1", "NORMAL"),
+                bin(1.0, 50.0, YELLOW, ">= 1 and < 50", "NORMAL"),
+                bin(50.0, 500.0, ORANGE, ">= 50 and < 500", "WARNING"),
+                bin(500.0, null, RED, ">= 500", "CRITICAL")));
+
+        out.add(kpi("FH_RX_CORRUPT", "CUS RX corrupt", "pkt/s", "Fronthaul", "O-RAN 7.2x",
+                "LOWER_IS_BETTER", 0, "Malformed or undecodable fronthaul packets.", "FRONTHAUL",
+                bin(null, 1.0, GREEN, "< 1", "NORMAL"),
+                bin(1.0, 20.0, ORANGE, ">= 1 and < 20", "WARNING"),
+                bin(20.0, null, RED, ">= 20", "CRITICAL")));
+
+        out.add(kpi("FH_RX_TOTAL", "CUS RX total", "pkt/s", "Fronthaul", "O-RAN 7.2x",
+                "HIGHER_IS_BETTER", 0, "Total C/U-plane packets received in the interval.",
+                "FRONTHAUL",
+                bin(null, 1.0, RED, "< 1", "CRITICAL"),
+                bin(1.0, null, GREEN, ">= 1", "NORMAL")));
+
         return out;
     }
 

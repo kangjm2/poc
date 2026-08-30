@@ -155,10 +155,15 @@ export function App() {
       case 'signaling':
         return (
           <div className="panel">
-            <header><span className="title">L3 / RRC signalling</span>
-              <span className="meta">{messages.length} messages</span></header>
+            <header>
+              <span className="title">L3 / RRC signalling</span>
+              <span className="meta">
+                {messages.length} messages · following cursor
+                {snapshot ? ` @ ${new Date(snapshot.ts).toISOString().slice(11, 19)}` : ''}
+              </span>
+            </header>
             <div style={{ maxHeight: 520, overflow: 'auto' }}>
-              <MessageList messages={messages} />
+              <MessageList messages={messages} cursorTs={snapshot?.ts ?? null} />
             </div>
           </div>
         )

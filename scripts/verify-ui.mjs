@@ -182,6 +182,49 @@ const importText = await page.locator('.panels').innerText()
 check('CSV 임포트 화면', /Recognised KPI columns/.test(importText) && /RSRP/.test(importText))
 await page.screenshot({ path: `${OUT}/12-import.png` })
 
+// 23-25. fronthaul injection scenario: a transport fault the radio view cannot see
+await page.locator('.mode-tabs button', { hasText: 'Analysis' }).click()
+await page.waitForTimeout(600)
+const sessionOpts = await page.locator('.toolbar select').first().locator('option').allInnerTexts()
+const fh = sessionOpts.find((o) => /fronthaul/i.test(o))
+check('프론트홀 주입 세션 존재', Boolean(fh), fh ?? 'not found')
+if (fh) {
+  await page.locator('.toolbar select').first().selectOption({ label: fh })
+  await page.waitForTimeout(2500)
+  const tree = await page.locator('.dock .tree').innerText()
+  check('O-RAN 프론트홀 KPI 계열', /Fronthaul/.test(tree) && /CUS RX late/.test(tree))
+
+  await page.locator('.tree .kpi', { hasText: 'CUS RX late' }).click()
+  await page.waitForTimeout(1500)
+  await page.locator('.workbook-tabs button', { hasText: 'Degradation' }).click()
+  await page.waitForTimeout(1500)
+  const degText = await page.locator('.panels').innerText()
+  check('프론트홀 타이밍 결함 탐지', /CRITICAL/.test(degText),
+    (degText.match(/\d+s/) ?? ['?'])[0] + ' fault window')
+  await page.screenshot({ path: `${OUT}/15-fronthaul-fault.png` })
+
+  // the radio side stays healthy through the same window - the whole point
+  await page.locator('.panel table.grid tbody tr').first().click()
+  await page.waitForTimeout(1200)
+  const grid = await page.locator('.dock.right table.grid').first().innerText()
+  const radioOk = /RSRP/.test(grid)
+  check('결함 구간에서 무선 KPI 조회 가능', radioOk)
+}
+
+// 26. L3 message log follows the cursor and expands
+await page.locator('.toolbar select').first().selectOption({ index: 0 })
+await page.waitForTimeout(1500)
+await page.locator('.workbook-tabs button', { hasText: 'L3 Signalling' }).click()
+await page.waitForTimeout(1200)
+const sigHeader = await page.locator('.panel > header .meta').first().innerText()
+check('L3 로그가 커서를 따라감', /following cursor/.test(sigHeader), sigHeader)
+const rowsBefore = await page.locator('.panel table.grid tbody tr').count()
+await page.locator('.panel table.grid tbody tr').first().click()
+await page.waitForTimeout(500)
+const rowsAfter = await page.locator('.panel table.grid tbody tr').count()
+check('L3 메시지 상세 펼치기', rowsAfter > rowsBefore, `${rowsBefore} -> ${rowsAfter} rows`)
+await page.screenshot({ path: `${OUT}/16-l3-drilldown.png` })
+
 check('앱 코드 콘솔 오류 없음', appErrors.length === 0, appErrors.slice(0, 3).join(' | '))
 const tileFailures = errors.length - appErrors.length
 if (tileFailures > 0) console.log(`  (note: ${tileFailures} basemap tile fetches failed - network egress, not app code)`)

@@ -1,4 +1,4 @@
-import { Fragment } from 'react'
+import { Fragment, useEffect, useRef, useState } from 'react'
 import type {
   Degradation, Distribution, KpiDefinition, NetworkEvent, SignalingMessage, Snapshot,
 } from '../api/types'
@@ -93,19 +93,63 @@ export function EventList({
   )
 }
 
-export function MessageList({ messages }: { messages: SignalingMessage[] }) {
+/**
+ * L3 / RRC message log, time-aligned to the shared cursor.
+ *
+ * The documented workflow in tools of this class is: find a failed KPI, then jump to
+ * the signalling message that explains it. That only works if the message list follows
+ * the cursor, so the row nearest the cursor is highlighted and scrolled into view, and
+ * rows expand to show the message body.
+ */
+export function MessageList({
+  messages, cursorTs,
+}: { messages: SignalingMessage[]; cursorTs?: string | null }) {
+  const [expanded, setExpanded] = useState<number | null>(null)
+  const activeRef = useRef<HTMLTableRowElement>(null)
+
+  // Nearest message at or before the cursor - what was last said on the link.
+  let activeId: number | null = null
+  if (cursorTs) {
+    for (const m of messages) {
+      if (m.ts <= cursorTs) activeId = m.id
+      else break
+    }
+  }
+
+  useEffect(() => {
+    activeRef.current?.scrollIntoView({ block: 'nearest' })
+  }, [activeId])
+
+  if (messages.length === 0) {
+    return <div className="loading">No signalling messages in this session.</div>
+  }
+
   return (
     <table className="grid">
-      <thead><tr><th>Time</th><th>Dir</th><th>Protocol</th><th>Message</th><th>Body</th></tr></thead>
+      <thead><tr><th>Time</th><th>Dir</th><th>Protocol</th><th>Message</th></tr></thead>
       <tbody>
         {messages.map((m) => (
-          <tr key={m.id}>
-            <td>{new Date(m.ts).toISOString().slice(11, 23)}</td>
-            <td>{m.direction}</td>
-            <td>{m.protocol}{m.channel ? ` / ${m.channel}` : ''}</td>
-            <td style={{ fontWeight: 600 }}>{m.messageName}</td>
-            <td style={{ whiteSpace: 'normal', color: '#666' }}>{m.body}</td>
-          </tr>
+          <Fragment key={m.id}>
+            <tr ref={m.id === activeId ? activeRef : undefined}
+                className="deg-row"
+                style={m.id === activeId ? { background: '#fff3cd' } : undefined}
+                onClick={() => setExpanded(expanded === m.id ? null : m.id)}>
+              <td>{new Date(m.ts).toISOString().slice(11, 23)}</td>
+              <td>{m.direction}</td>
+              <td>{m.protocol}{m.channel ? ` / ${m.channel}` : ''}</td>
+              <td style={{ fontWeight: 600 }}>
+                {expanded === m.id ? '▾' : '▸'} {m.messageName}
+              </td>
+            </tr>
+            {expanded === m.id && (
+              <tr>
+                <td colSpan={4} style={{ background: '#fafafc', whiteSpace: 'pre-wrap',
+                                         fontFamily: 'monospace', fontSize: 11, padding: 8 }}>
+                  {m.body ?? '(no decoded content)'}
+                </td>
+              </tr>
+            )}
+          </Fragment>
         ))}
       </tbody>
     </table>
