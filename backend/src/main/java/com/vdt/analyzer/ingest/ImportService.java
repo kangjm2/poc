@@ -98,12 +98,23 @@ public class ImportService {
     private record Layout(int tsIdx, int latIdx, int lonIdx, int speedIdx, int pciIdx,
                           Map<Integer, String> kpiColumns, List<String> ignored) {}
 
+    private static String normalise(String s) {
+        return s.toUpperCase(Locale.ROOT).replaceAll("[^A-Z0-9]+", "_")
+                .replaceAll("^_|_$", "");
+    }
+
     /** Maps header columns onto position fields and known KPI names. */
     private Layout resolveLayout(String[] header) {
         int ts = -1, lat = -1, lon = -1, speed = -1, pci = -1;
         Map<Integer, String> kpis = new LinkedHashMap<>();
         List<String> ignored = new ArrayList<>();
         Set<String> known = knownKpiNames();
+
+        // Files exported by other analysis tools label columns with display names
+        // ("RSRP (NR SpCell)") rather than internal ones, so both are accepted,
+        // compared with punctuation and case stripped out.
+        Map<String, String> byDisplay = new LinkedHashMap<>();
+        catalog.all().forEach(d -> byDisplay.put(normalise(d.getDisplayName()), d.getName()));
 
         for (int i = 0; i < header.length; i++) {
             String raw = header[i].trim();
@@ -116,7 +127,9 @@ public class ImportService {
                 case "serving_pci", "pci" -> pci = i;
                 default -> {
                     String candidate = raw.toUpperCase(Locale.ROOT).replace(' ', '_');
+                    String viaDisplay = byDisplay.get(normalise(raw));
                     if (known.contains(candidate)) kpis.put(i, candidate);
+                    else if (viaDisplay != null) kpis.put(i, viaDisplay);
                     else if (!RESERVED.contains(key)) ignored.add(raw);
                 }
             }

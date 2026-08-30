@@ -91,6 +91,9 @@ export function ImportView({ onImported }: { onImported: () => void }) {
           <p style={{ marginBottom: 0 }}>
             <b>Recognised KPI columns:</b>{' '}
             <code style={{ fontSize: 11 }}>{knownKpis.join(', ')}</code>
+            {' '}&mdash; display names as exported by other analysis tools
+            (e.g. <code style={{ fontSize: 11 }}>RSRP (NR SpCell)</code>) are
+            matched too, ignoring case and punctuation.
           </p>
         </div>
       </div>

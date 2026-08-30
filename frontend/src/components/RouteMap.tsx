@@ -144,7 +144,14 @@ export function RouteMap({
   useEffect(() => {
     const map = mapRef.current
     if (!map) return
-    const p = track.find((t) => t.seq === cursorSeq)
+    // A decimated track skips seqs, so take the last point at or before the
+    // cursor; an exact-match lookup would freeze the marker between kept samples.
+    let p: TrackPoint | undefined
+    for (const t of track) {
+      if (t.seq > cursorSeq) break
+      p = t
+    }
+    p ??= track[0]
     if (!p) return
     if (!cursorMarker.current) {
       cursorMarker.current = L.circleMarker([p.latitude, p.longitude], {

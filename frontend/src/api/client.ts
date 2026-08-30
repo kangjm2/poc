@@ -1,11 +1,16 @@
 import type {
   AreaBin, Campaign, CellConfig, CellRef, ChannelModel, Comparison, CoverageIssue,
   Degradation, Distribution, DuEndpoint, ImportResult, KpiDefinition, NetworkEvent,
-  Series, SessionSummary, SignalingMessage, Snapshot, Statistics, TestRun, TrackPoint,
-  UeProfile,
+  SeqRange, Series, SessionSummary, SignalingMessage, Snapshot, Statistics, TestRun,
+  TrackPoint, UeProfile,
 } from './types'
 
 const BASE = '/api'
+
+const rangeQs = (r?: SeqRange | null) => {
+  if (!r) return ''
+  return (r.from != null ? `&fromSeq=${r.from}` : '') + (r.to != null ? `&toSeq=${r.to}` : '')
+}
 
 async function get<T>(path: string): Promise<T> {
   const res = await fetch(`${BASE}${path}`)
@@ -31,12 +36,13 @@ export const api = {
     get<Series[]>(`/sessions/${id}/series?kpis=${kpis.join(',')}&maxPoints=${maxPoints}`),
   snapshot: (id: number, seq?: number) =>
     get<Snapshot>(`/sessions/${id}/snapshot${seq === undefined ? '' : `?seq=${seq}`}`),
-  distribution: (id: number, kpi: string) =>
-    get<Distribution>(`/sessions/${id}/distribution?kpi=${kpi}`),
-  statistics: (id: number, kpi: string) =>
-    get<Statistics>(`/sessions/${id}/statistics?kpi=${kpi}`),
-  degradations: (id: number, kpi: string, minSamples = 5) =>
-    get<Degradation[]>(`/sessions/${id}/degradations?kpi=${kpi}&minSamples=${minSamples}`),
+  distribution: (id: number, kpi: string, range?: SeqRange | null) =>
+    get<Distribution>(`/sessions/${id}/distribution?kpi=${kpi}${rangeQs(range)}`),
+  statistics: (id: number, kpi: string, range?: SeqRange | null) =>
+    get<Statistics>(`/sessions/${id}/statistics?kpi=${kpi}${rangeQs(range)}`),
+  degradations: (id: number, kpi: string, minSamples = 5, range?: SeqRange | null) =>
+    get<Degradation[]>(
+      `/sessions/${id}/degradations?kpi=${kpi}&minSamples=${minSamples}${rangeQs(range)}`),
   events: (id: number) => get<NetworkEvent[]>(`/sessions/${id}/events`),
   messages: (id: number) => get<SignalingMessage[]>(`/sessions/${id}/messages`),
   cells: (id: number) => get<CellRef[]>(`/sessions/${id}/cells`),
@@ -58,8 +64,17 @@ export const api = {
 
   evaluateRun: async (id: number): Promise<TestRun> => {
     const res = await fetch(`${BASE}/lab/runs/${id}/evaluate`, { method: 'POST' })
-    if (!res.ok) throw new Error(`${res.status}: ${res.statusText}`)
+    if (!res.ok) {
+      let detail = res.statusText
+      try { detail = (await res.json()).message ?? detail } catch { /* no JSON body */ }
+      throw new Error(`${res.status}: ${detail}`)
+    }
     return res.json() as Promise<TestRun>
+  },
+
+  deleteSession: async (id: number): Promise<void> => {
+    const res = await fetch(`${BASE}/sessions/${id}`, { method: 'DELETE' })
+    if (!res.ok) throw new Error(`${res.status}: ${res.statusText}`)
   },
 
   importCsv: async (form: FormData): Promise<ImportResult> => {

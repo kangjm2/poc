@@ -11,7 +11,7 @@ import type {
  * configuration, UE profile and DU connection are recorded with the run, so they
  * are shown together rather than buried in settings.
  */
-export function LabView() {
+export function LabView({ onOpenSession }: { onOpenSession?: (id: number) => void }) {
   const [campaigns, setCampaigns] = useState<Campaign[]>([])
   const [runs, setRuns] = useState<TestRun[]>([])
   const [channels, setChannels] = useState<ChannelModel[]>([])
@@ -113,7 +113,15 @@ export function LabView() {
             <header>
               <span className="title">Run configuration &mdash; {run.name}</span>
               <span className="meta">
-                {run.sessionId ? `session ${run.sessionId}` : 'no session attached'}
+                {run.status}
+                {run.status === 'RUNNING' ? ` ${run.progressPct}%` : ''}
+                {run.message ? ` — ${run.message}` : ''}
+                {run.sessionId ? (
+                  <button style={{ marginLeft: 10 }}
+                          onClick={() => onOpenSession?.(run.sessionId as number)}>
+                    Open session {run.sessionId} in Analysis
+                  </button>
+                ) : ' — no session attached'}
               </span>
             </header>
             <div className="config-grid">

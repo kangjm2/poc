@@ -2,7 +2,8 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { api } from './api/client'
 import type {
   AreaBin, CellRef, CoverageIssue, Degradation, Distribution, KpiDefinition,
-  NetworkEvent, Series, SessionSummary, SignalingMessage, Snapshot, TrackPoint,
+  NetworkEvent, SeqRange, Series, SessionSummary, SignalingMessage, Snapshot,
+  TrackPoint,
 } from './api/types'
 import { RouteMap } from './components/RouteMap'
 import { TimeSeriesChart } from './components/TimeSeriesChart'
@@ -22,6 +23,7 @@ const WORKBOOKS = [
   { id: 'overview', label: 'Overview' },
   { id: 'radio', label: 'Radio Quality' },
   { id: 'throughput', label: 'Throughput' },
+  { id: 'fronthaul', label: 'Fronthaul' },
   { id: 'mobility', label: 'Mobility' },
   { id: 'signaling', label: 'L3 Signalling' },
   { id: 'degradation', label: 'Degradation' },
@@ -55,7 +57,19 @@ export function App() {
   // The single time cursor every panel reads from. This shared cursor is the
   // interaction existing users rely on most, so it lives at the top of the tree.
   const [cursorSeq, setCursorSeq] = useState(0)
+  const [playing, setPlaying] = useState(false)
   const [error, setError] = useState<string | null>(null)
+
+  // A sub-selection of the drive. Statistics, the legend and the degradation list
+  // honour it; the map and charts keep the whole drive so the selection stays in
+  // context. The active range is shown as a chip because a filter the user cannot
+  // see is a filter they will forget is on.
+  const [range, setRange] = useState<SeqRange | null>(null)
+
+  // The selected KPI's own series, fetched on demand when it is not one of the
+  // pre-fetched overview KPIs - otherwise 12 of the 18 KPIs would have no chart.
+  const [extraSeries, setExtraSeries] = useState<Series | null>(null)
+  const [fhSeries, setFhSeries] = useState<Series[]>([])
 
   const session = sessions.find((s) => s.id === sessionId) ?? null
   const activeDef = defs.find((d) => d.name === kpi) ?? null
@@ -78,6 +92,8 @@ export function App() {
     if (sessionId == null) return
     setError(null)
     setCursorSeq(0)
+    setPlaying(false)
+    setRange(null)
     Promise.all([
       api.cells(sessionId).then(setCells),
       api.series(sessionId, SERIES_KPIS).then(setSeries),
@@ -89,9 +105,23 @@ export function App() {
   useEffect(() => {
     if (sessionId == null) return
     api.track(sessionId, kpi).then(setTrack).catch(fail)
-    api.distribution(sessionId, kpi).then(setDist).catch(fail)
-    api.degradations(sessionId, kpi, 5).then(setDegradations).catch(fail)
   }, [sessionId, kpi, fail])
+
+  useEffect(() => {
+    if (sessionId == null) return
+    api.distribution(sessionId, kpi, range).then(setDist).catch(fail)
+    api.degradations(sessionId, kpi, 5, range).then(setDegradations).catch(fail)
+  }, [sessionId, kpi, range, fail])
+
+  useEffect(() => {
+    if (sessionId == null || SERIES_KPIS.includes(kpi)) { setExtraSeries(null); return }
+    api.series(sessionId, [kpi]).then((s) => setExtraSeries(s[0] ?? null)).catch(fail)
+  }, [sessionId, kpi, SERIES_KPIS, fail])
+
+  useEffect(() => {
+    if (sessionId == null || workbook !== 'fronthaul') return
+    api.series(sessionId, ['FH_RX_LATE', 'FH_RX_ON_TIME']).then(setFhSeries).catch(fail)
+  }, [sessionId, workbook, fail])
 
   useEffect(() => {
     if (sessionId == null) return
@@ -108,8 +138,42 @@ export function App() {
     api.coverageIssues(sessionId).then(setIssues).catch(fail)
   }, [sessionId, fail])
 
-  const seriesFor = (name: string) => series.find((s) => s.kpi === name) ?? null
+  const seriesFor = (name: string) =>
+    series.find((s) => s.kpi === name)
+    ?? (extraSeries?.kpi === name ? extraSeries : null)
   const maxSeq = Math.max(0, (session?.sampleCount ?? 1) - 1)
+
+  // Playback: the cursor sweeps the drive so the engineer can watch the grid,
+  // charts and map move together, the way the run originally unfolded.
+  useEffect(() => {
+    if (!playing) return
+    const stepSize = Math.max(1, Math.round(maxSeq / 240))
+    const timer = setInterval(() => {
+      setCursorSeq((s) => {
+        if (s + stepSize >= maxSeq) { setPlaying(false); return maxSeq }
+        return s + stepSize
+      })
+    }, 250)
+    return () => clearInterval(timer)
+  }, [playing, maxSeq])
+
+  const removeSession = async () => {
+    if (!session) return
+    if (!window.confirm(`Delete measurement "${session.name}" and all its data?`)) return
+    try {
+      await api.deleteSession(session.id)
+      const s = await api.sessions()
+      setSessions(s)
+      setSessionId(s.length ? [...s].sort((a, b) => a.id - b.id)[0].id : null)
+    } catch (e) {
+      fail(e)
+    }
+  }
+
+  const openSessionFromLab = (id: number) => {
+    setMode('analyze')
+    setSessionId(id)
+  }
 
   const jumpToTime = (ts: string) => {
     const p = track.find((t) => t.ts >= ts)
@@ -123,6 +187,11 @@ export function App() {
                        onCursorChange={setCursorSeq} filled={filled} />
     ) : null
   }
+
+  const chartOf = (s: Series, filled = false) => (
+    <TimeSeriesChart key={s.kpi} series={s} cursorSeq={cursorSeq}
+                     onCursorChange={setCursorSeq} filled={filled} />
+  )
 
   const renderWorkbook = () => {
     switch (workbook) {
@@ -140,11 +209,56 @@ export function App() {
         return <>{chart('RSRP')}{chart('RSRQ')}{chart('SINR')}<ParameterGrid snapshot={snapshot} /></>
       case 'throughput':
         return <>{chart('MAC_DL_THROUGHPUT', true)}{chart('MAC_UL_THROUGHPUT', true)}{chart('DL_BLER')}</>
+      case 'fronthaul': {
+        // Transport counters above their radio-side consequences: a timing fault
+        // shows as RX-late rising and throughput sagging while RSRP stays flat -
+        // the separation this page exists to make visible.
+        const fh = fhSeries.filter((s) => s.points.some((p) => p.value != null))
+        if (fh.length === 0) {
+          return (
+            <div className="panel">
+              <header><span className="title">Fronthaul (O-RAN 7.2x)</span></header>
+              <div className="loading">
+                No fronthaul counters in this session. They exist only for lab runs
+                injected at the fronthaul; RF-connected and field measurements have none.
+              </div>
+            </div>
+          )
+        }
+        return <>{fh.map((s) => chartOf(s))}{chart('MAC_DL_THROUGHPUT', true)}{chart('RSRP')}</>
+      }
       case 'mobility':
         return (
           <>
             <RouteMap track={track} cells={cells} cursorSeq={cursorSeq}
                       onCursorChange={setCursorSeq} kpiName={activeDef?.displayName ?? kpi} />
+            <div className="panel">
+              <header>
+                <span className="title">Cells</span>
+                <span className="meta">
+                  {cells.length} · serving PCI {snapshot?.servingPci ?? '-'}
+                </span>
+              </header>
+              <table className="grid">
+                <thead><tr><th>PCI</th><th>Cell type</th><th>Band</th>
+                  <th className="num">ARFCN</th><th className="num">GSCN</th>
+                  <th className="num">Azimuth</th></tr></thead>
+                <tbody>
+                  {cells.map((c) => (
+                    <tr key={c.id}
+                        style={c.pci === snapshot?.servingPci
+                          ? { background: '#eef3fa', fontWeight: 600 } : undefined}>
+                      <td>{c.pci}</td>
+                      <td>{c.cellType ?? '-'}</td>
+                      <td>{c.band ?? '-'}</td>
+                      <td className="num">{c.arfcn}</td>
+                      <td className="num">{c.gscn ?? '-'}</td>
+                      <td className="num">{c.azimuthDeg == null ? '-' : `${c.azimuthDeg}°`}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
             <div className="panel">
               <header><span className="title">Events</span>
                 <span className="meta">{events.length}</span></header>
@@ -171,7 +285,8 @@ export function App() {
         )
       case 'statistics':
         return (
-          <StatisticsPanel sessionId={sessionId} kpi={kpi} unit={activeDef?.unit ?? ''} />
+          <StatisticsPanel sessionId={sessionId} kpi={kpi} unit={activeDef?.unit ?? ''}
+                           range={range} />
         )
       case 'coverage':
         return (
@@ -272,6 +387,16 @@ export function App() {
                 </>
               )}
             </div>
+            {range && (
+              <span className="filter-chip" title="Applies to the legend, statistics and degradation list">
+                Filter: seq {range.from ?? 0}&ndash;{range.to ?? maxSeq}
+                <button onClick={() => setRange(null)} aria-label="Clear range filter">✕</button>
+              </span>
+            )}
+            {session && (
+              <button className="danger" onClick={removeSession}
+                      title="Delete this measurement and all its data">Delete</button>
+            )}
           </>
         )}
         <span className="spacer" />
@@ -279,12 +404,23 @@ export function App() {
           {session.scenario ? ` · ${session.scenario}` : ''}</span>}
       </div>
 
-      {error && <div className="error">{error}</div>}
+      {mode === 'analyze' && session?.notes && (
+        <div className="session-notes">{session.notes}</div>
+      )}
+
+      {error && (
+        <div className="error">
+          {error}
+          <button onClick={() => setError(null)} aria-label="Dismiss error">✕</button>
+        </div>
+      )}
 
       {mode === 'compare' ? (
         <div className="body"><div className="center"><CompareView sessions={sessions} /></div></div>
       ) : mode === 'lab' ? (
-        <div className="body"><div className="center"><LabView /></div></div>
+        <div className="body"><div className="center">
+          <LabView onOpenSession={openSessionFromLab} />
+        </div></div>
       ) : mode === 'import' ? (
         <div className="body"><div className="center">
           <ImportView onImported={() => api.sessions().then(setSessions).catch(fail)} />
@@ -344,6 +480,10 @@ export function App() {
           </div>
 
           <div className="statusbar">
+            <button className="play" onClick={() => setPlaying((p) => !p)}
+                    title={playing ? 'Pause playback' : 'Play the drive'}>
+              {playing ? '⏸' : '▶'}
+            </button>
             <span>START <b>{session ? new Date(session.startedAt).toISOString().slice(11, 19) : '-'}</b></span>
             <span>END <b>{session ? new Date(session.endedAt).toISOString().slice(11, 19) : '-'}</b></span>
             <span>CURRENT <b style={{ color: 'var(--cursor)' }}>
@@ -358,6 +498,12 @@ export function App() {
               <div className="knob" style={{ left: `${(cursorSeq / Math.max(1, maxSeq)) * 100}%` }} />
             </div>
             <span className="dim">seq {cursorSeq} / {maxSeq}</span>
+            <span className="range-marks">
+              <button onClick={() => setRange((r) => ({ from: cursorSeq, to: r?.to ?? null }))}
+                      title="Filter from the cursor position onwards">From here</button>
+              <button onClick={() => setRange((r) => ({ from: r?.from ?? null, to: cursorSeq }))}
+                      title="Filter up to the cursor position">To here</button>
+            </span>
             <span className="dim">{session?.name}</span>
           </div>
         </>

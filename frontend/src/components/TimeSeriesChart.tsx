@@ -83,7 +83,16 @@ export function TimeSeriesChart({
     onCursorChange(Math.max(seqMin, Math.min(seqMax, seq)))
   }
 
-  const current = series.points.find((p) => p.seq === cursorSeq)
+  // Decimated payloads do not carry every seq, so the readout shows the nearest
+  // point at or before the cursor rather than 'no data' between kept samples.
+  const current = useMemo(() => {
+    let best: (typeof series.points)[number] | undefined
+    for (const p of series.points) {
+      if (p.seq > cursorSeq) break
+      best = p
+    }
+    return best ?? series.points[0]
+  }, [series, cursorSeq])
 
   return (
     <div className="panel chart-panel">

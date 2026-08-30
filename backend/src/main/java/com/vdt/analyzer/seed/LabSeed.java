@@ -92,6 +92,29 @@ final class LabSeed {
                 fieldReplay, cell4x4, ueFtp, duFh, baselineSessionId);
         seedRun(jdbc, campaignId, "Build 1.5.0 - city replay",
                 fieldReplay, cell4x4, ueFtp, duFh, updatedSessionId);
+
+        // The fronthaul-injected measurement, gated on transport criteria as well as
+        // radio ones. The radio gates pass on the replayed channel while the timing
+        // fault fails the fronthaul gates - a verdict an RF-only toolset cannot reach.
+        Long fhSession = jdbc.queryForObject(
+                "SELECT id FROM measurement_session WHERE scenario = 'Fronthaul injection'",
+                Long.class);
+        if (fhSession != null) {
+            jdbc.update("""
+                    INSERT INTO test_run (campaign_id, name, channel_model_id, cell_config_id,
+                        ue_profile_id, du_endpoint_id, session_id, status)
+                    VALUES (?,?,?,?,?,?,?, 'QUEUED')
+                    """, campaignId, "Fronthaul timing acceptance - O-DU rack B",
+                    fieldReplay, cell4x4, ueFtp, duFh, fhSession);
+            Long runId = jdbc.queryForObject("SELECT max(id) FROM test_run", Long.class);
+            jdbc.update("""
+                    INSERT INTO run_criterion (run_id, kpi_name, aggregate, operator, threshold)
+                    VALUES (?, 'RSRP', 'P05', 'GTE', -110),
+                           (?, 'SINR', 'MEAN', 'GTE', 5),
+                           (?, 'FH_RX_ON_TIME', 'MEAN', 'GTE', 99.8),
+                           (?, 'FH_RX_LATE', 'P95', 'LTE', 50)
+                    """, runId, runId, runId, runId);
+        }
     }
 
     private static void seedRun(JdbcTemplate jdbc, Long campaignId, String name,

@@ -11,7 +11,7 @@ public final class Dtos {
     public record SessionSummary(
             Long id, String name, String device, String operator, String technology,
             String scenario, String buildLabel, Instant startedAt, Instant endedAt,
-            String locationName, long sampleCount, long eventCount) {}
+            String locationName, String notes, long sampleCount, long eventCount) {}
 
     /** One point on the drive route, already assigned to a colour bin. */
     public record TrackPoint(

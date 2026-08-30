@@ -219,3 +219,36 @@ td.sev-WARNING  { background: var(--warning-bg); color: #262626; }
 .issue-WEAK_COVERAGE { border-left: 3px solid var(--critical-bg); }
 .issue-INTERFERENCE  { border-left: 3px solid #ff681f; }
 .issue-OVERSHOOT     { border-left: 3px solid #30578d; }
+
+/* ---- review supplements: filter chip, playback, notes, delete, no-data verdict */
+.filter-chip {
+  display: inline-flex; align-items: center; gap: 6px;
+  background: #fff3d6; border: 1px solid #e0c477; border-radius: 3px;
+  padding: 2px 8px; font-size: 12px; color: #6b5310;
+}
+.filter-chip button {
+  border: none; background: none; cursor: pointer; color: #6b5310;
+  font-size: 11px; padding: 0 2px;
+}
+.toolbar button.danger {
+  background: #fff; border: 1px solid #c9636f; color: #a3212f;
+  border-radius: 3px; padding: 3px 10px; cursor: pointer; font-size: 12px;
+}
+.toolbar button.danger:hover { background: #fbeaec; }
+.session-notes {
+  padding: 4px 12px; font-size: 12px; color: #5a5f66;
+  background: #f4f6f9; border-bottom: 1px solid var(--border);
+}
+.statusbar button.play {
+  width: 26px; height: 20px; line-height: 1; border: 1px solid var(--border);
+  background: #fff; border-radius: 3px; cursor: pointer; font-size: 11px;
+}
+.statusbar .range-marks { display: inline-flex; gap: 4px; }
+.statusbar .range-marks button {
+  border: 1px solid var(--border); background: #fff; border-radius: 3px;
+  padding: 1px 7px; cursor: pointer; font-size: 11px; color: var(--text-dim);
+}
+.error button {
+  border: none; background: none; color: inherit; cursor: pointer; margin-left: 8px;
+}
+.verdict-NO-DATA { color: var(--text-dim); font-style: italic; }

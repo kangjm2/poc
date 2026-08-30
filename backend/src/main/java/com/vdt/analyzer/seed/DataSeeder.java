@@ -190,10 +190,12 @@ public class DataSeeder implements ApplicationRunner {
     /**
      * A fronthaul-injected replay of the city route.
      *
-     * Carries a deliberate timing-window fault in the middle of the run: RX_LATE rises
-     * and RX_ON_TIME falls while the radio KPIs stay healthy. That combination is the
-     * point of the scenario - the fault is in the fronthaul transport, and an RF-only
-     * view would show nothing wrong.
+     * Carries a deliberate timing-window fault late in the run, placed on a stretch
+     * where the replayed radio channel is clean: RX_LATE rises, and because the O-DU
+     * discards C/U-plane data that misses its transmission window, MAC throughput and
+     * PRB utilisation sag with it - while RSRP/SINR/BLER stay healthy. That combination
+     * is the point of the scenario: a throughput dip with no radio cause, explained
+     * only by the fronthaul counters.
      */
     private void seedFronthaulSession(Instant start) {
         DriveTestGenerator gen = new DriveTestGenerator(
@@ -211,23 +213,19 @@ public class DataSeeder implements ApplicationRunner {
         s.setEndedAt(start.plusSeconds(points.size()));
         s.setLocationName("Lab (replay of Oulu city centre)");
         s.setNotes("Emulated UE injected at the O-RAN 7.2x fronthaul; the O-DU is real "
-                + "hardware. Contains a fronthaul timing-window fault around 09:20.");
+                + "hardware. Contains a fronthaul timing-window fault around 09:30.");
         long sid = sessions.saveAndFlush(s).getId();
 
-        int faultFrom = 380, faultTo = 520;
+        // The window sits on a stretch where the replayed channel has no fades
+        // (RSRP/SINR/BLER are clean from roughly seq 878 to 994), so the transport
+        // fault is the only explanation for what the user sees there.
+        int faultFrom = 885, faultTo = 985;
         List<Object[]> sampleRows = new ArrayList<>(points.size());
         List<Object[]> kpiRows = new ArrayList<>(points.size() * 15);
         for (Point p : points) {
             java.sql.Timestamp ts = java.sql.Timestamp.from(start.plusSeconds(p.seq()));
             sampleRows.add(new Object[]{sid, ts, p.seq(), p.lat(), p.lon(),
                     p.speedKmh(), p.servingPci()});
-
-            addKpi(kpiRows, sid, p.seq(), ts, "RSRP", p.rsrp());
-            addKpi(kpiRows, sid, p.seq(), ts, "SINR", p.sinr());
-            addKpi(kpiRows, sid, p.seq(), ts, "MAC_DL_THROUGHPUT", p.dlThroughput());
-            addKpi(kpiRows, sid, p.seq(), ts, "DL_BLER", p.bler());
-            addKpi(kpiRows, sid, p.seq(), ts, "DU_PRB_UTILISATION", p.prbUtilisation());
-            addKpi(kpiRows, sid, p.seq(), ts, "DU_HARQ_RETX_RATE", p.harqRetxRate());
 
             boolean inFault = p.seq() >= faultFrom && p.seq() <= faultTo;
             double total = 9000 + Math.round(400 * Math.sin(p.seq() / 40.0));
@@ -239,6 +237,26 @@ public class DataSeeder implements ApplicationRunner {
             double corrupt = inFault ? Math.round(4 * Math.abs(Math.sin(p.seq() / 9.0))) : 0;
             double onTime = Math.max(80.0,
                     100.0 - ((late + early + corrupt) * 100.0 / Math.max(1, total)));
+
+            // Data that misses the reception window is discarded by the O-DU, so the
+            // slots it would have filled go untransmitted: throughput and PRB
+            // utilisation fall with the late share, while the RF KPIs are untouched.
+            double lateShare = late / Math.max(1, total);
+            double thr = inFault
+                    ? p.dlThroughput() * Math.max(0.3, 1 - 5 * lateShare)
+                    : p.dlThroughput();
+            double prb = inFault
+                    ? p.prbUtilisation() * Math.max(0.4, 1 - 4 * lateShare)
+                    : p.prbUtilisation();
+
+            addKpi(kpiRows, sid, p.seq(), ts, "RSRP", p.rsrp());
+            addKpi(kpiRows, sid, p.seq(), ts, "SINR", p.sinr());
+            addKpi(kpiRows, sid, p.seq(), ts, "MAC_DL_THROUGHPUT",
+                    Math.round(thr * 10.0) / 10.0);
+            addKpi(kpiRows, sid, p.seq(), ts, "DL_BLER", p.bler());
+            addKpi(kpiRows, sid, p.seq(), ts, "DU_PRB_UTILISATION",
+                    Math.round(prb * 10.0) / 10.0);
+            addKpi(kpiRows, sid, p.seq(), ts, "DU_HARQ_RETX_RATE", p.harqRetxRate());
 
             addKpi(kpiRows, sid, p.seq(), ts, "FH_RX_TOTAL", total);
             addKpi(kpiRows, sid, p.seq(), ts, "FH_RX_LATE", Math.round(late));

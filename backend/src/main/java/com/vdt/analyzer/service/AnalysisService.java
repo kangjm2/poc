@@ -46,6 +46,21 @@ public class AnalysisService {
                 () -> new NoSuchElementException("No session " + id)));
     }
 
+    /**
+     * Removes a measurement and everything hanging off it. sample_kpi carries no
+     * foreign key (bulk-load speed), so its rows go explicitly; the session row's
+     * cascades cover samples, events, messages and cells, and lab runs that
+     * referenced the measurement keep their configuration with session_id nulled.
+     */
+    @org.springframework.transaction.annotation.Transactional
+    public void deleteSession(long id) {
+        if (!sessions.existsById(id)) {
+            throw new NoSuchElementException("No session " + id);
+        }
+        jdbc.update("DELETE FROM sample_kpi WHERE session_id = ?", id);
+        sessions.deleteById(id);
+    }
+
     private SessionSummary summarize(MeasurementSession s) {
         Long samples = jdbc.queryForObject(
                 "SELECT count(*) FROM sample WHERE session_id = ?", Long.class, s.getId());
@@ -53,7 +68,7 @@ public class AnalysisService {
                 "SELECT count(*) FROM network_event WHERE session_id = ?", Long.class, s.getId());
         return new SessionSummary(s.getId(), s.getName(), s.getDevice(), s.getOperator(),
                 s.getTechnology(), s.getScenario(), s.getBuildLabel(), s.getStartedAt(),
-                s.getEndedAt(), s.getLocationName(),
+                s.getEndedAt(), s.getLocationName(), s.getNotes(),
                 samples == null ? 0 : samples, events == null ? 0 : events);
     }
 
@@ -196,17 +211,19 @@ public class AnalysisService {
     // ----------------------------------------------------------- distribution
 
     /** Counts per bin, computed by the database. The legend doubles as a summary. */
-    public Distribution distribution(long sessionId, String kpiName) {
+    public Distribution distribution(long sessionId, String kpiName,
+                                     Integer fromSeq, Integer toSeq) {
         KpiDefinition def = catalog.require(kpiName);
         String sql = """
                 SELECT %s AS bin_ordinal, count(*) AS n
                 FROM sample_kpi WHERE session_id = ? AND kpi_name = ?
+                  AND seq >= ? AND seq <= ?
                 GROUP BY 1
                 """.formatted(KpiSql.binOrdinalExpr(def, "value"));
 
         Map<Integer, Long> counts = new HashMap<>();
         jdbc.query(sql, rs -> { counts.put(rs.getInt("bin_ordinal"), rs.getLong("n")); },
-                sessionId, kpiName);
+                sessionId, kpiName, lo(fromSeq), hi(toSeq));
 
         long total = counts.values().stream().mapToLong(Long::longValue).sum();
         List<DistributionBin> bins = new ArrayList<>();
@@ -231,6 +248,11 @@ public class AnalysisService {
      * against 0.02 s for this form.
      */
     public Statistics statistics(long sessionId, String kpiName) {
+        return statistics(sessionId, kpiName, null, null);
+    }
+
+    public Statistics statistics(long sessionId, String kpiName,
+                                 Integer fromSeq, Integer toSeq) {
         KpiDefinition def = catalog.require(kpiName);
         Map<String, Object> agg = jdbc.queryForMap("""
                 SELECT count(*) AS n, min(value) AS lo, max(value) AS hi, avg(value) AS mean,
@@ -239,7 +261,8 @@ public class AnalysisService {
                             FROM generate_series(0, 100) AS i)
                        ) WITHIN GROUP (ORDER BY value) AS curve
                 FROM sample_kpi WHERE session_id = ? AND kpi_name = ?
-                """, sessionId, kpiName);
+                  AND seq >= ? AND seq <= ?
+                """, sessionId, kpiName, lo(fromSeq), hi(toSeq));
 
         long n = ((Number) agg.get("n")).longValue();
         if (n == 0) {
@@ -272,7 +295,8 @@ public class AnalysisService {
      * Contiguous WARNING/CRITICAL stretches, found with a gaps-and-islands query so
      * the grouping happens in the database rather than by streaming every row out.
      */
-    public List<Degradation> degradations(long sessionId, String kpiName, int minSamples) {
+    public List<Degradation> degradations(long sessionId, String kpiName, int minSamples,
+                                          Integer fromSeq, Integer toSeq) {
         KpiDefinition def = catalog.require(kpiName);
         boolean higherBetter = "HIGHER_IS_BETTER".equals(def.getDirection());
         String sevExpr = KpiSql.severityExpr(def, "value");
@@ -283,6 +307,7 @@ public class AnalysisService {
                     FROM sample_kpi k
                     JOIN sample s ON s.session_id = k.session_id AND s.seq = k.seq
                     WHERE k.session_id = ? AND k.kpi_name = ?
+                      AND k.seq >= ? AND k.seq <= ?
                 ),
                 flagged AS (
                     SELECT *, (severity IN ('WARNING','CRITICAL')) AS bad FROM classified
@@ -313,7 +338,7 @@ public class AnalysisService {
                     round(rs.getDouble("worst")), round(rs.getDouble("mean_value")),
                     rs.getInt("has_critical") == 1 ? "CRITICAL" : "WARNING",
                     rs.getDouble("lat"), rs.getDouble("lon"), rs.getInt("n"));
-        }, sessionId, kpiName, minSamples);
+        }, sessionId, kpiName, lo(fromSeq), hi(toSeq), minSamples);
     }
 
     // ------------------------------------------------------------- comparison
@@ -335,12 +360,20 @@ public class AnalysisService {
     }
 
     private static String verdict(Double delta, String direction) {
-        if (delta == null || Math.abs(delta) < 0.01) return "SAME";
+        // A missing side is not sameness: reporting SAME for a KPI one session never
+        // measured would hide exactly the difference the comparison exists to find.
+        if (delta == null) return "NO DATA";
+        if (Math.abs(delta) < 0.01) return "SAME";
         boolean improved = "HIGHER_IS_BETTER".equals(direction) ? delta > 0 : delta < 0;
         return improved ? "BETTER" : "WORSE";
     }
 
     // ------------------------------------------------------------------ utils
+
+    /** Range-filter defaults: an absent bound means the whole drive. */
+    private static int lo(Integer fromSeq) { return fromSeq == null ? 0 : fromSeq; }
+
+    private static int hi(Integer toSeq) { return toSeq == null ? Integer.MAX_VALUE : toSeq; }
 
     long countSamples(long sessionId) {
         Long n = jdbc.queryForObject(

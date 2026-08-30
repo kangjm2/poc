@@ -40,6 +40,12 @@ public class AnalysisController {
         return analysis.getSession(id);
     }
 
+    @DeleteMapping("/sessions/{id}")
+    @ResponseStatus(org.springframework.http.HttpStatus.NO_CONTENT)
+    public void deleteSession(@PathVariable long id) {
+        analysis.deleteSession(id);
+    }
+
     @GetMapping("/sessions/{id}/track")
     public List<TrackPoint> track(@PathVariable long id, @RequestParam String kpi,
                                   @RequestParam(required = false) Integer maxPoints) {
@@ -58,19 +64,25 @@ public class AnalysisController {
     }
 
     @GetMapping("/sessions/{id}/distribution")
-    public Distribution distribution(@PathVariable long id, @RequestParam String kpi) {
-        return analysis.distribution(id, kpi);
+    public Distribution distribution(@PathVariable long id, @RequestParam String kpi,
+                                     @RequestParam(required = false) Integer fromSeq,
+                                     @RequestParam(required = false) Integer toSeq) {
+        return analysis.distribution(id, kpi, fromSeq, toSeq);
     }
 
     @GetMapping("/sessions/{id}/statistics")
-    public Statistics statistics(@PathVariable long id, @RequestParam String kpi) {
-        return analysis.statistics(id, kpi);
+    public Statistics statistics(@PathVariable long id, @RequestParam String kpi,
+                                 @RequestParam(required = false) Integer fromSeq,
+                                 @RequestParam(required = false) Integer toSeq) {
+        return analysis.statistics(id, kpi, fromSeq, toSeq);
     }
 
     @GetMapping("/sessions/{id}/degradations")
     public List<Degradation> degradations(@PathVariable long id, @RequestParam String kpi,
-                                          @RequestParam(defaultValue = "3") int minSamples) {
-        return analysis.degradations(id, kpi, minSamples);
+                                          @RequestParam(defaultValue = "3") int minSamples,
+                                          @RequestParam(required = false) Integer fromSeq,
+                                          @RequestParam(required = false) Integer toSeq) {
+        return analysis.degradations(id, kpi, minSamples, fromSeq, toSeq);
     }
 
     @GetMapping("/sessions/{id}/events")

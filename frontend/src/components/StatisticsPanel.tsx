@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { api } from '../api/client'
-import type { Statistics } from '../api/types'
+import type { SeqRange, Statistics } from '../api/types'
 
 /**
  * Distribution view: summary statistics and the CDF.
@@ -10,16 +10,16 @@ import type { Statistics } from '../api/types'
  * like", which a mean cannot.
  */
 export function StatisticsPanel({
-  sessionId, kpi, unit,
-}: { sessionId: number | null; kpi: string; unit: string }) {
+  sessionId, kpi, unit, range,
+}: { sessionId: number | null; kpi: string; unit: string; range?: SeqRange | null }) {
   const [stats, setStats] = useState<Statistics | null>(null)
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
     if (sessionId == null) return
     setError(null)
-    api.statistics(sessionId, kpi).then(setStats).catch((e) => setError(String(e)))
-  }, [sessionId, kpi])
+    api.statistics(sessionId, kpi, range).then(setStats).catch((e) => setError(String(e)))
+  }, [sessionId, kpi, range])
 
   if (error) return <div className="error">{error}</div>
   if (!stats) return <div className="panel"><div className="loading">Loading…</div></div>
@@ -47,7 +47,10 @@ export function StatisticsPanel({
       <div className="panel">
         <header>
           <span className="title">Statistics &mdash; {stats.displayName}</span>
-          <span className="meta">{stats.count.toLocaleString()} samples</span>
+          <span className="meta">
+            {stats.count.toLocaleString()} samples
+            {range && (range.from != null || range.to != null) ? ' (filtered range)' : ''}
+          </span>
         </header>
         <table className="grid">
           <thead><tr><th>Min</th><th>p05</th><th>p50</th><th>Mean</th><th>p95</th><th>Max</th></tr></thead>

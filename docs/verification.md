@@ -99,3 +99,12 @@ CQI 1 (CRITICAL) · BLER 60% (CRITICAL) · TX power 21.5 dBm (WARNING)
 | `/distribution` 500 오류 | `open-in-view: false`에서 임계 구간이 지연 로딩 | EAGER + join fetch로 변경 |
 | 리포지토리 빈 미탐지 | 중첩 인터페이스는 Spring Data 스캔 대상이 아님 | 최상위 인터페이스로 분리 |
 | 지도 타일 미표시 | 샌드박스에서 브라우저의 타일 CDN 접근 차단 | 앱 결함 아님. 실패를 감지해 안내 표시 + 격자 배경으로 폴백 |
+
+---
+
+## 8. 시나리오 단위 E2E 검증 (2026-08-30 추가)
+
+개별 동작 확인(위 30개)과 별개로, 8개 사용자 시나리오를 여정 전체로 걷는 검증을
+추가했습니다: `scripts/verify-scenarios.mjs`, 49단계 전부 통과. 시나리오 정의·결과·
+검증이 잡아낸 결함(결함 창-페이드 중첩, 커서 디시메이션 단절, 비교의 거짓 SAME 등)은
+`docs/scenario-verification.md`에 기록했습니다.

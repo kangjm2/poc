@@ -9,9 +9,13 @@ export interface SessionSummary {
   startedAt: string
   endedAt: string
   locationName: string | null
+  notes: string | null
   sampleCount: number
   eventCount: number
 }
+
+/** Sub-selection of a drive by sample sequence; either bound may be open. */
+export interface SeqRange { from: number | null; to: number | null }
 
 export interface TrackPoint {
   seq: number

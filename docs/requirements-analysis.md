@@ -59,8 +59,8 @@
 | **FR-14** | **시계열 라인 그래프** (계단형, 시간 X축) | `[TO]` Line Graph | ✅ |
 | **FR-15** | **전 패널 공유 시간 커서** | `[TO]` 적색 수직선 | ✅ |
 | FR-16 | 면적 채움 그래프 (처리량) | `[TO]` MAC throughput | ✅ |
-| FR-17 | 바 차트 (셀별 비교) | `[AN]` RSCP monitored set | ✅ |
-| FR-18 | CDF + 히스토그램 | `[AN]` 통계 리포트 | ✅ |
+| FR-17 | 바 차트 (셀별 비교) | `[AN]` RSCP monitored set | ⛔ (미구현 — 검토 라운드에서 과대표기 정정) |
+| FR-18 | CDF + 히스토그램 | `[AN]` 통계 리포트 | ◐ (CDF·비교 CDF 오버레이 구현, 히스토그램 미구현) |
 | FR-19 | 3D 빔 시각화 | `[AN]` 3D Visualizer | ⛔ 범위 외 |
 | FR-20 | Area binning | `[AN]` Figure 8 | ⛔ 범위 외 |
 
@@ -70,8 +70,8 @@
 |---|---|---|---|
 | **FR-30** | **파라미터 그리드** (Parameter / Value 2열) | `[TO]` 5G NR key parameters | ✅ |
 | **FR-31** | **임계 기반 셀 강조** (적=초과, 황=경고) | `[TO]` TX power 적색, BLER 황색 | ✅ |
-| FR-32 | 셀 정보 테이블 (Cell type/SSB band/ARFCN/PCI/GSCN) | `[TO]` Table - 1. Qualcomm | ✅ |
-| FR-33 | RACH 상세 그리드 | `[TO]` 5G NR RACH metrics | ✅ |
+| FR-32 | 셀 정보 테이블 (Cell type/SSB band/ARFCN/PCI/GSCN) | `[TO]` Table - 1. Qualcomm | ✅ (Mobility 워크북 — 서빙 셀 강조 포함) |
+| FR-33 | RACH 상세 그리드 | `[TO]` 5G NR RACH metrics | ⛔ (이벤트 로그의 RACH 행만 존재 — 검토 라운드에서 과대표기 정정) |
 | FR-34 | Numerical Data (커서 위치 값 표시) | `[AN]` 우측 도크 | ✅ |
 | FR-35 | L3 시그널링 메시지 뷰어 | `[VDT]` "field logs include Layer 3/RRC signaling" | ✅ |
 
