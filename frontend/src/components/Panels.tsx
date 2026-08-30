@@ -46,6 +46,11 @@ export function ParameterGrid({ snapshot }: { snapshot: Snapshot | null }) {
  * Colour legend. It carries sample count and share per bin, because in the
  * reference tool the legend is how you read the coverage distribution, not just
  * a key to the colours.
+ *
+ * The heading follows the reference tool's confirmed three-part form,
+ * "RSCP (dBm) [Time]" - KPI, unit, and the basis the shares are weighted by.
+ * Ours are weighted by sample, so it says so rather than borrowing "[Time]":
+ * with an irregular log the two do differ, and the reader has to know which.
  */
 export function LegendPanel({ dist }: { dist: Distribution | null }) {
   if (!dist) return <div className="loading">Loading…</div>
@@ -53,7 +58,7 @@ export function LegendPanel({ dist }: { dist: Distribution | null }) {
     <div>
       <div className="legend-row" style={{ fontWeight: 600, borderBottom: '1px solid #e2e2e8' }}>
         <span className="swatch" style={{ visibility: 'hidden' }} />
-        <span className="label">{dist.displayName} [{dist.unit}]</span>
+        <span className="label">{dist.displayName} ({dist.unit}) [Sample]</span>
         <span className="count">n</span><span className="pct">%</span>
       </div>
       {dist.bins.map((b) => (

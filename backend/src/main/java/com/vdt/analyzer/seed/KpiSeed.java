@@ -13,14 +13,18 @@ import java.util.List;
  * colours read off the reference tool's own legend (see docs/keysight-vdt-research.md
  * section 11.3.3). They are seeded as data, not constants, because bin boundaries are
  * operator conventions rather than 3GPP-defined quantities.
+ *
+ * The hex values come from a lossless PNG figure, measured at 100% pixel purity by
+ * tools/legend-extract/measure-legends.py. An earlier revision took them from a JPEG
+ * copy of the same panel, which shifted three of the four by compression artefact.
  */
 public final class KpiSeed {
     private KpiSeed() {}
 
-    public static final String GREEN  = "#009200";
+    public static final String GREEN  = "#009300";
     public static final String YELLOW = "#FFFF00";
-    public static final String ORANGE = "#FF681F";
-    public static final String RED    = "#FE0000";
+    public static final String ORANGE = "#FF6820";
+    public static final String RED    = "#FF0000";
 
     public static List<KpiDefinition> definitions() {
         List<KpiDefinition> out = new ArrayList<>();
@@ -49,10 +53,13 @@ public final class KpiSeed {
                 bin(5.0, 15.0, YELLOW, "< 15 and >= 5", "NORMAL"),
                 bin(15.0, null, GREEN, ">= 15", "NORMAL")));
 
+        // 50 / 100 / 300 Mbps: every boundary is one the AZQ drive-test theme uses on its
+        // NR throughput ladder (0/50/100/200/300/400/600/800/1500). The previous 20 Mbps
+        // floor appeared in no source we could check.
         out.add(kpi("MAC_DL_THROUGHPUT", "MAC downlink throughput", "Mbps", "Throughput", "5G NR",
                 "HIGHER_IS_BETTER", 1, "MAC layer downlink throughput.",
-                bin(null, 20.0, RED, "< 20", "CRITICAL"),
-                bin(20.0, 100.0, ORANGE, "< 100 and >= 20", "WARNING"),
+                bin(null, 50.0, RED, "< 50", "CRITICAL"),
+                bin(50.0, 100.0, ORANGE, "< 100 and >= 50", "WARNING"),
                 bin(100.0, 300.0, YELLOW, "< 300 and >= 100", "NORMAL"),
                 bin(300.0, null, GREEN, ">= 300", "NORMAL")));
 
