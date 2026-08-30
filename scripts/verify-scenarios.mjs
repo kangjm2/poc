@@ -14,6 +14,7 @@
  *   S6  Data lifecycle              (export → re-import → analyze the import → delete it)
  *   S7  Statistics reporting        (summary stats → CDF with percentile marks)
  *   S8  Responsiveness budget       (every analysis endpoint answers inside its budget)
+ *   S9  Colour scale personalisation (edit the bins -> every view repaints -> reset)
  *
  * Scale beyond the seed is covered separately by scripts/load-test.sh.
  */
@@ -448,6 +449,78 @@ scenario('S8 · Responsiveness budget (seeded data; scale harness: load-test.sh)
   }
   step(`all ${paths.length} analysis endpoints inside ${BUDGET_MS} ms`, allOk,
     `worst ${worst} ms (${worstPath})`)
+}
+
+// ─── S9 · Colour scale personalisation ───────────────────────────────────────
+scenario('S9 · Colour scale personalisation')
+{
+  await openMode('Analysis')
+  await selectSession(CITY_A)
+  await openWorkbook('Overview')
+  await page.locator('.toolbar select').nth(1).selectOption({ label: 'RSRP (NR SpCell)' })
+  await page.waitForTimeout(1500)
+
+  const legendLabels = () => page.locator('.dock.right .legend-row .label').allInnerTexts()
+  const legendCounts = () => page.locator('.dock.right .legend-row .count').allInnerTexts()
+  const before = { labels: await legendLabels(), counts: await legendCounts() }
+
+  await page.locator('.legend-edit').click()
+  await page.waitForSelector('.modal', { timeout: 5000 })
+  step('legend opens its own scale editor', (await page.locator('.modal').count()) === 1)
+
+  // The legend's .label cells include its header and Total rows, so count the data
+  // bins the way the legend itself marks them: a row with a numeric count.
+  const dataBins = (await legendCounts()).filter((c) => /^\d+$/.test(c.trim())).length - 1
+  const boundaries = page.locator('.modal input.boundary')
+  const editorBins = await page.locator('.modal tbody tr').count()
+  step('editor exposes one boundary per gap between bins',
+    editorBins === dataBins && (await boundaries.count()) === editorBins - 1,
+    `${editorBins} bins (legend ${dataBins}), ${await boundaries.count()} boundaries`)
+
+  // An out-of-order ladder must be refused before it can be saved.
+  await boundaries.nth(0).fill('-50')
+  await page.waitForTimeout(300)
+  const saveBtn = page.locator('.modal footer button', { hasText: 'Save' })
+  const blocked = await saveBtn.isDisabled()
+  const warned = /Boundaries must increase/.test(await page.locator('.modal').innerText())
+  step('non-ascending boundaries block the save', blocked && warned)
+
+  // A real edit. The -90 boundary is the one that separates a degraded bin from a
+  // normal one, so moving it must change which stretches count as degraded - an
+  // edit that only moved -100 would leave the degraded set identical and prove
+  // nothing about whether the analytics read the new scale.
+  const cityId = sessions.find((s) => s.name === CITY_A).id
+  const degBefore = (await apiGet(`/api/sessions/${cityId}/degradations?kpi=RSRP&minSamples=5`)).length
+  await boundaries.nth(0).fill('-95')
+  await boundaries.nth(1).fill('-85')
+  await page.waitForTimeout(300)
+  step('valid ladder re-enables the save', !(await saveBtn.isDisabled()))
+  await saveBtn.click()
+  await page.waitForTimeout(2000)
+
+  const after = { labels: await legendLabels(), counts: await legendCounts() }
+  step('legend labels follow the new bounds',
+    after.labels.some((l) => /-95/.test(l)) && after.labels.some((l) => /-85/.test(l))
+    && !after.labels.some((l) => /-100/.test(l)),
+    after.labels.join(' | '))
+  step('bin statistics recount against the new scale',
+    JSON.stringify(after.counts) !== JSON.stringify(before.counts),
+    `${before.counts.join('/')} -> ${after.counts.join('/')}`)
+
+  // The whole view set is painted from these bins, not just the legend.
+  const degAfter = (await apiGet(`/api/sessions/${cityId}/degradations?kpi=RSRP&minSamples=5`)).length
+  step('degradation detection uses the edited scale', degAfter !== degBefore,
+    `${degBefore} -> ${degAfter} stretches`)
+
+  await page.locator('.legend-edit').click()
+  await page.waitForSelector('.modal', { timeout: 5000 })
+  await page.locator('.modal footer button', { hasText: 'Reset to default' }).click()
+  await page.waitForTimeout(1500)
+  await page.locator('.modal > header button').click()
+  await page.waitForTimeout(1500)
+  const restored = await legendLabels()
+  step('reset restores the seeded scale',
+    JSON.stringify(restored) === JSON.stringify(before.labels), restored.join(' | '))
 }
 
 // ─── wrap-up ─────────────────────────────────────────────────────────────────

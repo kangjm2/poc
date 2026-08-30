@@ -52,10 +52,17 @@ export function ParameterGrid({ snapshot }: { snapshot: Snapshot | null }) {
  * Ours are weighted by sample, so it says so rather than borrowing "[Time]":
  * with an irregular log the two do differ, and the reader has to know which.
  */
-export function LegendPanel({ dist }: { dist: Distribution | null }) {
+export function LegendPanel({ dist, onEdit }: {
+  dist: Distribution | null
+  onEdit?: () => void
+}) {
   if (!dist) return <div className="loading">Loading…</div>
   return (
     <div>
+      {onEdit && (
+        <button className="legend-edit" onClick={onEdit}
+                title="Edit this KPI's colour scale">Edit scale</button>
+      )}
       <div className="legend-row" style={{ fontWeight: 600, borderBottom: '1px solid #e2e2e8' }}>
         <span className="swatch" style={{ visibility: 'hidden' }} />
         <span className="label">{dist.displayName} ({dist.unit}) [Sample]</span>

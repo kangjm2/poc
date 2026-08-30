@@ -7,3 +7,6 @@ dist/
 .frontend.log
 *.class
 .DS_Store
+
+# TypeScript incremental build cache — machine-local, changes on every build
+*.tsbuildinfo

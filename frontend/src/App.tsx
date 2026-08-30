@@ -14,6 +14,7 @@ import { CompareView } from './components/CompareView'
 import { StatisticsPanel } from './components/StatisticsPanel'
 import { LabView } from './components/LabView'
 import { ImportView } from './components/ImportView'
+import { LegendEditor } from './components/LegendEditor'
 
 /**
  * Workbook pages. Existing users switch screen sets from a tab strip along the
@@ -71,6 +72,11 @@ export function App() {
   const [extraSeries, setExtraSeries] = useState<Series | null>(null)
   const [fhSeries, setFhSeries] = useState<Series[]>([])
 
+  // Editing a colour scale changes how every view paints, so a save bumps this and
+  // the fetches that depend on the bins re-run.
+  const [editingScale, setEditingScale] = useState(false)
+  const [scaleVersion, setScaleVersion] = useState(0)
+
   const session = sessions.find((s) => s.id === sessionId) ?? null
   const activeDef = defs.find((d) => d.name === kpi) ?? null
 
@@ -105,13 +111,13 @@ export function App() {
   useEffect(() => {
     if (sessionId == null) return
     api.track(sessionId, kpi).then(setTrack).catch(fail)
-  }, [sessionId, kpi, fail])
+  }, [sessionId, kpi, scaleVersion, fail])
 
   useEffect(() => {
     if (sessionId == null) return
     api.distribution(sessionId, kpi, range).then(setDist).catch(fail)
     api.degradations(sessionId, kpi, 5, range).then(setDegradations).catch(fail)
-  }, [sessionId, kpi, range, fail])
+  }, [sessionId, kpi, range, scaleVersion, fail])
 
   useEffect(() => {
     if (sessionId == null || SERIES_KPIS.includes(kpi)) { setExtraSeries(null); return }
@@ -126,12 +132,12 @@ export function App() {
   useEffect(() => {
     if (sessionId == null) return
     api.snapshot(sessionId, cursorSeq).then(setSnapshot).catch(() => { /* seq may be out of range */ })
-  }, [sessionId, cursorSeq])
+  }, [sessionId, cursorSeq, scaleVersion])
 
   useEffect(() => {
     if (sessionId == null || binSize === 0) { setBins(null); return }
     api.bins(sessionId, kpi, binSize).then(setBins).catch(fail)
-  }, [sessionId, kpi, binSize, fail])
+  }, [sessionId, kpi, binSize, scaleVersion, fail])
 
   useEffect(() => {
     if (sessionId == null) return
@@ -415,6 +421,15 @@ export function App() {
         </div>
       )}
 
+      {editingScale && activeDef && (
+        <LegendEditor def={activeDef}
+                      onClose={() => setEditingScale(false)}
+                      onSaved={(updated) => {
+                        setDefs((prev) => prev.map((d) => (d.name === updated.name ? updated : d)))
+                        setScaleVersion((v) => v + 1)
+                      }} />
+      )}
+
       {mode === 'compare' ? (
         <div className="body"><div className="center"><CompareView sessions={sessions} /></div></div>
       ) : mode === 'lab' ? (
@@ -450,7 +465,10 @@ export function App() {
             <div className="dock right">
               <div className="dock-section">
                 <h3>Color Legends</h3>
-                <div className="content"><LegendPanel dist={dist} /></div>
+                <div className="content">
+                  <LegendPanel dist={dist}
+                               onEdit={activeDef ? () => setEditingScale(true) : undefined} />
+                </div>
               </div>
               <div className="dock-section" style={{ flex: 1, minHeight: 0 }}>
                 <h3>Numerical Data</h3>

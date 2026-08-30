@@ -252,3 +252,55 @@ td.sev-WARNING  { background: var(--warning-bg); color: #262626; }
   border: none; background: none; color: inherit; cursor: pointer; margin-left: 8px;
 }
 .verdict-NO-DATA { color: var(--text-dim); font-style: italic; }
+
+/* ---- colour scale editor -------------------------------------------------- */
+.legend-edit {
+  display: block; width: 100%; margin: 0 0 6px; padding: 3px 0;
+  border: 1px solid var(--border); background: #fff; border-radius: 3px;
+  cursor: pointer; font-size: 11px; color: var(--text-dim);
+}
+.legend-edit:hover { background: #f4f6f9; color: #222; }
+
+.modal-backdrop {
+  position: fixed; inset: 0; background: rgba(20, 22, 26, .45);
+  display: flex; align-items: center; justify-content: center; z-index: 1000;
+}
+.modal {
+  background: #fff; border: 1px solid #b9bcc4; border-radius: 4px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, .28);
+  width: 560px; max-width: 94vw; max-height: 92vh; overflow: auto;
+}
+.modal > header {
+  display: flex; align-items: center; gap: 8px;
+  padding: 6px 10px; background: var(--panel-header); border-bottom: 1px solid var(--border);
+}
+.modal > header .title { font-weight: 600; flex: 1; }
+.modal > header button {
+  border: none; background: none; cursor: pointer; font-size: 13px; color: var(--text-dim);
+}
+.modal-hint { margin: 8px 10px; font-size: 12px; color: var(--text-dim); }
+.modal > footer {
+  display: flex; align-items: center; gap: 8px;
+  padding: 8px 10px; border-top: 1px solid var(--border); background: #fafafa;
+}
+.modal > footer .spacer { flex: 1; }
+.modal > footer button {
+  border: 1px solid var(--border); background: #fff; border-radius: 3px;
+  padding: 4px 12px; cursor: pointer; font-size: 12px;
+}
+.modal > footer button.primary { background: #30578d; border-color: #27466f; color: #fff; }
+.modal > footer button:disabled { opacity: .5; cursor: default; }
+
+table.legend-editor { margin: 0 10px; width: calc(100% - 20px); }
+table.legend-editor td { padding: 3px 4px; }
+.swatch-row { display: flex; align-items: center; gap: 3px; }
+.swatch-row input[type=color] {
+  width: 34px; height: 20px; padding: 0; border: 1px solid var(--border); background: none;
+}
+.swatch-pick {
+  width: 13px; height: 13px; border: 1px solid rgba(0, 0, 0, .25);
+  border-radius: 2px; padding: 0; cursor: pointer;
+}
+input.boundary { width: 76px; text-align: right; }
+.modal-preview { margin: 10px; padding: 8px; background: #fafafa; border: 1px solid var(--border); }
+.modal-preview b { display: block; font-size: 11px; color: var(--text-dim); margin-bottom: 4px; }

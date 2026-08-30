@@ -2,7 +2,7 @@ import type {
   AreaBin, Campaign, CellConfig, CellRef, ChannelModel, Comparison, CoverageIssue,
   Degradation, Distribution, DuEndpoint, ImportResult, KpiDefinition, NetworkEvent,
   SeqRange, Series, SessionSummary, SignalingMessage, Snapshot, Statistics, TestRun,
-  TrackPoint, UeProfile,
+  Threshold, TrackPoint, UeProfile,
 } from './types'
 
 const BASE = '/api'
@@ -47,6 +47,30 @@ export const api = {
   messages: (id: number) => get<SignalingMessage[]>(`/sessions/${id}/messages`),
   cells: (id: number) => get<CellRef[]>(`/sessions/${id}/cells`),
   kpiDefinitions: () => get<KpiDefinition[]>('/kpi-definitions'),
+
+  saveThresholds: async (name: string, bins: Threshold[]): Promise<KpiDefinition> => {
+    const res = await fetch(`${BASE}/kpi-definitions/${name}/thresholds`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(bins),
+    })
+    if (!res.ok) {
+      let detail = res.statusText
+      try { detail = (await res.json()).message ?? detail } catch { /* no JSON body */ }
+      throw new Error(detail)
+    }
+    return res.json() as Promise<KpiDefinition>
+  },
+
+  resetThresholds: async (name: string): Promise<KpiDefinition> => {
+    const res = await fetch(`${BASE}/kpi-definitions/${name}/thresholds/reset`, { method: 'POST' })
+    if (!res.ok) {
+      let detail = res.statusText
+      try { detail = (await res.json()).message ?? detail } catch { /* no JSON body */ }
+      throw new Error(detail)
+    }
+    return res.json() as Promise<KpiDefinition>
+  },
   compare: (a: number, b: number, kpis: string[]) =>
     get<Comparison>(`/compare?a=${a}&b=${b}&kpis=${kpis.join(',')}`),
 

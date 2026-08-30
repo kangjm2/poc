@@ -5,7 +5,9 @@ import com.vdt.analyzer.api.Dtos.ThresholdDto;
 import com.vdt.analyzer.domain.KpiDefinition;
 import com.vdt.analyzer.domain.KpiThreshold;
 import com.vdt.analyzer.repo.KpiDefinitionRepo;
+import com.vdt.analyzer.seed.KpiSeed;
 import com.vdt.analyzer.service.KpiCatalog;
+import com.vdt.analyzer.service.ThresholdScale;
 import jakarta.transaction.Transactional;
 import org.springframework.web.bind.annotation.*;
 
@@ -33,26 +35,46 @@ public class KpiController {
     /**
      * Bin boundaries are operator conventions, so an operator can retune the scale
      * without a code change and every user of this server sees the new one.
+     *
+     * The old rows are removed and flushed before the new ones are written: both sets
+     * carry ordinals 0..n, so letting Hibernate order the statements itself collided
+     * with the (kpi_name, ordinal) unique index and failed every single call.
      */
     @PutMapping("/{name}/thresholds")
     @Transactional
     public KpiDefinitionDto updateThresholds(@PathVariable String name,
                                              @RequestBody List<ThresholdDto> body) {
         KpiDefinition def = catalog.require(name);
+        List<ThresholdDto> scale = ThresholdScale.validate(body, def.getDecimals());
+
         def.getThresholds().clear();
-        int ordinal = 0;
-        for (ThresholdDto t : body) {
+        repo.saveAndFlush(def);
+
+        for (ThresholdDto t : scale) {
             KpiThreshold kt = new KpiThreshold();
             kt.setKpiName(name);
-            kt.setOrdinal(ordinal++);
+            kt.setOrdinal(t.ordinal());
             kt.setLowerBound(t.lowerBound());
             kt.setUpperBound(t.upperBound());
             kt.setColor(t.color());
             kt.setLabel(t.label());
-            kt.setSeverity(t.severity() == null ? "NORMAL" : t.severity());
+            kt.setSeverity(t.severity());
             def.getThresholds().add(kt);
         }
-        return toDto(repo.save(def));
+        return toDto(repo.saveAndFlush(def));
+    }
+
+    /** Restores the seeded scale for one KPI, so an experiment is never a dead end. */
+    @PostMapping("/{name}/thresholds/reset")
+    @Transactional
+    public KpiDefinitionDto resetThresholds(@PathVariable String name) {
+        KpiDefinition seeded = KpiSeed.definitions().stream()
+                .filter(d -> d.getName().equals(name)).findFirst()
+                .orElseThrow(() -> new IllegalArgumentException("No seeded scale for " + name));
+        return updateThresholds(name, seeded.getThresholds().stream()
+                .map(t -> new ThresholdDto(t.getOrdinal(), t.getLowerBound(), t.getUpperBound(),
+                        t.getColor(), t.getLabel(), t.getSeverity()))
+                .toList());
     }
 
     private static KpiDefinitionDto toDto(KpiDefinition d) {
