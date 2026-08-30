@@ -10,6 +10,7 @@ import {
   DegradationPanel, EventList, LegendPanel, MessageList, ParameterGrid, ParameterTree,
 } from './components/Panels'
 import { CompareView } from './components/CompareView'
+import { StatisticsPanel } from './components/StatisticsPanel'
 import { LabView } from './components/LabView'
 import { ImportView } from './components/ImportView'
 
@@ -25,6 +26,7 @@ const WORKBOOKS = [
   { id: 'signaling', label: 'L3 Signalling' },
   { id: 'degradation', label: 'Degradation' },
   { id: 'coverage', label: 'Coverage Issues' },
+  { id: 'statistics', label: 'Statistics' },
 ] as const
 type WorkbookId = (typeof WORKBOOKS)[number]['id']
 
@@ -166,6 +168,10 @@ export function App() {
               <MessageList messages={messages} cursorTs={snapshot?.ts ?? null} />
             </div>
           </div>
+        )
+      case 'statistics':
+        return (
+          <StatisticsPanel sessionId={sessionId} kpi={kpi} unit={activeDef?.unit ?? ''} />
         )
       case 'coverage':
         return (

@@ -23,7 +23,6 @@ async function get<T>(path: string): Promise<T> {
 
 export const api = {
   sessions: () => get<SessionSummary[]>('/sessions'),
-  session: (id: number) => get<SessionSummary>(`/sessions/${id}`),
   // maxPoints caps the payload; the server decimates while preserving bin changes
   // and per-bucket extremes.
   track: (id: number, kpi: string, maxPoints = 4000) =>
@@ -72,6 +71,8 @@ export const api = {
     }
     return res.json() as Promise<ImportResult>
   },
+
+  importJobs: () => get<Array<Record<string, unknown>>>('/import/jobs'),
 
   exportUrl: (id: number, kind: 'csv' | 'geojson', kpi?: string) =>
     kind === 'csv'

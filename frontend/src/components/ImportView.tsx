@@ -19,9 +19,13 @@ export function ImportView({ onImported }: { onImported: () => void }) {
   const [result, setResult] = useState<ImportResult | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [knownKpis, setKnownKpis] = useState<string[]>([])
+  const [jobs, setJobs] = useState<Array<Record<string, unknown>>>([])
+
+  const reloadJobs = () => { api.importJobs().then(setJobs).catch(() => {}) }
 
   useEffect(() => {
     api.kpiDefinitions().then((d) => setKnownKpis(d.map((k) => k.name))).catch(() => {})
+    reloadJobs()
   }, [])
 
   const submit = async () => {
@@ -37,6 +41,7 @@ export function ImportView({ onImported }: { onImported: () => void }) {
     try {
       setResult(await api.importCsv(form))
       onImported()
+      reloadJobs()
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
     } finally {
@@ -91,6 +96,37 @@ export function ImportView({ onImported }: { onImported: () => void }) {
       </div>
 
       {error && <div className="error">{error}</div>}
+
+      <div className="panel">
+        <header>
+          <span className="title">Import history</span>
+          <span className="meta">{jobs.length}</span>
+        </header>
+        {jobs.length === 0
+          ? <div className="loading">No imports yet.</div>
+          : (
+            <table className="grid">
+              <thead><tr><th>File</th><th>Status</th><th className="num">Rows</th>
+                <th className="num">Samples</th><th className="num">KPI values</th>
+                <th>Session</th><th>Message</th></tr></thead>
+              <tbody>
+                {jobs.map((j) => (
+                  <tr key={String(j.id)}>
+                    <td>{String(j.filename)}</td>
+                    <td className={j.status === 'FAILED' ? 'sev-CRITICAL' : ''}>{String(j.status)}</td>
+                    <td className="num">{String(j.rows_read)}</td>
+                    <td className="num">{String(j.samples_loaded)}</td>
+                    <td className="num">{String(j.kpis_loaded)}</td>
+                    <td>{j.session_id == null ? '-' : String(j.session_id)}</td>
+                    <td style={{ whiteSpace: 'normal', color: '#666' }}>
+                      {j.message == null ? '' : String(j.message)}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+      </div>
 
       {result && (
         <div className="panel">
