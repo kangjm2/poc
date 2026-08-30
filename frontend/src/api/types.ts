@@ -95,3 +95,66 @@ export interface KpiDefinition {
   technology: string; direction: string; decimals: number
   description: string | null; thresholds: Threshold[]
 }
+
+// ---------------------------------------------------------------- lab domain
+
+export interface ChannelModel {
+  id: number; name: string; modelType: string; profile: string | null
+  delaySpreadNs: number | null; maxDopplerHz: number | null
+  mimoCorrelation: string | null; pathLossDb: number | null; awgnSnrDb: number | null
+  sourceSessionId: number | null; description: string | null
+}
+
+export interface CellConfig {
+  id: number; name: string; band: string; dlArfcn: number | null; bandwidthMhz: number | null
+  scsKhz: number | null; duplex: string; tddPattern: string | null; mimoLayers: number | null
+  txAntennas: number | null; rxAntennas: number | null; maxPowerDbm: number | null
+}
+
+export interface UeProfile {
+  id: number; name: string; release: string | null; ueCount: number | null
+  maxMimoLayers: number | null; trafficProfile: string
+  targetMbps: number | null; mobilityKmh: number | null
+}
+
+export interface DuEndpoint {
+  id: number; name: string; vendor: string | null; connectionType: string
+  address: string | null; splitOption: string | null; notes: string | null
+}
+
+export interface Campaign {
+  id: number; name: string; description: string | null; owner: string | null
+  createdAt: string; runCount: number
+}
+
+export interface Criterion {
+  id: number; kpiName: string; aggregate: string; operator: string
+  threshold: number; actualValue: number | null; passed: boolean | null
+}
+
+export interface TestRun {
+  id: number; campaignId: number; name: string
+  channelModel: ChannelModel | null; cellConfig: CellConfig | null
+  ueProfile: UeProfile | null; duEndpoint: DuEndpoint | null
+  sessionId: number | null; status: string; verdict: string | null
+  progressPct: number; startedAt: string | null; endedAt: string | null
+  message: string | null; criteria: Criterion[]
+}
+
+// ------------------------------------------------------- spatial and import
+
+export interface AreaBin {
+  centerLat: number; centerLon: number; sizeMeters: number; sampleCount: number
+  avgValue: number; minValue: number; maxValue: number; color: string; binLabel: string
+}
+
+export interface CoverageIssue {
+  type: string; severity: string; startSeq: number; endSeq: number
+  sampleCount: number; latitude: number; longitude: number; detail: string
+}
+
+export interface ImportResult {
+  jobId: number; sessionId: number | null; status: string
+  rowsRead: number; samplesLoaded: number; kpisLoaded: number
+  mappedKpis: string[]; ignoredColumns: string[]; message: string | null
+}

@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
-import type { CellRef, TrackPoint } from '../api/types'
+import type { AreaBin, CellRef, TrackPoint } from '../api/types'
 
 interface Props {
   track: TrackPoint[]
@@ -9,6 +9,9 @@ interface Props {
   cursorSeq: number
   onCursorChange: (seq: number) => void
   kpiName: string
+  /** When present, tiles replace the raw route so a long drive stays readable. */
+  bins?: AreaBin[] | null
+  showServingLine?: boolean
 }
 
 /**
@@ -16,11 +19,15 @@ interface Props {
  * read at a glance. Each segment takes the colour of the bin its sample fell in,
  * so the map and the legend are the same classification.
  */
-export function RouteMap({ track, cells, cursorSeq, onCursorChange, kpiName }: Props) {
+export function RouteMap({
+  track, cells, cursorSeq, onCursorChange, kpiName, bins, showServingLine = true,
+}: Props) {
   const hostRef = useRef<HTMLDivElement>(null)
   const mapRef = useRef<L.Map | null>(null)
   const routeLayer = useRef<L.LayerGroup | null>(null)
   const cellLayer = useRef<L.LayerGroup | null>(null)
+  const binLayer = useRef<L.LayerGroup | null>(null)
+  const servingLine = useRef<L.Polyline | null>(null)
   const cursorMarker = useRef<L.CircleMarker | null>(null)
   const [basemapFailed, setBasemapFailed] = useState(false)
 
@@ -37,16 +44,41 @@ export function RouteMap({ track, cells, cursorSeq, onCursorChange, kpiName }: P
     tiles.addTo(map)
     map.setView([65.012, 25.465], 13)
     routeLayer.current = L.layerGroup().addTo(map)
+    binLayer.current = L.layerGroup().addTo(map)
     cellLayer.current = L.layerGroup().addTo(map)
     mapRef.current = map
     return () => { map.remove(); mapRef.current = null }
   }, [])
+
+  // Tiles and the raw route are alternatives, never both at once.
+  useEffect(() => {
+    const layer = binLayer.current
+    if (!layer) return
+    layer.clearLayers()
+    if (!bins || bins.length === 0) return
+    for (const b of bins) {
+      const dLat = b.sizeMeters / 111_320
+      const dLon = b.sizeMeters / (111_320 * Math.cos((b.centerLat * Math.PI) / 180))
+      L.rectangle(
+        [[b.centerLat - dLat / 2, b.centerLon - dLon / 2],
+         [b.centerLat + dLat / 2, b.centerLon + dLon / 2]],
+        { color: b.color, weight: 1, fillColor: b.color, fillOpacity: 0.65 },
+      ).bindTooltip(
+        `${b.sampleCount} samples<br/>avg ${b.avgValue}<br/>${b.binLabel}`,
+      ).addTo(layer)
+    }
+  }, [bins])
 
   useEffect(() => {
     const map = mapRef.current
     const layer = routeLayer.current
     if (!map || !layer || track.length === 0) return
     layer.clearLayers()
+    if (bins && bins.length > 0) {
+      const b = L.latLngBounds(track.map((p) => [p.latitude, p.longitude] as [number, number]))
+      map.fitBounds(b, { padding: [18, 18] })
+      return
+    }
 
     for (let i = 0; i < track.length - 1; i++) {
       const a = track[i]
@@ -64,7 +96,7 @@ export function RouteMap({ track, cells, cursorSeq, onCursorChange, kpiName }: P
     }
     const bounds = L.latLngBounds(track.map((p) => [p.latitude, p.longitude] as [number, number]))
     map.fitBounds(bounds, { padding: [18, 18] })
-  }, [track, kpiName, onCursorChange])
+  }, [track, kpiName, onCursorChange, bins])
 
   useEffect(() => {
     const layer = cellLayer.current
@@ -103,12 +135,29 @@ export function RouteMap({ track, cells, cursorSeq, onCursorChange, kpiName }: P
     } else {
       cursorMarker.current.setLatLng([p.latitude, p.longitude])
     }
-  }, [cursorSeq, track])
+
+    // Line from the terminal to its serving cell, so which cell is in charge at this
+    // instant is visible rather than inferred from a PCI number.
+    if (servingLine.current) { servingLine.current.remove(); servingLine.current = null }
+    if (showServingLine && p.servingPci != null) {
+      const cell = cells.find((c) => c.pci === p.servingPci)
+      if (cell?.latitude != null && cell.longitude != null) {
+        servingLine.current = L.polyline(
+          [[p.latitude, p.longitude], [cell.latitude, cell.longitude]],
+          { color: '#30578d', weight: 2, dashArray: '4 3', opacity: 0.9 },
+        ).addTo(map)
+      }
+    }
+  }, [cursorSeq, track, cells, showServingLine])
 
   return (
     <div className="panel map-panel">
       <header>
-        <span className="title">Map &mdash; route coloured by {kpiName}</span>
+        <span className="title">
+          Map &mdash; {bins && bins.length > 0
+            ? `${bins.length} area bins of ${bins[0].sizeMeters} m`
+            : `route coloured by ${kpiName}`}
+        </span>
         <span className="meta">
           {basemapFailed && (
             <span style={{ color: '#b26a00', marginRight: 10 }}>

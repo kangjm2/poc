@@ -126,6 +126,62 @@ check('비교 판정 산출', verdicts.some((v) => v === 'BETTER' || v === 'WORS
 await page.screenshot({ path: `${OUT}/08-compare.png`, fullPage: true })
 
 const appErrors = errors.filter((e) => !/tile\.openstreetmap\.org|ERR_CONNECTION|Failed to load resource/.test(e))
+// 16. network-side KPIs are present alongside UE-side ones
+await page.locator('.mode-tabs button', { hasText: 'Analysis' }).click()
+await page.waitForTimeout(700)
+const treeText = await page.locator('.dock .tree').innerText()
+check('네트워크(DU) 측 KPI 노출', /Network Side/.test(treeText) && /PRB utilisation/.test(treeText))
+
+// 17. area binning replaces the raw route with tiles
+const segBefore = await page.locator('path.leaflet-interactive').count()
+await page.locator('.toolbar select').nth(2).selectOption('150')
+await page.waitForTimeout(1600)
+const rects = await page.locator('.leaflet-overlay-pane path').count()
+const mapTitle = await page.locator('.panel > header .title').first().innerText()
+check('영역 비닝(area binning) 렌더링', /area bins/.test(mapTitle) && rects > 0,
+  `${segBefore} segments -> ${rects} shapes, title="${mapTitle}"`)
+await page.screenshot({ path: `${OUT}/09-area-bins.png` })
+await page.locator('.toolbar select').nth(2).selectOption('0')
+await page.waitForTimeout(900)
+
+// 18. coverage issue detection
+await page.locator('.workbook-tabs button', { hasText: 'Coverage Issues' }).click()
+await page.waitForTimeout(1400)
+const issueRows = await page.locator('.panel table.grid tbody tr').count()
+const issueText = await page.locator('.panels').innerText()
+check('커버리지 문제 자동 탐지', issueRows > 0 && /WEAK COVERAGE|INTERFERENCE|OVERSHOOT/.test(issueText),
+  `${issueRows} issues`)
+await page.screenshot({ path: `${OUT}/10-coverage-issues.png` })
+
+// 19. export links are wired
+const csvHref = await page.locator('.toolbar a', { hasText: 'CSV' }).getAttribute('href')
+const geoHref = await page.locator('.toolbar a', { hasText: 'GeoJSON' }).getAttribute('href')
+check('CSV / GeoJSON 내보내기 링크', /export\.csv/.test(csvHref ?? '') && /export\.geojson/.test(geoHref ?? ''))
+
+// 20. lab campaign view shows the emulated-vs-real configuration
+await page.locator('.mode-tabs button', { hasText: 'Lab Campaigns' }).click()
+await page.waitForTimeout(1600)
+const labText = await page.locator('.panels').innerText()
+check('랩 캠페인 구성 표시',
+  /Channel model \(emulated\)/.test(labText) && /DU under test \(real\)/.test(labText)
+  && /UE profile \(emulated\)/.test(labText))
+check('필드 리플레이 채널 모델', /FIELD_REPLAY/.test(labText))
+check('O-RAN 프론트홀 연결 표기', /FRONTHAUL_ORAN_7_2X/.test(labText))
+
+// 21. evaluating a run produces a verdict from its criteria
+await page.locator('.panel button', { hasText: 'Evaluate' }).first().click()
+await page.waitForTimeout(1800)
+const afterEval = await page.locator('.panels').innerText()
+check('합불 판정(verdict) 산출', /PASS|FAIL/.test(afterEval))
+await page.screenshot({ path: `${OUT}/11-lab-campaign.png`, fullPage: true })
+
+// 22. import screen documents the recognised columns
+await page.locator('.mode-tabs button', { hasText: 'Import' }).click()
+await page.waitForTimeout(1200)
+const importText = await page.locator('.panels').innerText()
+check('CSV 임포트 화면', /Recognised KPI columns/.test(importText) && /RSRP/.test(importText))
+await page.screenshot({ path: `${OUT}/12-import.png` })
+
 check('앱 코드 콘솔 오류 없음', appErrors.length === 0, appErrors.slice(0, 3).join(' | '))
 const tileFailures = errors.length - appErrors.length
 if (tileFailures > 0) console.log(`  (note: ${tileFailures} basemap tile fetches failed - network egress, not app code)`)

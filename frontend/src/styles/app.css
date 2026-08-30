@@ -192,3 +192,30 @@ td.sev-WARNING  { background: var(--warning-bg); color: #262626; }
     linear-gradient(to bottom, #e4e8ec 1px, transparent 1px);
   background-size: 48px 48px;
 }
+
+/* Lab configuration cards: four related config blocks read side by side. */
+.config-grid {
+  display: grid; gap: 8px; padding: 8px;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+}
+.config-card { border: 1px solid var(--border-soft); background: #fcfcfd; }
+.config-card h4 {
+  margin: 0; padding: 4px 8px; font-size: 11px;
+  background: var(--panel-header); border-bottom: 1px solid var(--border-soft);
+}
+.config-card table.grid td { padding: 2px 8px; }
+.config-card ul { font-size: 11px; padding: 6px 6px 6px 22px; }
+
+.toolbar input[type="text"], .toolbar input:not([type]) {
+  padding: 3px 6px; border: 1px solid var(--border); border-radius: 2px;
+}
+.panel button {
+  padding: 2px 10px; border: 1px solid var(--border);
+  background: var(--panel-header); cursor: pointer; border-radius: 2px;
+}
+.panel button:hover:not(:disabled) { background: #e6ecf5; }
+.panel button:disabled { opacity: .5; cursor: default; }
+
+.issue-WEAK_COVERAGE { border-left: 3px solid var(--critical-bg); }
+.issue-INTERFERENCE  { border-left: 3px solid #ff681f; }
+.issue-OVERSHOOT     { border-left: 3px solid #30578d; }

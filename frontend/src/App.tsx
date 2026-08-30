@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { api } from './api/client'
 import type {
-  CellRef, Degradation, Distribution, KpiDefinition, NetworkEvent, Series,
-  SessionSummary, SignalingMessage, Snapshot, TrackPoint,
+  AreaBin, CellRef, CoverageIssue, Degradation, Distribution, KpiDefinition,
+  NetworkEvent, Series, SessionSummary, SignalingMessage, Snapshot, TrackPoint,
 } from './api/types'
 import { RouteMap } from './components/RouteMap'
 import { TimeSeriesChart } from './components/TimeSeriesChart'
@@ -10,6 +10,8 @@ import {
   DegradationPanel, EventList, LegendPanel, MessageList, ParameterGrid, ParameterTree,
 } from './components/Panels'
 import { CompareView } from './components/CompareView'
+import { LabView } from './components/LabView'
+import { ImportView } from './components/ImportView'
 
 /**
  * Workbook pages. Existing users switch screen sets from a tab strip along the
@@ -22,6 +24,7 @@ const WORKBOOKS = [
   { id: 'mobility', label: 'Mobility' },
   { id: 'signaling', label: 'L3 Signalling' },
   { id: 'degradation', label: 'Degradation' },
+  { id: 'coverage', label: 'Coverage Issues' },
 ] as const
 type WorkbookId = (typeof WORKBOOKS)[number]['id']
 
@@ -31,7 +34,12 @@ export function App() {
   const [defs, setDefs] = useState<KpiDefinition[]>([])
   const [kpi, setKpi] = useState('RSRP')
   const [workbook, setWorkbook] = useState<WorkbookId>('overview')
-  const [mode, setMode] = useState<'analyze' | 'compare'>('analyze')
+  const [mode, setMode] = useState<'analyze' | 'compare' | 'lab' | 'import'>('analyze')
+
+  // Area binning replaces the raw route once a drive is too dense to read.
+  const [binSize, setBinSize] = useState(0)
+  const [bins, setBins] = useState<AreaBin[] | null>(null)
+  const [issues, setIssues] = useState<CoverageIssue[]>([])
 
   const [track, setTrack] = useState<TrackPoint[]>([])
   const [cells, setCells] = useState<CellRef[]>([])
@@ -88,6 +96,16 @@ export function App() {
     api.snapshot(sessionId, cursorSeq).then(setSnapshot).catch(() => { /* seq may be out of range */ })
   }, [sessionId, cursorSeq])
 
+  useEffect(() => {
+    if (sessionId == null || binSize === 0) { setBins(null); return }
+    api.bins(sessionId, kpi, binSize).then(setBins).catch(fail)
+  }, [sessionId, kpi, binSize, fail])
+
+  useEffect(() => {
+    if (sessionId == null) return
+    api.coverageIssues(sessionId).then(setIssues).catch(fail)
+  }, [sessionId, fail])
+
   const seriesFor = (name: string) => series.find((s) => s.kpi === name) ?? null
   const maxSeq = Math.max(0, (session?.sampleCount ?? 1) - 1)
 
@@ -110,7 +128,8 @@ export function App() {
         return (
           <>
             <RouteMap track={track} cells={cells} cursorSeq={cursorSeq}
-                      onCursorChange={setCursorSeq} kpiName={activeDef?.displayName ?? kpi} />
+                      onCursorChange={setCursorSeq} kpiName={activeDef?.displayName ?? kpi}
+                      bins={bins} />
             {chart(kpi)}
             <ParameterGrid snapshot={snapshot} />
           </>
@@ -143,6 +162,39 @@ export function App() {
             </div>
           </div>
         )
+      case 'coverage':
+        return (
+          <>
+            <RouteMap track={track} cells={cells} cursorSeq={cursorSeq}
+                      onCursorChange={setCursorSeq} kpiName={activeDef?.displayName ?? kpi}
+                      bins={bins} />
+            <div className="panel">
+              <header>
+                <span className="title">Detected coverage issues</span>
+                <span className="meta">{issues.length}</span>
+              </header>
+              <div style={{ maxHeight: 320, overflow: 'auto' }}>
+                <table className="grid">
+                  <thead><tr><th>Type</th><th>Severity</th><th className="num">Samples</th>
+                    <th>Detail</th></tr></thead>
+                  <tbody>
+                    {issues.map((x, i) => (
+                      <tr key={i} className={`deg-row issue-${x.type}`}
+                          onClick={() => setCursorSeq(x.startSeq)}>
+                        <td>{x.type.replace('_', ' ')}</td>
+                        <td className={x.severity === 'CRITICAL' ? 'sev-CRITICAL' : 'sev-WARNING'}>
+                          {x.severity}
+                        </td>
+                        <td className="num">{x.sampleCount}</td>
+                        <td style={{ whiteSpace: 'normal' }}>{x.detail}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </>
+        )
       case 'degradation':
         return (
           <>
@@ -171,6 +223,10 @@ export function App() {
                   onClick={() => setMode('analyze')}>Analysis</button>
           <button className={mode === 'compare' ? 'active' : ''}
                   onClick={() => setMode('compare')}>Compare</button>
+          <button className={mode === 'lab' ? 'active' : ''}
+                  onClick={() => setMode('lab')}>Lab Campaigns</button>
+          <button className={mode === 'import' ? 'active' : ''}
+                  onClick={() => setMode('import')}>Import</button>
         </div>
         {mode === 'analyze' && (
           <>
@@ -187,6 +243,24 @@ export function App() {
                 {defs.map((d) => <option key={d.name} value={d.name}>{d.displayName}</option>)}
               </select>
             </div>
+            <div className="group">
+              <label>Area bins</label>
+              <select value={binSize} onChange={(e) => setBinSize(Number(e.target.value))}>
+                <option value={0}>off (raw route)</option>
+                <option value={50}>50 m</option>
+                <option value={150}>150 m</option>
+                <option value={500}>500 m</option>
+              </select>
+            </div>
+            <div className="group">
+              <label>Export</label>
+              {sessionId != null && (
+                <>
+                  <a href={api.exportUrl(sessionId, 'csv')} download>CSV</a>
+                  <a href={api.exportUrl(sessionId, 'geojson', kpi)} download>GeoJSON</a>
+                </>
+              )}
+            </div>
           </>
         )}
         <span className="spacer" />
@@ -198,6 +272,12 @@ export function App() {
 
       {mode === 'compare' ? (
         <div className="body"><div className="center"><CompareView sessions={sessions} /></div></div>
+      ) : mode === 'lab' ? (
+        <div className="body"><div className="center"><LabView /></div></div>
+      ) : mode === 'import' ? (
+        <div className="body"><div className="center">
+          <ImportView onImported={() => api.sessions().then(setSessions).catch(fail)} />
+        </div></div>
       ) : (
         <>
           <div className="body">
