@@ -423,6 +423,14 @@ export function App() {
 
       {editingScale && activeDef && (
         <LegendEditor def={activeDef}
+                      proposed={dist?.bins.map((b, i) => ({
+                        ordinal: i,
+                        lowerBound: b.lowerBound,
+                        upperBound: b.upperBound,
+                        color: b.color,
+                        label: b.label,
+                        severity: b.severity,
+                      }))}
                       onClose={() => setEditingScale(false)}
                       onSaved={(updated) => {
                         setDefs((prev) => prev.map((d) => (d.name === updated.name ? updated : d)))

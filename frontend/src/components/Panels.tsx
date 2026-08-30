@@ -65,9 +65,20 @@ export function LegendPanel({ dist, onEdit }: {
       )}
       <div className="legend-row" style={{ fontWeight: 600, borderBottom: '1px solid #e2e2e8' }}>
         <span className="swatch" style={{ visibility: 'hidden' }} />
-        <span className="label">{dist.displayName} ({dist.unit}) [Sample]</span>
+        <span className="label">
+          {dist.displayName}{dist.unit ? ` (${dist.unit})` : ''} [Sample]
+        </span>
         <span className="count">n</span><span className="pct">%</span>
       </div>
+      {dist.derived && (
+        // An auto scale looks exactly like a configured one but means something
+        // different: the colours rank this drive against itself, so the same value
+        // in another drive can be a different colour. Say so, or the map is read as
+        // an absolute judgement it is not making.
+        <div className="legend-note" title="Quartiles of this session, rounded. Set fixed bins with Edit scale.">
+          Auto scale &mdash; quartiles of this session, no pass/fail implied
+        </div>
+      )}
       {dist.bins.map((b) => (
         <div className="legend-row" key={b.label}>
           <span className="swatch" style={{ background: b.color }} />

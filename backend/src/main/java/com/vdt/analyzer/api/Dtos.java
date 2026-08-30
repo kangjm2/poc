@@ -27,8 +27,9 @@ public final class Dtos {
             String label, String color, String severity,
             Double lowerBound, Double upperBound, long count, double percentage) {}
 
+    /** derived = the bins came from this session's own distribution, not configuration. */
     public record Distribution(String kpi, String displayName, String unit,
-                               long total, List<DistributionBin> bins) {}
+                               long total, List<DistributionBin> bins, boolean derived) {}
 
     public record KpiValue(String kpi, String displayName, String unit, Double value,
                            String color, String severity, String binLabel, int decimals) {}

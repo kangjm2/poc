@@ -1,7 +1,8 @@
 package com.vdt.analyzer.service;
 
-import com.vdt.analyzer.domain.KpiDefinition;
 import com.vdt.analyzer.domain.KpiThreshold;
+
+import java.util.List;
 
 /**
  * Builds SQL fragments that classify a KPI value into its configured bin.
@@ -14,10 +15,16 @@ import com.vdt.analyzer.domain.KpiThreshold;
 final class KpiSql {
     private KpiSql() {}
 
-    /** CASE expression yielding the bin ordinal, or -1 when no bin matches. */
-    static String binOrdinalExpr(KpiDefinition def, String column) {
+    /**
+     * CASE expression yielding the bin ordinal, or -1 when no bin matches.
+     *
+     * An empty scale yields the bare literal: "CASE ELSE -1 END" has no WHEN branch
+     * and is a syntax error, which turned every unconfigured KPI into a 500.
+     */
+    static String binOrdinalExpr(List<KpiThreshold> bins, String column) {
+        if (bins.isEmpty()) return "-1";
         StringBuilder sb = new StringBuilder("CASE");
-        for (KpiThreshold t : def.getThresholds()) {
+        for (KpiThreshold t : bins) {
             sb.append(" WHEN ").append(condition(t, column))
               .append(" THEN ").append(t.getOrdinal());
         }
@@ -25,9 +32,10 @@ final class KpiSql {
     }
 
     /** CASE expression yielding the bin severity. */
-    static String severityExpr(KpiDefinition def, String column) {
+    static String severityExpr(List<KpiThreshold> bins, String column) {
+        if (bins.isEmpty()) return "'NORMAL'";
         StringBuilder sb = new StringBuilder("CASE");
-        for (KpiThreshold t : def.getThresholds()) {
+        for (KpiThreshold t : bins) {
             sb.append(" WHEN ").append(condition(t, column))
               .append(" THEN '").append(sanitize(t.getSeverity())).append('\'');
         }

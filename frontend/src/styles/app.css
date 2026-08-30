@@ -304,3 +304,9 @@ table.legend-editor td { padding: 3px 4px; }
 input.boundary { width: 76px; text-align: right; }
 .modal-preview { margin: 10px; padding: 8px; background: #fafafa; border: 1px solid var(--border); }
 .modal-preview b { display: block; font-size: 11px; color: var(--text-dim); margin-bottom: 4px; }
+
+.legend-note {
+  margin: 3px 0 4px; padding: 3px 6px; font-size: 10px; line-height: 1.35;
+  color: #6b5310; background: #fff8e6; border: 1px solid #e6d8a8; border-radius: 2px;
+}
+.verdict-NO-VERDICT { color: var(--text-dim); font-style: italic; }

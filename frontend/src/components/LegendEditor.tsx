@@ -18,16 +18,23 @@ const SEVERITIES = ['NORMAL', 'WARNING', 'CRITICAL'] as const
  * reference tool's own phrasing, which keeps an edited bin reading exactly like a
  * seeded one.
  */
-export function LegendEditor({ def, onClose, onSaved }: {
+export function LegendEditor({ def, proposed, onClose, onSaved }: {
   def: KpiDefinition
+  /**
+   * The bins currently painting the map when the KPI has none configured. Opening
+   * the editor on an auto scale starts from what the user is already looking at,
+   * so "Edit scale" means "pin these and adjust" rather than facing an empty form.
+   */
+  proposed?: Threshold[]
   onClose: () => void
   onSaved: (updated: KpiDefinition) => void
 }) {
-  const [bins, setBins] = useState<Threshold[]>(() => def.thresholds.map((t) => ({ ...t })))
+  const start = () => (def.thresholds.length ? def.thresholds : proposed ?? []).map((t) => ({ ...t }))
+  const [bins, setBins] = useState<Threshold[]>(start)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  useEffect(() => { setBins(def.thresholds.map((t) => ({ ...t }))) }, [def])
+  useEffect(() => { setBins(start()) }, [def])
 
   // Boundaries are the editable numbers: bins.length - 1 of them, ascending.
   const boundaries = useMemo(
@@ -65,6 +72,20 @@ export function LegendEditor({ def, onClose, onSaved }: {
     }
   }
 
+  const clear = async () => {
+    setBusy(true)
+    setError(null)
+    try {
+      const updated = await api.clearThresholds(def.name)
+      onSaved(updated)
+      onClose()
+    } catch (e) {
+      setError(String(e instanceof Error ? e.message : e))
+    } finally {
+      setBusy(false)
+    }
+  }
+
   const reset = async () => {
     setBusy(true)
     setError(null)
@@ -83,18 +104,24 @@ export function LegendEditor({ def, onClose, onSaved }: {
     <div className="modal-backdrop" onMouseDown={onClose}>
       <div className="modal" onMouseDown={(e) => e.stopPropagation()}>
         <header>
-          <span className="title">Colour scale &mdash; {def.displayName} ({def.unit})</span>
+          <span className="title">
+            Colour scale &mdash; {def.displayName}{def.unit ? ` (${def.unit})` : ''}
+          </span>
           <button onClick={onClose} aria-label="Close">✕</button>
         </header>
 
         <p className="modal-hint">
           Each row is one bin. The number between two rows is the boundary they share,
           so the scale always covers every value. Labels follow from the bounds.
+          {def.thresholds.length === 0 && (
+            <> <b>These start from the auto scale</b> &mdash; saving pins them, so the
+            colours stop depending on this session&rsquo;s own distribution.</>
+          )}
         </p>
 
         <table className="grid legend-editor">
           <thead>
-            <tr><th>Colour</th><th>Severity</th><th className="num">Boundary ({def.unit})</th></tr>
+            <tr><th>Colour</th><th>Severity</th><th className="num">Boundary{def.unit ? ` (${def.unit})` : ''}</th></tr>
           </thead>
           <tbody>
             {bins.map((b, i) => (
@@ -148,6 +175,12 @@ export function LegendEditor({ def, onClose, onSaved }: {
 
         <footer>
           <button onClick={reset} disabled={busy}>Reset to default</button>
+          {def.thresholds.length > 0 && (
+            <button onClick={clear} disabled={busy}
+                    title="Drop the fixed bins and colour by each session's own distribution">
+              Use auto scale
+            </button>
+          )}
           <span className="spacer" />
           <button onClick={onClose} disabled={busy}>Cancel</button>
           <button className="primary" onClick={save} disabled={busy || !ascending || !complete}>

@@ -32,8 +32,8 @@ public class KpiCatalog {
     }
 
     /** The first bin containing the value, or empty when the scale does not cover it. */
-    public Optional<KpiThreshold> binFor(KpiDefinition def, Double value) {
+    public Optional<KpiThreshold> binFor(List<KpiThreshold> bins, Double value) {
         if (value == null) return Optional.empty();
-        return def.getThresholds().stream().filter(t -> t.contains(value)).findFirst();
+        return bins.stream().filter(t -> t.contains(value)).findFirst();
     }
 }

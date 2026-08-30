@@ -17,6 +17,11 @@ import java.util.List;
  * The hex values come from a lossless PNG figure, measured at 100% pixel purity by
  * tools/legend-extract/measure-legends.py. An earlier revision took them from a JPEG
  * copy of the same panel, which shifted three of the four by compression artefact.
+ *
+ * direction is not only "which end is good" but "is either end good at all".
+ * Counters and load indicators are NEUTRAL: they get a magnitude ramp rather than
+ * the status ramp, because painting a packet count green would assert a judgement
+ * the measurement does not make.
  */
 public final class KpiSeed {
     private KpiSeed() {}
@@ -25,6 +30,8 @@ public final class KpiSeed {
     public static final String YELLOW = "#FFFF00";
     public static final String ORANGE = "#FF6820";
     public static final String RED    = "#FF0000";
+    /** For a bin that carries no quality judgement, only "a value is present". */
+    public static final String GREY   = "#B7B7B7";
 
     public static List<KpiDefinition> definitions() {
         List<KpiDefinition> out = new ArrayList<>();
@@ -114,10 +121,14 @@ public final class KpiSeed {
                 bin(80.0, 95.0, ORANGE, ">= 80 and < 95", "WARNING"),
                 bin(95.0, null, RED, ">= 95", "CRITICAL")));
 
+        // NEUTRAL: a cell serving thirty UEs is not thirty times better than one
+        // serving one. This is load, and the only judgement the data supports is the
+        // liveness check below - so the scale stops there rather than colouring a
+        // busy cell green.
         out.add(kpi("DU_ACTIVE_UES", "Active UEs", "", "Network Side", "5G NR",
-                "HIGHER_IS_BETTER", 0, "UEs in RRC connected state on the cell.", "DU",
+                "NEUTRAL", 0, "UEs in RRC connected state on the cell.", "DU",
                 bin(null, 1.0, RED, "< 1", "CRITICAL"),
-                bin(1.0, null, GREEN, ">= 1", "NORMAL")));
+                bin(1.0, null, GREY, ">= 1", "NORMAL")));
 
         out.add(kpi("DU_HARQ_RETX_RATE", "HARQ retransmission rate", "%", "Network Side", "5G NR",
                 "LOWER_IS_BETTER", 2, "Share of downlink transmissions requiring HARQ retry.",
@@ -163,11 +174,13 @@ public final class KpiSeed {
                 bin(1.0, 20.0, ORANGE, ">= 1 and < 20", "WARNING"),
                 bin(20.0, null, RED, ">= 20", "CRITICAL")));
 
+        // NEUTRAL for the same reason: a packet count is volume, not quality. The
+        // one real signal is zero, which means the flow stopped.
         out.add(kpi("FH_RX_TOTAL", "CUS RX total", "pkt/s", "Fronthaul", "O-RAN 7.2x",
-                "HIGHER_IS_BETTER", 0, "Total C/U-plane packets received in the interval.",
+                "NEUTRAL", 0, "Total C/U-plane packets received in the interval.",
                 "FRONTHAUL",
                 bin(null, 1.0, RED, "< 1", "CRITICAL"),
-                bin(1.0, null, GREEN, ">= 1", "NORMAL")));
+                bin(1.0, null, GREY, ">= 1", "NORMAL")));
 
         return out;
     }

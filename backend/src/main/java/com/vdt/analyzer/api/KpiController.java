@@ -64,6 +64,19 @@ public class KpiController {
         return toDto(repo.saveAndFlush(def));
     }
 
+    /**
+     * Drops the configured scale so the KPI falls back to bins derived from each
+     * session's own distribution. The other direction of the same loop as saving:
+     * the auto scale proposes, Save pins it, this releases it again.
+     */
+    @DeleteMapping("/{name}/thresholds")
+    @Transactional
+    public KpiDefinitionDto clearThresholds(@PathVariable String name) {
+        KpiDefinition def = catalog.require(name);
+        def.getThresholds().clear();
+        return toDto(repo.saveAndFlush(def));
+    }
+
     /** Restores the seeded scale for one KPI, so an experiment is never a dead end. */
     @PostMapping("/{name}/thresholds/reset")
     @Transactional

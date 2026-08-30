@@ -40,6 +40,8 @@ export interface DistributionBin {
 export interface Distribution {
   kpi: string; displayName: string; unit: string
   total: number; bins: DistributionBin[]
+  /** true = bins came from this session's own distribution, not from configuration */
+  derived: boolean
 }
 
 export interface KpiValue {

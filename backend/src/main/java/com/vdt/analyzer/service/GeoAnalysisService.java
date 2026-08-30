@@ -24,10 +24,12 @@ public class GeoAnalysisService {
 
     private final JdbcTemplate jdbc;
     private final KpiCatalog catalog;
+    private final AutoScale autoScale;
 
-    public GeoAnalysisService(JdbcTemplate jdbc, KpiCatalog catalog) {
+    public GeoAnalysisService(JdbcTemplate jdbc, KpiCatalog catalog, AutoScale autoScale) {
         this.jdbc = jdbc;
         this.catalog = catalog;
+        this.autoScale = autoScale;
     }
 
     public record AreaBin(
@@ -42,6 +44,7 @@ public class GeoAnalysisService {
      */
     public List<AreaBin> areaBins(long sessionId, String kpiName, double sizeMeters) {
         KpiDefinition def = catalog.require(kpiName);
+        List<KpiThreshold> scale = autoScale.effective(sessionId, def);
         if (sizeMeters < 5 || sizeMeters > 20_000) {
             throw new IllegalArgumentException("Bin size must be between 5 and 20000 metres");
         }
@@ -68,7 +71,7 @@ public class GeoAnalysisService {
             double lat = (rs.getDouble("gy") + 0.5) * dLat;
             double lon = (rs.getDouble("gx") + 0.5) * dLon;
             double avg = rs.getDouble("avg_v");
-            Optional<KpiThreshold> bin = catalog.binFor(def, avg);
+            Optional<KpiThreshold> bin = catalog.binFor(scale, avg);
             return new AreaBin(round6(lat), round6(lon), sizeMeters, rs.getLong("n"),
                     round2(avg), round2(rs.getDouble("min_v")), round2(rs.getDouble("max_v")),
                     bin.map(KpiThreshold::getColor).orElse("#999999"),

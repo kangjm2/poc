@@ -15,6 +15,7 @@
  *   S7  Statistics reporting        (summary stats → CDF with percentile marks)
  *   S8  Responsiveness budget       (every analysis endpoint answers inside its budget)
  *   S9  Colour scale personalisation (edit the bins -> every view repaints -> reset)
+ *   S10 Unconfigured KPI            (auto scale: readable, stable under filtering, honest)
  *
  * Scale beyond the seed is covered separately by scripts/load-test.sh.
  */
@@ -521,6 +522,75 @@ scenario('S9 · Colour scale personalisation')
   const restored = await legendLabels()
   step('reset restores the seeded scale',
     JSON.stringify(restored) === JSON.stringify(before.labels), restored.join(' | '))
+}
+
+// ─── S10 · A KPI with no configured scale ────────────────────────────────────
+scenario('S10 · Unconfigured KPI falls back to an auto scale')
+{
+  // Strip one KPI's bins through the API, the way a user-defined or newly imported
+  // KPI arrives: defined, measured, but with nobody's thresholds on it yet.
+  const cityId = sessions.find((s) => s.name === CITY_A).id
+  const stripped = 'CQI'
+  await page.request.delete(`${API}/api/kpi-definitions/${stripped}/thresholds`)
+
+  const dist = await apiGet(`/api/sessions/${cityId}/distribution?kpi=${stripped}`)
+  if (!dist.derived) {
+    step('KPI could be stripped for this check', false, 'still configured — check skipped')
+  } else {
+    step('unconfigured KPI still answers', Array.isArray(dist.bins) && dist.bins.length >= 2,
+      `${dist.bins.length} bins`)
+    step('auto scale is marked as derived', dist.derived === true)
+
+    // Every bin must be reachable: a bin that cannot fill wastes a quarter of the
+    // legend and a step of the ramp.
+    step('every derived bin holds samples', dist.bins.every((b) => b.count > 0),
+      dist.bins.map((b) => `${b.label}=${b.count}`).join(' '))
+
+    // Quantiles, so the bins should be roughly balanced rather than lopsided.
+    const shares = dist.bins.map((b) => b.percentage)
+    step('quartile bins are balanced', Math.max(...shares) < 45 && Math.min(...shares) > 8,
+      shares.map((p) => `${p}%`).join(' '))
+
+    // Boundaries must be readable numbers, not raw quantiles like -93.7421.
+    const bounds = dist.bins.map((b) => b.upperBound).filter((v) => v != null)
+    step('boundaries are rounded, not raw quantiles',
+      bounds.every((v) => Math.abs(v * 100 - Math.round(v * 100)) < 1e-9),
+      bounds.join(', '))
+
+    // The property the whole design turns on: filtering changes counts, never bins.
+    const filtered = await apiGet(
+      `/api/sessions/${cityId}/distribution?kpi=${stripped}&fromSeq=600&toSeq=900`)
+    const same = JSON.stringify(filtered.bins.map((b) => [b.lowerBound, b.upperBound]))
+      === JSON.stringify(dist.bins.map((b) => [b.lowerBound, b.upperBound]))
+    step('range filtering moves the counts, never the boundaries',
+      same && filtered.total < dist.total, `${dist.total} -> ${filtered.total} samples`)
+
+    // A derived scale ranks a drive against itself; it must not claim a breach.
+    step('no derived bin asserts a severity', dist.bins.every((b) => b.severity === 'NORMAL'),
+      [...new Set(dist.bins.map((b) => b.severity))].join(','))
+
+    // And the UI has to say so, or the map reads as an absolute judgement.
+    await openMode('Analysis')
+    await selectSession(CITY_A)
+    await page.locator('.toolbar select').nth(1).selectOption({ label: 'CQI' })
+    await page.waitForTimeout(1600)
+    const noteVisible = await page.locator('.dock.right .legend-note').count()
+    step('legend says the scale was derived, not configured', noteVisible === 1,
+      noteVisible ? await page.locator('.dock.right .legend-note').innerText() : 'no note')
+
+    // Editing an auto scale starts from what is on screen, not an empty form.
+    await page.locator('.legend-edit').click()
+    await page.waitForSelector('.modal', { timeout: 5000 })
+    const rows = await page.locator('.modal tbody tr').count()
+    step('editor opens pre-filled with the proposed bins', rows === dist.bins.length,
+      `${rows} rows`)
+    await page.locator('.modal > header button').click()
+    await page.waitForTimeout(500)
+
+    await page.request.post(`${API}/api/kpi-definitions/${stripped}/thresholds/reset`)
+    await page.locator('.toolbar select').nth(1).selectOption({ label: 'RSRP (NR SpCell)' })
+    await page.waitForTimeout(1200)
+  }
 }
 
 // ─── wrap-up ─────────────────────────────────────────────────────────────────

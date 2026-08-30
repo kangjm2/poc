@@ -28,11 +28,14 @@ public class AnalysisService {
     private final JdbcTemplate jdbc;
     private final SessionRepo sessions;
     private final KpiCatalog catalog;
+    private final AutoScale autoScale;
 
-    public AnalysisService(JdbcTemplate jdbc, SessionRepo sessions, KpiCatalog catalog) {
+    public AnalysisService(JdbcTemplate jdbc, SessionRepo sessions, KpiCatalog catalog,
+                           AutoScale autoScale) {
         this.jdbc = jdbc;
         this.sessions = sessions;
         this.catalog = catalog;
+        this.autoScale = autoScale;
     }
 
     // ---------------------------------------------------------------- sessions
@@ -87,7 +90,8 @@ public class AnalysisService {
         int limit = maxPoints == null ? DEFAULT_MAX_POINTS : Math.max(2, maxPoints);
         int stride = (int) Math.max(1, Math.ceil(total / (double) limit));
 
-        String binExpr = KpiSql.binOrdinalExpr(def, "k.value");
+        List<KpiThreshold> scale = autoScale.effective(sessionId, def);
+        String binExpr = KpiSql.binOrdinalExpr(scale, "k.value");
         String sql = """
                 WITH classified AS (
                     SELECT s.seq, s.ts, s.latitude, s.longitude, s.speed_kmh, s.serving_pci,
@@ -108,7 +112,7 @@ public class AnalysisService {
                 """.formatted(binExpr);
 
         Map<Integer, KpiThreshold> byOrdinal = new HashMap<>();
-        for (KpiThreshold t : def.getThresholds()) byOrdinal.put(t.getOrdinal(), t);
+        for (KpiThreshold t : scale) byOrdinal.put(t.getOrdinal(), t);
 
         return jdbc.query(sql, (rs, i) -> {
             Double v = (Double) rs.getObject("value");
@@ -195,7 +199,8 @@ public class AnalysisService {
         for (KpiDefinition def : catalog.all()) {
             Double v = values.get(def.getName());
             if (v == null) continue;
-            Optional<KpiThreshold> bin = catalog.binFor(def, v);
+            Optional<KpiThreshold> bin = catalog.binFor(
+                    autoScale.effective(sessionId, def), v);
             byCategory.computeIfAbsent(def.getCategory(), c -> new ArrayList<>())
                     .add(new KpiValue(def.getName(), def.getDisplayName(), def.getUnit(), v,
                             bin.map(KpiThreshold::getColor).orElse(null),
@@ -214,12 +219,13 @@ public class AnalysisService {
     public Distribution distribution(long sessionId, String kpiName,
                                      Integer fromSeq, Integer toSeq) {
         KpiDefinition def = catalog.require(kpiName);
+        List<KpiThreshold> scale = autoScale.effective(sessionId, def);
         String sql = """
                 SELECT %s AS bin_ordinal, count(*) AS n
                 FROM sample_kpi WHERE session_id = ? AND kpi_name = ?
                   AND seq >= ? AND seq <= ?
                 GROUP BY 1
-                """.formatted(KpiSql.binOrdinalExpr(def, "value"));
+                """.formatted(KpiSql.binOrdinalExpr(scale, "value"));
 
         Map<Integer, Long> counts = new HashMap<>();
         jdbc.query(sql, rs -> { counts.put(rs.getInt("bin_ordinal"), rs.getLong("n")); },
@@ -227,14 +233,15 @@ public class AnalysisService {
 
         long total = counts.values().stream().mapToLong(Long::longValue).sum();
         List<DistributionBin> bins = new ArrayList<>();
-        for (KpiThreshold t : def.getThresholds()) {
+        for (KpiThreshold t : scale) {
             long count = counts.getOrDefault(t.getOrdinal(), 0L);
             double pct = total == 0 ? 0 : (count * 100.0) / total;
             bins.add(new DistributionBin(t.getLabel(), t.getColor(), t.getSeverity(),
                     t.getLowerBound(), t.getUpperBound(), count,
                     Math.round(pct * 100.0) / 100.0));
         }
-        return new Distribution(kpiName, def.getDisplayName(), def.getUnit(), total, bins);
+        return new Distribution(kpiName, def.getDisplayName(), def.getUnit(), total, bins,
+                autoScale.isDerived(def));
     }
 
     // ------------------------------------------------------------- statistics
@@ -298,8 +305,12 @@ public class AnalysisService {
     public List<Degradation> degradations(long sessionId, String kpiName, int minSamples,
                                           Integer fromSeq, Integer toSeq) {
         KpiDefinition def = catalog.require(kpiName);
-        boolean higherBetter = "HIGHER_IS_BETTER".equals(def.getDirection());
-        String sevExpr = KpiSql.severityExpr(def, "value");
+        // Which end of a degraded stretch to report as its worst sample. A NEUTRAL
+        // KPI has no bad end in general, but the only severe bin such a KPI carries
+        // in practice is a low-end liveness one ("< 1"), so the minimum is the
+        // informative extreme for it too.
+        boolean higherBetter = !"LOWER_IS_BETTER".equals(def.getDirection());
+        String sevExpr = KpiSql.severityExpr(autoScale.effective(sessionId, def), "value");
 
         String sql = """
                 WITH classified AS (
@@ -364,6 +375,11 @@ public class AnalysisService {
         // measured would hide exactly the difference the comparison exists to find.
         if (delta == null) return "NO DATA";
         if (Math.abs(delta) < 0.01) return "SAME";
+        // A counter or a load indicator changed; calling that better or worse would
+        // be inventing a preference the measurement does not have.
+        if (!"HIGHER_IS_BETTER".equals(direction) && !"LOWER_IS_BETTER".equals(direction)) {
+            return "NO VERDICT";
+        }
         boolean improved = "HIGHER_IS_BETTER".equals(direction) ? delta > 0 : delta < 0;
         return improved ? "BETTER" : "WORSE";
     }
