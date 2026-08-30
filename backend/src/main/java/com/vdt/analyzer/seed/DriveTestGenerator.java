@@ -26,7 +26,8 @@ public class DriveTestGenerator {
     public record Point(int seq, double lat, double lon, double speedKmh, int servingPci,
                         double rsrp, double rsrq, double sinr, double dlThroughput,
                         double ulThroughput, double bler, double cqi, double mcs,
-                        double rank, double txPower) {}
+                        double rank, double txPower,
+                        double prbUtilisation, double activeUes, double harqRetxRate) {}
 
     private static final double NOISE_DBM = -110.0;
 
@@ -104,9 +105,17 @@ public class DriveTestGenerator {
             double tx = clamp(-8 + (-70 - rsrp) * 0.62 + random.nextGaussian(), -20, 23);
             double speed = 28 + random.nextGaussian() * 6;
 
+            // Network-side counters. A UE needing more retransmissions to move the same
+            // data occupies more of the cell, so these track the UE-side picture.
+            double harq = clamp(bler * 1.6 + random.nextDouble() * 2, 0, 80);
+            double prb = clamp(20 + (dl / 9.0) + harq * 0.55 + random.nextGaussian() * 4, 2, 100);
+            double activeUes = Math.max(1, Math.round(3 + 2 * Math.sin(i / 300.0)
+                    + random.nextGaussian()));
+
             out.add(new Point(i, pos[0], pos[1], round(clamp(speed, 0, 120), 1), bestPci,
                     round(rsrp, 1), round(rsrq, 1), round(sinr, 1), round(dl, 1), round(ul, 1),
-                    round(bler, 2), cqi, mcs, rank, round(tx, 1)));
+                    round(bler, 2), cqi, mcs, rank, round(tx, 1),
+                    round(prb, 1), activeUes, round(harq, 2)));
         }
         return out;
     }

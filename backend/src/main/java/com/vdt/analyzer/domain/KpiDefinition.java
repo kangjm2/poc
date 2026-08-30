@@ -17,6 +17,10 @@ public class KpiDefinition {
     private String category;
     private String technology;
     private String direction;
+
+    /** UE | DU | SCANNER - which side of the link reported this measurement. */
+    private String source;
+
     private int decimals;
     private String description;
 
@@ -38,6 +42,8 @@ public class KpiDefinition {
     public void setTechnology(String technology) { this.technology = technology; }
     public String getDirection() { return direction; }
     public void setDirection(String direction) { this.direction = direction; }
+    public String getSource() { return source; }
+    public void setSource(String source) { this.source = source; }
     public int getDecimals() { return decimals; }
     public void setDecimals(int decimals) { this.decimals = decimals; }
     public String getDescription() { return description; }

@@ -96,13 +96,44 @@ public final class KpiSeed {
                 bin(18.0, 22.0, ORANGE, ">= 18 and < 22", "WARNING"),
                 bin(22.0, null, RED, ">= 22", "CRITICAL")));
 
+        // Network-side counters. When a real DU is under test it reports its own
+        // statistics, and a UE-only view cannot tell "the UE is struggling" apart from
+        // "the cell is congested".
+        out.add(kpi("DU_PRB_UTILISATION", "PRB utilisation (DL)", "%", "Network Side", "5G NR",
+                "LOWER_IS_BETTER", 1, "Share of downlink physical resource blocks scheduled.",
+                "DU",
+                bin(null, 60.0, GREEN, "< 60", "NORMAL"),
+                bin(60.0, 80.0, YELLOW, ">= 60 and < 80", "NORMAL"),
+                bin(80.0, 95.0, ORANGE, ">= 80 and < 95", "WARNING"),
+                bin(95.0, null, RED, ">= 95", "CRITICAL")));
+
+        out.add(kpi("DU_ACTIVE_UES", "Active UEs", "", "Network Side", "5G NR",
+                "HIGHER_IS_BETTER", 0, "UEs in RRC connected state on the cell.", "DU",
+                bin(null, 1.0, RED, "< 1", "CRITICAL"),
+                bin(1.0, null, GREEN, ">= 1", "NORMAL")));
+
+        out.add(kpi("DU_HARQ_RETX_RATE", "HARQ retransmission rate", "%", "Network Side", "5G NR",
+                "LOWER_IS_BETTER", 2, "Share of downlink transmissions requiring HARQ retry.",
+                "DU",
+                bin(null, 10.0, GREEN, "< 10", "NORMAL"),
+                bin(10.0, 20.0, YELLOW, ">= 10 and < 20", "NORMAL"),
+                bin(20.0, 30.0, ORANGE, ">= 20 and < 30", "WARNING"),
+                bin(30.0, null, RED, ">= 30", "CRITICAL")));
+
         return out;
     }
 
     private static KpiDefinition kpi(String name, String display, String unit, String category,
                                      String tech, String direction, int decimals, String desc,
                                      KpiThreshold... bins) {
+        return kpi(name, display, unit, category, tech, direction, decimals, desc, "UE", bins);
+    }
+
+    private static KpiDefinition kpi(String name, String display, String unit, String category,
+                                     String tech, String direction, int decimals, String desc,
+                                     String source, KpiThreshold... bins) {
         KpiDefinition d = new KpiDefinition();
+        d.setSource(source);
         d.setName(name);
         d.setDisplayName(display);
         d.setUnit(unit);

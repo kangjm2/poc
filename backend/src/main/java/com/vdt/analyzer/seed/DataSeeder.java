@@ -105,6 +105,15 @@ public class DataSeeder implements ApplicationRunner {
                 new DriveTestGenerator(20260827L, HIGHWAY_SITES, HIGHWAY_ROUTE, 900, 0.0, 1.5, null),
                 "High speed run with sparse site density and frequent handovers.");
 
+        // Attach a lab campaign so the field-to-lab side of the tool has real content.
+        List<Long> ids = jdbc.queryForList(
+                "SELECT id FROM measurement_session ORDER BY id", Long.class);
+        if (ids.size() >= 2) {
+            LabSeed.seed(jdbc, ids.get(0), ids.get(1));
+            log.info("Seeded lab campaign with {} runs",
+                    jdbc.queryForObject("SELECT count(*) FROM test_run", Long.class));
+        }
+
         log.info("Seed complete: {} sessions, {} samples", sessions.count(),
                 jdbc.queryForObject("SELECT count(*) FROM sample", Long.class));
     }
@@ -125,7 +134,7 @@ public class DataSeeder implements ApplicationRunner {
         s.setEndedAt(start.plusSeconds(points.size()));
         s.setLocationName(location);
         s.setNotes(notes);
-        MeasurementSession saved = sessions.save(s);
+        MeasurementSession saved = sessions.saveAndFlush(s);
         long sid = saved.getId();
 
         for (Site site : gen.sites()) {
@@ -160,6 +169,9 @@ public class DataSeeder implements ApplicationRunner {
             addKpi(kpiRows, sid, p.seq(), ts, "PDSCH_MCS", p.mcs());
             addKpi(kpiRows, sid, p.seq(), ts, "PDSCH_RANK", p.rank());
             addKpi(kpiRows, sid, p.seq(), ts, "TX_POWER", p.txPower());
+            addKpi(kpiRows, sid, p.seq(), ts, "DU_PRB_UTILISATION", p.prbUtilisation());
+            addKpi(kpiRows, sid, p.seq(), ts, "DU_ACTIVE_UES", p.activeUes());
+            addKpi(kpiRows, sid, p.seq(), ts, "DU_HARQ_RETX_RATE", p.harqRetxRate());
         }
 
         jdbc.batchUpdate("INSERT INTO sample (session_id, ts, seq, latitude, longitude,"

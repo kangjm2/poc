@@ -58,6 +58,7 @@ public final class Dtos {
                                String color, String label, String severity) {}
 
     public record KpiDefinitionDto(String name, String displayName, String unit, String category,
-                                   String technology, String direction, int decimals,
-                                   String description, List<ThresholdDto> thresholds) {}
+                                   String technology, String direction, String source,
+                                   int decimals, String description,
+                                   List<ThresholdDto> thresholds) {}
 }

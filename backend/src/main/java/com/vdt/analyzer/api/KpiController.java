@@ -62,6 +62,7 @@ public class KpiController {
                     t.getColor(), t.getLabel(), t.getSeverity()));
         }
         return new KpiDefinitionDto(d.getName(), d.getDisplayName(), d.getUnit(), d.getCategory(),
-                d.getTechnology(), d.getDirection(), d.getDecimals(), d.getDescription(), ts);
+                d.getTechnology(), d.getDirection(), d.getSource(), d.getDecimals(),
+                d.getDescription(), ts);
     }
 }
