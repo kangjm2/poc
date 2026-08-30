@@ -1,0 +1,194 @@
+/* Chrome tokens sampled from the reference tool's own screenshots
+   (docs/keysight-vdt-research.md 11.3.2). The chrome stays desaturated so the
+   data is the only thing carrying colour. */
+:root {
+  --chrome: #efeff2;
+  --toolbar: #fafafa;
+  --panel-header: #eeeef2;
+  --data-bg: #ffffff;
+  --status-bg: #f0f0f0;
+  --border: #c8c8d0;
+  --border-soft: #e2e2e8;
+  --text: #262626;
+  --text-dim: #666666;
+  --cursor: #da0000;
+  --trace: #825ac8;
+  --trace-2: #1f77b4;
+  --area-fill: #ff7f7f;
+  --area-line: #d02d2d;
+  --accent: #30578d;
+  --critical-bg: #fe0000;
+  --warning-bg: #ffff00;
+  --font: Inter, 'Helvetica Neue', Arial, 'Apple SD Gothic Neo',
+          'Malgun Gothic', sans-serif;
+}
+
+* { box-sizing: border-box; }
+
+html, body, #root { height: 100%; margin: 0; }
+
+body {
+  font-family: var(--font);
+  font-size: 12px;
+  color: var(--text);
+  background: var(--chrome);
+  overflow: hidden;
+}
+
+button, select, input { font-family: inherit; font-size: inherit; color: inherit; }
+
+.app { display: flex; flex-direction: column; height: 100%; }
+
+/* ---------------------------------------------------------------- toolbar */
+.toolbar {
+  display: flex; align-items: center; gap: 16px;
+  padding: 6px 10px;
+  background: var(--toolbar);
+  border-bottom: 1px solid var(--border);
+  flex: 0 0 auto;
+}
+.toolbar .brand { font-weight: 700; letter-spacing: .2px; margin-right: 4px; }
+.toolbar .group { display: flex; align-items: center; gap: 6px; }
+.toolbar label { color: var(--text-dim); }
+.toolbar select {
+  padding: 3px 6px; border: 1px solid var(--border); background: #fff; border-radius: 2px;
+}
+.toolbar .spacer { flex: 1; }
+
+.mode-tabs { display: flex; gap: 2px; }
+.mode-tabs button {
+  padding: 4px 12px; border: 1px solid var(--border); background: var(--panel-header);
+  cursor: pointer; border-radius: 2px 2px 0 0;
+}
+.mode-tabs button.active { background: #fff; font-weight: 600; border-bottom-color: #fff; }
+
+/* ------------------------------------------------------------------ body */
+.body { flex: 1; display: flex; min-height: 0; }
+
+.dock {
+  background: var(--chrome);
+  border-right: 1px solid var(--border);
+  width: 214px; flex: 0 0 214px;
+  display: flex; flex-direction: column; min-height: 0;
+}
+.dock.right { border-right: none; border-left: 1px solid var(--border); width: 286px; flex-basis: 286px; }
+
+.dock-section { display: flex; flex-direction: column; min-height: 0; }
+.dock-section > h3 {
+  margin: 0; padding: 5px 8px;
+  font-size: 11px; font-weight: 600;
+  background: var(--panel-header);
+  border-bottom: 1px solid var(--border-soft);
+  border-top: 1px solid var(--border-soft);
+}
+.dock-section .content { overflow: auto; background: var(--data-bg); }
+
+.center { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+.panels { flex: 1; overflow: auto; padding: 6px; display: flex; flex-direction: column; gap: 6px; }
+
+.panel {
+  background: var(--data-bg);
+  border: 1px solid var(--border);
+  display: flex; flex-direction: column;
+}
+.panel > header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 3px 8px;
+  background: var(--panel-header);
+  border-bottom: 1px solid var(--border-soft);
+  font-size: 11px;
+}
+.panel > header .title { font-weight: 600; }
+.panel > header .meta { color: var(--text-dim); }
+.panel .body-area { padding: 0; }
+
+/* ------------------------------------------------------------------ tree */
+.tree { padding: 4px 0; }
+.tree .cat {
+  padding: 3px 8px; font-weight: 600; color: var(--text-dim);
+  background: #f7f7fa; border-top: 1px solid var(--border-soft);
+}
+.tree .kpi {
+  padding: 3px 8px 3px 18px; cursor: pointer; display: flex; justify-content: space-between;
+}
+.tree .kpi:hover { background: #eef3fa; }
+.tree .kpi.active { background: var(--accent); color: #fff; }
+.tree .kpi .unit { color: var(--text-dim); }
+.tree .kpi.active .unit { color: #dbe6f5; }
+
+/* ----------------------------------------------------------------- grids */
+table.grid { width: 100%; border-collapse: collapse; }
+table.grid th, table.grid td {
+  padding: 2px 6px; border-bottom: 1px solid #f0f0f4; text-align: left; white-space: nowrap;
+}
+table.grid th { background: #f7f7fa; font-weight: 600; position: sticky; top: 0; }
+table.grid td.num { text-align: right; font-variant-numeric: tabular-nums; }
+/* Full-cell fills, matching how the reference tool flags a breached threshold. */
+td.sev-CRITICAL { background: var(--critical-bg); color: #fff; font-weight: 600; }
+td.sev-WARNING  { background: var(--warning-bg); color: #262626; }
+
+.legend-row { display: flex; align-items: center; gap: 6px; padding: 2px 8px; }
+.legend-row .swatch { width: 14px; height: 12px; border: 1px solid #999; flex: 0 0 auto; }
+.legend-row .label { flex: 1; }
+.legend-row .count, .legend-row .pct { font-variant-numeric: tabular-nums; color: var(--text-dim); }
+.legend-row .pct { width: 52px; text-align: right; }
+.legend-row .count { width: 46px; text-align: right; }
+
+/* --------------------------------------------------------------- workbook */
+.workbook-tabs {
+  display: flex; align-items: stretch; gap: 1px;
+  background: var(--chrome); border-top: 1px solid var(--border);
+  padding: 0 4px; flex: 0 0 auto; overflow-x: auto;
+}
+.workbook-tabs button {
+  padding: 4px 12px; border: 1px solid var(--border); border-bottom: none;
+  background: var(--panel-header); cursor: pointer; white-space: nowrap;
+}
+.workbook-tabs button.active { background: #fff; font-weight: 600; }
+
+/* --------------------------------------------------------------- statusbar */
+.statusbar {
+  display: flex; align-items: center; gap: 14px;
+  padding: 3px 10px; background: var(--status-bg);
+  border-top: 1px solid var(--border); flex: 0 0 auto;
+  font-variant-numeric: tabular-nums;
+}
+.statusbar .progress {
+  flex: 1; height: 10px; background: #dcdce2;
+  border: 1px solid var(--border); position: relative; cursor: pointer;
+}
+.statusbar .progress .fill { height: 100%; background: #5bdc77; }
+.statusbar .progress .knob {
+  position: absolute; top: -2px; width: 2px; height: 12px; background: var(--cursor);
+}
+.statusbar .dim { color: var(--text-dim); }
+
+/* ------------------------------------------------------------------- misc */
+.map { height: 100%; width: 100%; }
+.map-panel { height: 340px; flex: 0 0 340px; }
+.chart-panel { height: 190px; flex: 0 0 190px; }
+.grid-panel { max-height: 260px; overflow: auto; }
+
+.loading, .error { padding: 12px; color: var(--text-dim); }
+.error { color: #b00020; }
+
+.compare table.grid td, .compare table.grid th { padding: 4px 8px; }
+.verdict-BETTER { color: #0a7f2e; font-weight: 600; }
+.verdict-WORSE  { color: #c40024; font-weight: 600; }
+.verdict-SAME   { color: var(--text-dim); }
+
+.deg-row { cursor: pointer; }
+.deg-row:hover { background: #eef3fa; }
+
+.leaflet-container { font-family: var(--font); }
+
+/* Readable backdrop when the tile CDN is unreachable, so the route still reads
+   as a map rather than floating on white. */
+.map.no-basemap .leaflet-tile-pane { display: none; }
+.map.no-basemap {
+  background-color: #f4f6f8;
+  background-image:
+    linear-gradient(to right, #e4e8ec 1px, transparent 1px),
+    linear-gradient(to bottom, #e4e8ec 1px, transparent 1px);
+  background-size: 48px 48px;
+}
