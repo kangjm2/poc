@@ -82,6 +82,26 @@ export async function digestSignal(page) {
   })
 }
 
+/**
+ * S4b - the same digest, collected across every workbook page.
+ *
+ * A signal only sees what is currently rendered. In the first experiment run no
+ * detector caught a dead workbook page, because every probe looked at the default
+ * page only. Route coverage, not signal choice, was the thing missing.
+ */
+export async function digestAllRoutesSignal(page) {
+  const tabs = await page.locator('.workbook-tabs button').allInnerTexts()
+  const out = []
+  for (const tab of tabs) {
+    await page.locator('.workbook-tabs button', { hasText: tab }).first().click()
+    await page.waitForTimeout(700)
+    const panels = await page.locator('.panel > header .title').allInnerTexts()
+    const rows = await page.locator('table.grid tbody tr').count()
+    out.push(`${tab}: panels=[${panels.join(' | ')}] rows=${rows}`)
+  }
+  return out.join('\n')
+}
+
 /** S5 - full-page screenshot. */
 export async function screenshotSignal(page, name) {
   const path = `${OUT}/${name}.png`

@@ -5,10 +5,11 @@
  * Cost without detection power is meaningless, so the two are measured together.
  */
 import { execFileSync } from 'node:child_process'
-import { writeFileSync } from 'node:fs'
+import { readFileSync, writeFileSync } from 'node:fs'
 import { DEFECTS } from './defects.mjs'
 import {
-  openApp, runtimeSignal, domTextSignal, ariaSignal, digestSignal, textTokensApprox,
+  openApp, runtimeSignal, domTextSignal, ariaSignal, digestSignal,
+  digestAllRoutesSignal, textTokensApprox,
 } from './signals.mjs'
 
 const sh = (cmd, args, opts = {}) => {
@@ -30,6 +31,7 @@ async function probe() {
     dom: await domTextSignal(page),
     aria: await ariaSignal(page),
     digest: await digestSignal(page),
+    routes: await digestAllRoutesSignal(page),
   }
   await browser.close()
   return out
@@ -48,14 +50,22 @@ const lineDiff = (a, b) => {
 console.log('=== establishing the noise floor: two baseline probes of an unmodified app ===')
 const base1 = await probe()
 const base2 = await probe()
-for (const k of ['runtime', 'dom', 'aria', 'digest']) {
+for (const k of ['runtime', 'dom', 'aria', 'digest', 'routes']) {
   const d = lineDiff(base1[k], base2[k])
   console.log(`  ${k.padEnd(8)} baseline-vs-baseline diff: ${d ? `${d.split('\n').length} lines - NOISY` : 'identical'}`)
 }
 
+// Optional filter so a single case can be re-checked without a full sweep.
+const only = process.argv.slice(2)
+const selected = only.length ? DEFECTS.filter((d) => only.includes(d.id)) : DEFECTS
+
 const results = []
-for (const defect of DEFECTS) {
+for (const defect of selected) {
   console.log(`\n=== ${defect.id} (${defect.kind}) ===`)
+  // Snapshot the exact bytes and restore from that. Using `git checkout` as the
+  // undo silently destroys any uncommitted work in the same file - it did exactly
+  // that on a first run of this harness.
+  const original = readFileSync(defect.file, 'utf8')
   const applied = sh('node', ['tools/uxtest/inject.mjs', 'apply', defect.id])
   if (!applied.ok) { console.log('  SKIP: could not apply -', applied.out.trim()); continue }
 
@@ -75,7 +85,8 @@ for (const defect of DEFECTS) {
     row.detectors.build = { caught: false, bytes: 0 }
     const cur = await probe()
     for (const [name, key] of [['runtime', 'runtime'], ['domText', 'dom'],
-                               ['aria', 'aria'], ['digest', 'digest']]) {
+                               ['aria', 'aria'], ['digest', 'digest'],
+                               ['routeDigest', 'routes']]) {
       const d = lineDiff(base1[key], cur[key])
       row.detectors[name] = { caught: d.length > 0, bytes: Buffer.byteLength(d) }
     }
@@ -94,7 +105,7 @@ for (const defect of DEFECTS) {
       + (r.detail ? `  ${r.detail}` : ''))
   }
 
-  sh('git', ['checkout', '--', defect.file])
+  writeFileSync(defect.file, original)
 }
 
 buildFrontend()

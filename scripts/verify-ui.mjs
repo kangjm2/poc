@@ -45,9 +45,17 @@ check('세션 목록 로드', sessionCount >= 3, `${sessionCount} sessions`)
 
 // 2. legend carries counts and percentages, not just colours
 const legendRows = await page.locator('.dock.right .legend-row').count()
-const legendText = await page.locator('.dock.right').first().innerText()
-check('색상 범례에 건수·비율 포함', legendRows >= 5 && /%/.test(legendText),
-  `${legendRows} rows`)
+// Assert a per-bin count AND percentage on a DATA row, not just that '%' appears
+// somewhere: the header alone contains '%', so the looser check passed against a
+// legend whose statistics columns had been removed entirely.
+const legendStats = await page.locator('.dock.right .legend-row')
+  .filter({ has: page.locator('.swatch') })
+  .evaluateAll((rows) => rows.map((r) => ({
+    count: r.querySelector('.count')?.textContent?.trim() ?? '',
+    pct: r.querySelector('.pct')?.textContent?.trim() ?? '',
+  })).filter((x) => /^\d+$/.test(x.count) && /^\d+(\.\d+)?%$/.test(x.pct)))
+check('색상 범례에 건수·비율 포함', legendRows >= 5 && legendStats.length >= 4,
+  `${legendRows} rows, ${legendStats.length} with count+pct`)
 
 // 3. route is drawn as coloured segments
 const segments = await page.locator('path.leaflet-interactive').count()

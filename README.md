@@ -15,6 +15,7 @@ VDT 장비·소프트웨어 자체는 별도 저장소에서 개발되었으며,
 | [`docs/architecture-and-scale.md`](docs/architecture-and-scale.md) | 데이터 수집, 가상 채널 + 실제 DU 시나리오, 대용량 처리 설계와 측정 결과 |
 | [`docs/gap-analysis.md`](docs/gap-analysis.md) | Keysight 매뉴얼 및 경쟁 솔루션(VIAVI 등) 대비 기능 격차와 우선순위 |
 | [`docs/verification.md`](docs/verification.md) | 검증 기록 |
+| [`docs/ui-testing/README.md`](docs/ui-testing/README.md) | **(별도 주제)** UI 검증 기법 리서치 — 신호별 토큰 비용 실측, 결함 주입 매트릭스, UX-driven development 근거 검토 |
 | [`docs/assets/NOTICE.md`](docs/assets/NOTICE.md) | 저작권 고지 및 구현 시 복제 금지 항목 |
 
 `docs/poc-screenshots/`는 아래 검증 스크립트가 실제 브라우저에서 캡처한 이 앱의 화면입니다.
@@ -51,6 +52,11 @@ node scripts/verify-ui.mjs
 # 5) (선택) 대용량 부하 측정
 ./scripts/load-test.sh 25      # 200 device-hours 생성 후 응답시간 출력
 ./scripts/load-test.sh clean
+
+# 6) (선택) UI 검증 기법 도구 — docs/ui-testing/ 참조
+node tools/uxtest/api-surface.mjs      # 뷰 없는 백엔드 기능 탐지 (종료 코드 1 = 격차)
+node tools/uxtest/measure-signals.mjs  # 검증 신호별 비용 측정
+node tools/uxtest/experiment.mjs       # 결함 주입 × 검출기 매트릭스
 ```
 
 중지: `./scripts/backend.sh stop`, `./scripts/frontend.sh stop`

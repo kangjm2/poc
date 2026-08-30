@@ -13,11 +13,9 @@ export const DEFECTS = [
     describes: 'A KPI family exists server-side but the parameter tree filters it out, '
       + 'so it is unreachable in the UI.',
     file: 'frontend/src/components/Panels.tsx',
-    find: `  const byCat = defs.reduce<Record<string, KpiDefinition[]>>((acc, d) => {
-    (acc[d.category] ??= []).push(d)`,
-    replace: `  const byCat = defs.reduce<Record<string, KpiDefinition[]>>((acc, d) => {
-    if (d.category === 'Fronthaul') return acc
-    (acc[d.category] ??= []).push(d)`,
+    find: `  const byCat = defs.reduce<Record<string, KpiDefinition[]>>((acc, d) => {`,
+    replace: `  const byCat = defs.filter((d) => d.category !== 'Fronthaul')
+    .reduce<Record<string, KpiDefinition[]>>((acc, d) => {`,
   },
   {
     id: 'D2-legend-stats-dropped',
@@ -63,8 +61,7 @@ export const DEFECTS = [
     kind: 'crash',
     describes: 'A component throws while rendering.',
     file: 'frontend/src/components/Panels.tsx',
-    find: `export function LegendPanel({ dist }: { dist: Distribution | null }) {`,
-    replace: `export function LegendPanel({ dist }: { dist: Distribution | null }) {
-  if (dist) throw new Error('injected defect D6')`,
+    find: `      {dist.bins.map((b) => (`,
+    replace: `      {dist.bins.slice(0, dist.bins[9999].count).map((b) => (`,
   },
 ]
