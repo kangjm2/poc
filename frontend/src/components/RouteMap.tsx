@@ -80,20 +80,38 @@ export function RouteMap({
       return
     }
 
-    for (let i = 0; i < track.length - 1; i++) {
-      const a = track[i]
-      const b = track[i + 1]
-      L.polyline(
-        [[a.latitude, a.longitude], [b.latitude, b.longitude]],
-        { color: a.color, weight: 6, opacity: 0.95, lineCap: 'butt' },
-      )
-        .on('click', () => onCursorChange(a.seq))
-        .bindTooltip(
-          `${new Date(a.ts).toISOString().slice(11, 19)}<br/>${kpiName}: ${a.value ?? '-'}<br/>${a.binLabel}`,
-          { sticky: true },
-        )
-        .addTo(layer)
+    // Group consecutive same-colour samples into one polyline per run.
+    //
+    // Drawing a polyline per segment creates a layer, an SVG node and a tooltip for
+    // every sample: on an eight-hour drive that is thousands of objects and the map
+    // takes tens of seconds to appear. The colour only changes where the KPI crosses
+    // a bin boundary, so a run is the natural unit and there are usually a few dozen.
+    let runStart = 0
+    for (let i = 1; i <= track.length; i++) {
+      const endOfRun = i === track.length || track[i].color !== track[runStart].color
+      if (!endOfRun) continue
+
+      const head = track[runStart]
+      // Extend one sample past the run so adjacent runs join without a visible gap.
+      const end = Math.min(i, track.length - 1)
+      const coords = track.slice(runStart, end + 1)
+        .map((p) => [p.latitude, p.longitude] as [number, number])
+
+      if (coords.length > 1) {
+        L.polyline(coords, {
+          color: head.color, weight: 6, opacity: 0.95, lineCap: 'butt', lineJoin: 'round',
+        })
+          .on('click', () => onCursorChange(head.seq))
+          .bindTooltip(
+            `${new Date(head.ts).toISOString().slice(11, 19)}<br/>${kpiName}: ${head.value ?? '-'}`
+            + `<br/>${head.binLabel}<br/>${coords.length} samples`,
+            { sticky: true },
+          )
+          .addTo(layer)
+      }
+      runStart = i
     }
+
     const bounds = L.latLngBounds(track.map((p) => [p.latitude, p.longitude] as [number, number]))
     map.fitBounds(bounds, { padding: [18, 18] })
   }, [track, kpiName, onCursorChange, bins])
