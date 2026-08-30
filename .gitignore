@@ -1,0 +1,7 @@
+target/
+node_modules/
+dist/
+.backend.pid
+.backend.log
+*.class
+.DS_Store

@@ -1,0 +1,30 @@
+server:
+  port: 8080
+
+spring:
+  application:
+    name: vdt-analyzer
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://127.0.0.1:5432/vdt}
+    username: ${DB_USER:vdt}
+    password: ${DB_PASSWORD:vdt}
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    open-in-view: false
+    properties:
+      hibernate:
+        jdbc:
+          batch_size: 500
+        order_inserts: true
+  flyway:
+    enabled: true
+    baseline-on-migrate: true
+
+vdt:
+  seed:
+    enabled: ${SEED_ENABLED:true}
+
+logging:
+  level:
+    org.hibernate.SQL: warn
