@@ -3,5 +3,7 @@ node_modules/
 dist/
 .backend.pid
 .backend.log
+.frontend.pid
+.frontend.log
 *.class
 .DS_Store
