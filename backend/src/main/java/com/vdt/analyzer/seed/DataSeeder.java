@@ -142,41 +142,37 @@ public class DataSeeder implements ApplicationRunner {
             cells.save(c);
         }
 
-        // Pre-allocate sample ids so both tables can be written in batches.
-        List<Long> ids = jdbc.queryForList(
-                "SELECT nextval('sample_id_seq') FROM generate_series(1, ?)",
-                Long.class, points.size());
-
+        // sample_kpi carries session_id/seq/ts directly, so no sample ids are needed
+        // and both tables can be written as straight batches.
         List<Object[]> sampleRows = new ArrayList<>(points.size());
         List<Object[]> kpiRows = new ArrayList<>(points.size() * 10);
-        for (int i = 0; i < points.size(); i++) {
-            Point p = points.get(i);
-            long id = ids.get(i);
-            Instant ts = start.plusSeconds(p.seq());
-            sampleRows.add(new Object[]{id, sid, java.sql.Timestamp.from(ts), p.seq(),
-                    p.lat(), p.lon(), p.speedKmh(), p.servingPci()});
-            addKpi(kpiRows, id, "RSRP", p.rsrp());
-            addKpi(kpiRows, id, "RSRQ", p.rsrq());
-            addKpi(kpiRows, id, "SINR", p.sinr());
-            addKpi(kpiRows, id, "MAC_DL_THROUGHPUT", p.dlThroughput());
-            addKpi(kpiRows, id, "MAC_UL_THROUGHPUT", p.ulThroughput());
-            addKpi(kpiRows, id, "DL_BLER", p.bler());
-            addKpi(kpiRows, id, "CQI", p.cqi());
-            addKpi(kpiRows, id, "PDSCH_MCS", p.mcs());
-            addKpi(kpiRows, id, "PDSCH_RANK", p.rank());
-            addKpi(kpiRows, id, "TX_POWER", p.txPower());
+        for (Point p : points) {
+            java.sql.Timestamp ts = java.sql.Timestamp.from(start.plusSeconds(p.seq()));
+            sampleRows.add(new Object[]{sid, ts, p.seq(), p.lat(), p.lon(),
+                    p.speedKmh(), p.servingPci()});
+            addKpi(kpiRows, sid, p.seq(), ts, "RSRP", p.rsrp());
+            addKpi(kpiRows, sid, p.seq(), ts, "RSRQ", p.rsrq());
+            addKpi(kpiRows, sid, p.seq(), ts, "SINR", p.sinr());
+            addKpi(kpiRows, sid, p.seq(), ts, "MAC_DL_THROUGHPUT", p.dlThroughput());
+            addKpi(kpiRows, sid, p.seq(), ts, "MAC_UL_THROUGHPUT", p.ulThroughput());
+            addKpi(kpiRows, sid, p.seq(), ts, "DL_BLER", p.bler());
+            addKpi(kpiRows, sid, p.seq(), ts, "CQI", p.cqi());
+            addKpi(kpiRows, sid, p.seq(), ts, "PDSCH_MCS", p.mcs());
+            addKpi(kpiRows, sid, p.seq(), ts, "PDSCH_RANK", p.rank());
+            addKpi(kpiRows, sid, p.seq(), ts, "TX_POWER", p.txPower());
         }
 
-        jdbc.batchUpdate("INSERT INTO sample (id, session_id, ts, seq, latitude, longitude,"
-                + " speed_kmh, serving_pci) VALUES (?,?,?,?,?,?,?,?)", sampleRows);
-        jdbc.batchUpdate("INSERT INTO sample_kpi (sample_id, kpi_name, value) VALUES (?,?,?)",
-                kpiRows);
+        jdbc.batchUpdate("INSERT INTO sample (session_id, ts, seq, latitude, longitude,"
+                + " speed_kmh, serving_pci) VALUES (?,?,?,?,?,?,?)", sampleRows);
+        jdbc.batchUpdate("INSERT INTO sample_kpi (session_id, seq, ts, kpi_name, value)"
+                + " VALUES (?,?,?,?,?)", kpiRows);
 
         seedEventsAndMessages(sid, start, points);
     }
 
-    private static void addKpi(List<Object[]> rows, long sampleId, String kpi, double value) {
-        rows.add(new Object[]{sampleId, kpi, value});
+    private static void addKpi(List<Object[]> rows, long sessionId, int seq,
+                               java.sql.Timestamp ts, String kpi, double value) {
+        rows.add(new Object[]{sessionId, seq, ts, kpi, value});
     }
 
     /** Derives events from the generated series so they line up with the measurements. */

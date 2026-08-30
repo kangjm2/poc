@@ -41,13 +41,15 @@ public class AnalysisController {
     }
 
     @GetMapping("/sessions/{id}/track")
-    public List<TrackPoint> track(@PathVariable long id, @RequestParam String kpi) {
-        return analysis.track(id, kpi);
+    public List<TrackPoint> track(@PathVariable long id, @RequestParam String kpi,
+                                  @RequestParam(required = false) Integer maxPoints) {
+        return analysis.track(id, kpi, maxPoints);
     }
 
     @GetMapping("/sessions/{id}/series")
-    public List<Series> series(@PathVariable long id, @RequestParam List<String> kpis) {
-        return analysis.series(id, kpis);
+    public List<Series> series(@PathVariable long id, @RequestParam List<String> kpis,
+                               @RequestParam(required = false) Integer maxPoints) {
+        return analysis.series(id, kpis, maxPoints);
     }
 
     @GetMapping("/sessions/{id}/snapshot")
