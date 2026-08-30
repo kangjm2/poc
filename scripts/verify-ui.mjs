@@ -68,7 +68,7 @@ check('공유 시간 커서 — 값 패널 동기화', beforeGrid !== afterGrid)
 await page.screenshot({ path: `${OUT}/02-cursor-moved.png` })
 
 // 5. threshold highlighting paints whole cells
-await page.locator('.workbook-tabs button', { hasText: '무선 품질' }).click()
+await page.locator('.workbook-tabs button', { hasText: 'Radio Quality' }).click()
 await page.waitForTimeout(600)
 // park the cursor inside the seeded deep-fade stretch
 await page.mouse.click(bar.x + bar.width * 0.46, bar.y + bar.height / 2)
@@ -78,20 +78,20 @@ check('임계 초과 셀 강조', severeCells > 0, `${severeCells} highlighted c
 await page.screenshot({ path: `${OUT}/03-radio-thresholds.png` })
 
 // 6. workbook tabs switch the panel set
-await page.locator('.workbook-tabs button', { hasText: '처리량' }).click()
+await page.locator('.workbook-tabs button', { hasText: 'Throughput' }).click()
 await page.waitForTimeout(700)
 const thrTitles = await page.locator('.panel > header .title').allInnerTexts()
 check('워크북 탭 전환', thrTitles.some((t) => /throughput/i.test(t)), thrTitles.join(' | '))
 await page.screenshot({ path: `${OUT}/04-throughput.png` })
 
-await page.locator('.workbook-tabs button', { hasText: 'L3 시그널링' }).click()
+await page.locator('.workbook-tabs button', { hasText: 'L3 Signalling' }).click()
 await page.waitForTimeout(600)
 const msgRows = await page.locator('.panel table.grid tbody tr').count()
 check('L3 시그널링 메시지 뷰어', msgRows > 0, `${msgRows} messages`)
 await page.screenshot({ path: `${OUT}/05-signaling.png` })
 
 // 7. automatic degradation detection
-await page.locator('.workbook-tabs button', { hasText: '열화 구간' }).click()
+await page.locator('.workbook-tabs button', { hasText: 'Degradation' }).click()
 await page.waitForTimeout(900)
 const degRows = await page.locator('.panel table.grid tbody tr').count()
 const degText = await page.locator('.panel').first().innerText()
@@ -107,7 +107,7 @@ const seqAfter = await page.locator('.statusbar .dim').first().innerText()
 check('열화 구간 클릭 시 커서 이동', seqBefore !== seqAfter, `${seqBefore} -> ${seqAfter}`)
 
 // 8. KPI switch re-colours the map and legend
-await page.locator('.workbook-tabs button', { hasText: '개요' }).click()
+await page.locator('.workbook-tabs button', { hasText: 'Overview' }).click()
 await page.waitForTimeout(500)
 const legendBefore = await page.locator('.dock.right').first().innerText()
 await page.locator('.tree .kpi', { hasText: 'SS-SINR' }).click()
@@ -117,7 +117,7 @@ check('파라미터 트리에서 KPI 전환', legendBefore !== legendAfter)
 await page.screenshot({ path: `${OUT}/07-sinr.png` })
 
 // 9. session comparison
-await page.locator('.mode-tabs button', { hasText: '세션 비교' }).click()
+await page.locator('.mode-tabs button', { hasText: 'Compare' }).click()
 await page.waitForTimeout(1800)
 const verdicts = await page.locator('[class^="verdict-"]').allInnerTexts()
 check('세션 비교 결과 렌더링', verdicts.length >= 5, `${verdicts.length} rows`)

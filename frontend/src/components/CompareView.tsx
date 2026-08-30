@@ -35,7 +35,7 @@ export function CompareView({ sessions }: { sessions: SessionSummary[] }) {
   return (
     <div className="panels compare">
       <div className="panel">
-        <header><span className="title">세션 비교</span></header>
+        <header><span className="title">Compare</span></header>
         <div style={{ padding: 8, display: 'flex', gap: 16, alignItems: 'center' }}>
           <label>A&nbsp;
             <select value={a ?? ''} onChange={(e) => setA(Number(e.target.value))}>
@@ -66,9 +66,9 @@ export function CompareView({ sessions }: { sessions: SessionSummary[] }) {
             <thead>
               <tr>
                 <th>KPI</th>
-                <th className="num">A 평균</th><th className="num">A p05</th><th className="num">A p95</th>
-                <th className="num">B 평균</th><th className="num">B p05</th><th className="num">B p95</th>
-                <th className="num">Δ 평균</th><th>판정</th>
+                <th className="num">A mean</th><th className="num">A p05</th><th className="num">A p95</th>
+                <th className="num">B mean</th><th className="num">B p05</th><th className="num">B p95</th>
+                <th className="num">Δ mean</th><th>Verdict</th>
               </tr>
             </thead>
             <tbody>

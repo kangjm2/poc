@@ -5,7 +5,7 @@ import type {
 
 /** Parameter grid: every KPI at the cursor, grouped by category. */
 export function ParameterGrid({ snapshot }: { snapshot: Snapshot | null }) {
-  if (!snapshot) return <div className="panel"><div className="loading">불러오는 중…</div></div>
+  if (!snapshot) return <div className="panel"><div className="loading">Loading…</div></div>
   return (
     <div className="panel grid-panel">
       <header>
@@ -48,7 +48,7 @@ export function ParameterGrid({ snapshot }: { snapshot: Snapshot | null }) {
  * a key to the colours.
  */
 export function LegendPanel({ dist }: { dist: Distribution | null }) {
-  if (!dist) return <div className="loading">불러오는 중…</div>
+  if (!dist) return <div className="loading">Loading…</div>
   return (
     <div>
       <div className="legend-row" style={{ fontWeight: 600, borderBottom: '1px solid #e2e2e8' }}>
@@ -66,7 +66,7 @@ export function LegendPanel({ dist }: { dist: Distribution | null }) {
       ))}
       <div className="legend-row" style={{ borderTop: '1px solid #e2e2e8', color: '#666' }}>
         <span className="swatch" style={{ visibility: 'hidden' }} />
-        <span className="label">합계</span>
+        <span className="label">Total</span>
         <span className="count">{dist.total}</span><span className="pct">100.00%</span>
       </div>
     </div>
@@ -116,12 +116,12 @@ export function MessageList({ messages }: { messages: SignalingMessage[] }) {
 export function DegradationPanel({
   items, unit, onPick,
 }: { items: Degradation[]; unit: string; onPick: (seq: number) => void }) {
-  if (items.length === 0) return <div className="loading">열화 구간이 없습니다.</div>
+  if (items.length === 0) return <div className="loading">No degraded stretches found.</div>
   return (
     <table className="grid">
       <thead>
-        <tr><th>구간</th><th className="num">지속</th><th className="num">최악</th>
-          <th className="num">평균</th><th>등급</th><th className="num">샘플</th></tr>
+        <tr><th>Range</th><th className="num">Duration</th><th className="num">Worst</th>
+          <th className="num">Mean</th><th>Severity</th><th className="num">Samples</th></tr>
       </thead>
       <tbody>
         {items.map((d, i) => (

@@ -112,7 +112,7 @@ export function RouteMap({ track, cells, cursorSeq, onCursorChange, kpiName }: P
         <span className="meta">
           {basemapFailed && (
             <span style={{ color: '#b26a00', marginRight: 10 }}>
-              배경 지도 타일 불러오기 실패 (네트워크) &mdash; 경로는 정상 표시
+              Basemap tiles unavailable (network) &mdash; route still shown
             </span>
           )}
           {track.length} samples

@@ -16,12 +16,12 @@ import { CompareView } from './components/CompareView'
  * bottom, so the same idea is kept here rather than a side navigation.
  */
 const WORKBOOKS = [
-  { id: 'overview', label: '개요' },
-  { id: 'radio', label: '무선 품질' },
-  { id: 'throughput', label: '처리량' },
-  { id: 'mobility', label: '이동성' },
-  { id: 'signaling', label: 'L3 시그널링' },
-  { id: 'degradation', label: '열화 구간' },
+  { id: 'overview', label: 'Overview' },
+  { id: 'radio', label: 'Radio Quality' },
+  { id: 'throughput', label: 'Throughput' },
+  { id: 'mobility', label: 'Mobility' },
+  { id: 'signaling', label: 'L3 Signalling' },
+  { id: 'degradation', label: 'Degradation' },
 ] as const
 type WorkbookId = (typeof WORKBOOKS)[number]['id']
 
@@ -126,7 +126,7 @@ export function App() {
                       onCursorChange={setCursorSeq} kpiName={activeDef?.displayName ?? kpi} />
             <div className="panel">
               <header><span className="title">Events</span>
-                <span className="meta">{events.length}건</span></header>
+                <span className="meta">{events.length}</span></header>
               <div style={{ maxHeight: 260, overflow: 'auto' }}>
                 <EventList events={events} onPick={jumpToTime} />
               </div>
@@ -148,8 +148,8 @@ export function App() {
           <>
             <div className="panel">
               <header>
-                <span className="title">자동 탐지된 열화 구간 &mdash; {activeDef?.displayName}</span>
-                <span className="meta">{degradations.length}건</span>
+                <span className="title">Detected degradation &mdash; {activeDef?.displayName}</span>
+                <span className="meta">{degradations.length}</span>
               </header>
               <div style={{ maxHeight: 300, overflow: 'auto' }}>
                 <DegradationPanel items={degradations} unit={activeDef?.unit ?? ''}
@@ -168,14 +168,14 @@ export function App() {
         <span className="brand">VDT Analyzer</span>
         <div className="mode-tabs">
           <button className={mode === 'analyze' ? 'active' : ''}
-                  onClick={() => setMode('analyze')}>분석</button>
+                  onClick={() => setMode('analyze')}>Analysis</button>
           <button className={mode === 'compare' ? 'active' : ''}
-                  onClick={() => setMode('compare')}>세션 비교</button>
+                  onClick={() => setMode('compare')}>Compare</button>
         </div>
         {mode === 'analyze' && (
           <>
             <div className="group">
-              <label>측정</label>
+              <label>Measurement</label>
               <select value={sessionId ?? ''}
                       onChange={(e) => setSessionId(Number(e.target.value))}>
                 {sessions.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
