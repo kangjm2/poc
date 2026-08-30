@@ -382,11 +382,21 @@ https://www.keysight.com/content/dam/keysight/en/doc/ungate/<type>/<litNumber>.p
 ```
 
 `<type>`은 `flyers`, `data-sheets`, `brochures`, `solution-briefs`, `technical-overviews` 등입니다.
-**(A)는 일반 HTTP 클라이언트에 403을 반환**하지만 **(B)는 200과 함께 실제 PDF를 반환**합니다 【확인됨】.
-경로에 포함된 `ungate`는 게이팅되지 않은(로그인 불필요) 자료임을 뜻합니다 【추정】.
+**(A)는 일반 HTTP 클라이언트에 403(봇 차단)을 반환**합니다. **(B)는 일부 문서에 한해 200과 함께 실제 PDF
+바이트를 반환**합니다 【확인됨】. 경로의 `ungate`는 로그인이 필요 없는 자료를 뜻합니다 【추정】.
 
-> 주의: `technical-overviews` 계열 일부는 (B) 경로에서 404가 납니다 (`5992-2005`, `3120-1513` 확인).
-> 이 경우 (A) 경로를 브라우저 또는 WebFetch로 접근해야 합니다 【확인됨】.
+**(B) 경로의 실제 성공률** — 18건을 시험한 결과 5건만 성공했습니다 【확인됨】.
+
+| 결과 | 문서 |
+|---|---|
+| **200 (PDF 획득)** | `flyers/5992-2057`, `flyers/5992-2047`, `flyers/5992-2050`, `brochures/5992-2774`, `brochures/5992-2268` |
+| **404** | 시험한 모든 `data-sheets/*`, `technical-overviews/5992-2005`, `solution-briefs/5992-3870`, `flyers/3122-2162`, `flyers/3120-1471`, `technical-overviews/3120-1513` |
+
+즉 **(B)는 일반 규칙이 아니라 부분적 미러**입니다. 특히 `3xxx-xxxx` 형식 번호와 `data-sheets` 계열은
+대체로 실패하며, 검색 결과에서 `/assets/ndx/...` 형태로 나타나는 문서들도 (B)에서 받을 수 없었습니다.
+404 시에는 PDF가 아니라 "Page Not Found" **HTML**이 반환되므로, 스크립트로 수집할 때는 반드시
+`Content-Type` 또는 매직 바이트로 PDF 여부를 검증해야 합니다 【확인됨】.
+실패한 문서는 (A) 경로를 브라우저 또는 WebFetch로 접근하십시오.
 
 #### 11.1.4 무엇이 공개이고 무엇이 벽 뒤에 있는가
 
@@ -471,8 +481,25 @@ https://www.keysight.com/content/dam/keysight/en/doc/ungate/<type>/<litNumber>.p
 - 상태 표시: 좌하단 **녹색 텍스트** 3줄(`Device driver ready` / `Connected to the firmware server` / `Ready to update devices`)
 - 하단 흰색 푸터 밴드에 **Keysight 로고(적색 파형 마크)** 와 **NEMO 워드마크(남색)** 배치
 
-> 관찰: Nemo 계열은 **측정 도구(Outdoor/Analyze)는 라이트 테마 + 리본**, **유틸리티(Firmware Manager)는
-> 다크 테마 + 브랜드 그래픽**이라는 이원적 디자인을 씁니다 【확인됨】.
+> 관찰: Nemo 계열의 테마 선택은 **제품 성격이 아니라 플랫폼**을 따릅니다 — **Windows 데스크톱
+> 측정 도구(Outdoor/Analyze)는 라이트 테마 + 리본**, **Android 앱(Handy)과 Windows 유틸리티(Firmware
+> Manager)는 다크 테마**입니다 【확인됨】. (§11.2.5 참조)
+
+#### 11.2.5 Nemo Handy 화면 재구성 (모바일) 【확인됨】
+
+출처: `5992-2774.pdf`(Nemo Handy IoT 브로슈어) 1페이지 내장 이미지(2000×1520). 두 개의 화면이 실려 있습니다.
+
+| 화면 요소 | 위치 | 역할 | 확인 수준 |
+|---|---|---|---|
+| 앱 바 | 최상단 | 햄버거 메뉴 `☰` + 화면 제목(`IoT Parameters` / `IoT Measurements`), 우측 끝에 삼각형 리사이즈 어포던스 | 【확인됨】 |
+| 파라미터 목록 | 상단 | 좌측 라벨 + 우측 값의 2열 정렬. 관측 항목: `Test Round`(14/100), `Last Ping RTT`, `Last UDP Echo RTT`, `Operation Mode`, `Power Save Mode`(I-DRX), `DCI Repetitions/Count/Format`, `RACH Preamble Repetitions`, `RACH CE Level` | 【확인됨】 |
+| 차트 패널 | 중단 (세로 적층) | 각 패널 상단에 **범례 헤더 행** — 색상 스와치 + KPI명 + **현재값**. 예: `■ RSRP -109.70`, `■ Serving SNR 7.20 dB`, `■ Ping RTT 280 ms` | 【확인됨】 |
+| 차트 본문 | 각 패널 | 검정 배경, 점선 그리드, **좌·우 이중 Y축**(두 계열 동시 표시), X축은 경과 시간(`m:ss`) | 【확인됨】 |
+| 하단 상태 바 | 최하단 | **파란 배경**. 좌측 `Measurement State` / `Measuring ICMP Ping`, 우측 `Test system state` / `Ready` | 【확인됨】 |
+
+**설계상 핵심 관찰**: 데스크톱 Nemo가 "커서 동기화된 다중 패널"이라면, 모바일 Nemo는
+**"KPI명 + 현재값 + 미니 시계열"을 한 카드로 묶어 세로로 쌓는" 구조**입니다. 좁은 화면에서 현재값을
+즉시 읽히게 하는 것이 우선이며, 이 카드 구성은 POC의 반응형 레이아웃에 그대로 차용할 만합니다 【추정】.
 
 ---
 
@@ -563,6 +590,22 @@ https://www.keysight.com/content/dam/keysight/en/doc/ungate/<type>/<litNumber>.p
 | 강조 배너 | `#3399FE` |
 | 상태 텍스트 | 녹색 (≈`#2E9440`) |
 | NEMO 워드마크 | 남색 (≈`#004578`) |
+
+**모바일 계열(Nemo Handy)** — 브로슈어 스크린샷에서 샘플링 【확인됨】
+
+| 요소 | 값 |
+|---|---|
+| 테마 | **다크** |
+| 본문 배경 | `#18171C` |
+| 앱 바 배경 | `#28272D` |
+| 차트 배경 | `#1B1A1F` |
+| 하단 상태 바 | **`#2C5FC8`** (파랑) |
+| 데이터 트레이스 | **순색 `#0000FF`(청), `#00FF00`(녹), 황색 점선** |
+
+> **관통하는 규칙**: Nemo는 데스크톱·모바일 모두 **데이터 계열에 순색 프라이머리(순적·순황·순청·순녹)** 를
+> 씁니다. 조화롭게 설계된 팔레트가 아니라 **최대 판별성**을 노린 계측기 관행입니다 【확인됨】.
+> POC에서 이를 그대로 쓰면 촌스러워 보일 수 있으나, 다수 계열이 겹치는 밀집 차트에서는 실제로 유리합니다.
+> 색상 접근성이 필요하면 순색 대신 동등한 명도 대비를 갖는 팔레트로 치환하되 **계열 간 구분 강도**는 유지하십시오 【추정】.
 
 > **핵심 시사점**: Nemo 측정 도구의 시각 언어는 "브랜드 표현"이 아니라 **엔지니어링 계기판**입니다.
 > 중립 회색 크롬 + 흰 데이터 영역 + **순색(적/황) 임계 강조**가 전부이며, 브랜드 레드는 UI 크롬에
