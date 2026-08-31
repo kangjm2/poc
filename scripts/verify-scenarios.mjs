@@ -1,0 +1,709 @@
+/**
+ * Scenario-level end-to-end verification.
+ *
+ * verify-ui.mjs asserts individual behaviours; this script walks the complete
+ * journey a user in each situation actually takes, in order, carrying state
+ * from step to step. A journey fails if any step in it fails, because a user
+ * blocked mid-journey does not care that the remaining screens render.
+ *
+ *   S1  Post-drive field analysis   (map → legend → degradation → drill-down → export)
+ *   S2  Build A/B comparison        (two builds, same route → per-KPI verdicts)
+ *   S3  Lab campaign                (virtual channel + virtual UE vs a real DU → verdict)
+ *   S4  Fronthaul fault triage      (throughput dip with clean RF → FH counters explain it)
+ *   S5  Coverage optimization       (area bins → detected issues → jump to location → GeoJSON)
+ *   S6  Data lifecycle              (export → re-import → analyze the import → delete it)
+ *   S7  Statistics reporting        (summary stats → CDF with percentile marks)
+ *   S8  Responsiveness budget       (every analysis endpoint answers inside its budget)
+ *   S9  Colour scale personalisation (edit the bins -> every view repaints -> reset)
+ *   S10 Unconfigured KPI            (auto scale: readable, stable under filtering, honest)
+ *   S11 Lossless import             (unknown columns become KPIs, analysable straight away)
+ *
+ * Scale beyond the seed is covered separately by scripts/load-test.sh.
+ */
+import { chromium } from 'playwright'
+
+const BASE = process.env.BASE ?? 'http://127.0.0.1:4173'
+const API = process.env.API ?? 'http://127.0.0.1:8080'
+
+const CITY_A = 'Oulu city centre - build 1.4.2'
+const CITY_B = 'Oulu city centre - build 1.5.0'
+const HIGHWAY = 'Oulu highway northbound - build 1.5.0'
+const FRONTHAUL = 'Lab fronthaul replay - O-DU under test'
+const ROUNDTRIP = 'E2E roundtrip'
+
+const results = []
+let current = ''
+const scenario = (title) => { current = title; console.log(`\n=== ${title}`) }
+const step = (name, ok, detail = '') => {
+  results.push({ scenario: current, name, ok, detail })
+  console.log(`  ${ok ? 'PASS' : 'FAIL'}  ${name}${detail ? `  — ${detail}` : ''}`)
+}
+
+const PROXY = process.env.HTTPS_PROXY ?? process.env.https_proxy
+const browser = await chromium.launch({
+  executablePath: '/opt/pw-browsers/chromium-1194/chrome-linux/chrome',
+  ...(PROXY ? { proxy: { server: PROXY, bypass: 'localhost,127.0.0.1,::1' } } : {}),
+  args: ['--ignore-certificate-errors'],
+})
+const page = await browser.newPage({ viewport: { width: 1680, height: 1000 } })
+const errors = []
+page.on('pageerror', (e) => errors.push(String(e)))
+page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()) })
+
+const apiGet = async (path) => (await page.request.get(`${API}${path}`)).json()
+const selectSession = async (label) => {
+  await page.locator('.toolbar select').first().selectOption({ label })
+  await page.waitForTimeout(1800)
+}
+const openWorkbook = async (label) => {
+  await page.locator('.workbook-tabs button', { hasText: label }).click()
+  await page.waitForTimeout(900)
+}
+const openMode = async (label) => {
+  await page.locator('.mode-tabs button', { hasText: label }).click()
+  await page.waitForTimeout(1200)
+}
+/** displayName -> severity class from the Numerical Data grid in the right dock. */
+const gridSeverities = () => page
+  .locator('.dock.right .dock-section:has(h3:text("Numerical Data")) table.grid tbody tr')
+  .evaluateAll((rows) => Object.fromEntries(rows.map((r) => {
+    const tds = r.querySelectorAll('td')
+    const sev = [...tds[1].classList].find((c) => c.startsWith('sev-')) ?? ''
+    return [tds[0].textContent.trim(), sev.replace('sev-', '')]
+  })))
+const cursorSeq = async () =>
+  Number((await page.locator('.statusbar .dim').first().innerText()).match(/seq (\d+)/)?.[1] ?? -1)
+const clickProgressAt = async (fraction) => {
+  const bar = await page.locator('.statusbar .progress').boundingBox()
+  await page.mouse.click(bar.x + bar.width * fraction, bar.y + bar.height / 2)
+  await page.waitForTimeout(900)
+}
+
+await page.goto(BASE, { waitUntil: 'domcontentloaded' })
+await page.waitForSelector('.statusbar', { timeout: 15000 })
+await page.waitForTimeout(2500)
+const sessions = await apiGet('/api/sessions')
+
+// ─── S1 · Post-drive field analysis ──────────────────────────────────────────
+scenario('S1 · Post-drive field analysis')
+{
+  await selectSession(CITY_A)
+  const meta = sessions.find((s) => s.name === CITY_A)
+  step('session opens', Boolean(meta), CITY_A)
+
+  const segments = await page.locator('path.leaflet-interactive').count()
+  step('route rendered as coloured segments', segments > 100, `${segments} segments`)
+
+  // The legend is a distribution: its Total must account for every sample.
+  const totalRow = await page.locator('.dock.right .legend-row', { hasText: 'Total' }).innerText()
+  const totalCount = Number(totalRow.match(/(\d+)/)?.[1] ?? -1)
+  step('legend Total equals the sample count', totalCount === meta.sampleCount,
+    `legend ${totalCount} vs session ${meta.sampleCount}`)
+
+  await openWorkbook('Degradation')
+  const degRows = page.locator('.panels .panel table.grid tbody tr')
+  const degCount = await degRows.count()
+  const degText = await page.locator('.panels').innerText()
+  step('degraded stretches detected', degCount > 0 && /CRITICAL/.test(degText), `${degCount} stretches`)
+
+  const seqBefore = await cursorSeq()
+  await degRows.first().click()
+  await page.waitForTimeout(1000)
+  const seqAfter = await cursorSeq()
+  step('clicking a stretch moves the shared cursor', seqAfter !== seqBefore, `seq ${seqBefore} -> ${seqAfter}`)
+
+  const sev = await gridSeverities()
+  const rsrpSev = sev['RSRP (NR SpCell)'] ?? ''
+  step('parameter grid confirms the problem at the cursor',
+    rsrpSev === 'CRITICAL' || rsrpSev === 'WARNING', `RSRP ${rsrpSev} at seq ${seqAfter}`)
+
+  await openWorkbook('L3 Signalling')
+  const sigMeta = await page.locator('.panel > header .meta').first().innerText()
+  step('L3 log follows the cursor', /following cursor @/.test(sigMeta), sigMeta)
+  const msgRows = page.locator('.panels .panel table.grid tbody tr')
+  const nBefore = await msgRows.count()
+  await msgRows.first().click()
+  await page.waitForTimeout(400)
+  step('message expands to full detail', (await msgRows.count()) > nBefore)
+
+  const evSeqBefore = await cursorSeq()
+  await page.locator('.dock.right .dock-section:has(h3:text("Events")) table.grid tbody tr')
+    .first().click()
+  await page.waitForTimeout(900)
+  const evSeqAfter = await cursorSeq()
+  step('clicking an event jumps to its moment', evSeqAfter !== evSeqBefore,
+    `seq ${evSeqBefore} -> ${evSeqAfter}`)
+
+  await openWorkbook('Mobility')
+  const cellsPanel = page.locator('.panel:has(header .title:text("Cells"))')
+  const cellRows = await cellsPanel.locator('tbody tr').count()
+  const servingHighlighted = await cellsPanel
+    .locator('tbody tr[style*="rgb(238, 243, 250)"], tbody tr[style*="#eef3fa"]').count()
+  step('cell table lists PCI/band/ARFCN/GSCN with the serving cell highlighted',
+    cellRows >= 3 && servingHighlighted === 1, `${cellRows} cells`)
+  await openWorkbook('Overview')
+
+  await page.locator('.statusbar button.play').click()
+  await page.waitForTimeout(1300)
+  const playSeq = await cursorSeq()
+  await page.locator('.statusbar button.play').click()
+  await page.waitForTimeout(400)
+  const pausedSeq = await cursorSeq()
+  await page.waitForTimeout(700)
+  step('playback sweeps the cursor and pause holds it',
+    playSeq > evSeqAfter && (await cursorSeq()) === pausedSeq,
+    `seq ${evSeqAfter} -> ${playSeq}, held at ${pausedSeq}`)
+
+  const csv = await page.request.get(`${API}/api/sessions/${meta.id}/export.csv`)
+  const body = await csv.text()
+  const lines = body.trim().split('\n')
+  step('CSV export carries the full drive', csv.ok() && lines.length === meta.sampleCount + 1
+    && lines[0].includes('RSRP'), `${lines.length - 1} rows`)
+}
+
+// ─── S2 · Build A/B comparison ───────────────────────────────────────────────
+scenario('S2 · Build A/B comparison')
+{
+  await openMode('Compare')
+  await page.waitForTimeout(1200)
+  const header = await page.locator('.panel > header .title').nth(1).innerText()
+  step('two builds compared by default', /1\.4\.2 vs 1\.5\.0/.test(header), header)
+
+  const rows = await page.locator('.panels .panel table.grid tbody tr')
+    .evaluateAll((trs) => trs.map((tr) => [...tr.querySelectorAll('td')].map((td) => td.textContent.trim())))
+  const kpiRows = rows.filter((r) => r.length >= 9)
+  const numeric = kpiRows.every((r) => r.slice(1, 8).every((c) => /^-?\d/.test(c)))
+  step('per-KPI stats for both sides', kpiRows.length >= 8 && numeric, `${kpiRows.length} KPI rows`)
+
+  const verdicts = kpiRows.map((r) => r[8])
+  step('verdicts separate the builds', verdicts.some((v) => v === 'BETTER' || v === 'WORSE'),
+    verdicts.join(','))
+
+  const overlay = page.locator('.panel:has(header .title:has-text("CDF overlay"))')
+  step('CDF overlay compares full distributions',
+    (await overlay.count()) === 1 && (await overlay.locator('svg path').count()) >= 2)
+
+  // The highway drive is also build 1.5.0, so the header alone cannot prove the
+  // recompute; the sample-count meta (1200 vs 900) can.
+  await page.locator('.panel select').nth(1).selectOption({ label: HIGHWAY })
+  await page.waitForTimeout(1500)
+  const meta2 = await page.locator('.panel > header .meta').first().innerText()
+  step('swapping a side recomputes the comparison', /900 samples/.test(meta2), meta2)
+}
+
+// ─── S3 · Lab campaign: virtual channel + virtual UE vs a real DU ────────────
+scenario('S3 · Lab campaign against a real DU')
+{
+  await openMode('Lab Campaigns')
+  await page.waitForTimeout(1200)
+  const text = await page.locator('.panels').innerText()
+  step('campaigns and runs listed',
+    (await page.locator('.panels .panel').count()) >= 3 && /Runs/.test(text))
+
+  step('run records what was emulated and what is real',
+    /Channel model \(emulated\)/.test(text) && /UE profile \(emulated\)/.test(text)
+    && /DU under test \(real\)/.test(text) && /FRONTHAUL/.test(text))
+  step('field-to-lab replay channel available',
+    /FIELD_REPLAY/.test(text) && /Replay source/.test(text))
+
+  await page.locator('.panel button', { hasText: 'Evaluate' }).first().click()
+  await page.waitForTimeout(1800)
+  const criteria = await page
+    .locator('.panel:has(header .title:text("Acceptance criteria")) table.grid tbody tr')
+    .evaluateAll((trs) => trs.map((tr) => [...tr.querySelectorAll('td')].map((td) => td.textContent.trim())))
+  const judged = criteria.filter((r) => r[4] === 'PASS' || r[4] === 'FAIL')
+  const actuals = criteria.every((r) => /^-?\d/.test(r[3]))
+  step('every criterion judged against a measured value',
+    criteria.length > 0 && judged.length === criteria.length && actuals,
+    `${judged.length}/${criteria.length} judged`)
+  const after = await page.locator('.panels').innerText()
+  step('run verdict produced', /PASS|FAIL/.test(after))
+
+  // The fronthaul-gated run: radio criteria pass, transport criteria fail.
+  await page.locator('.panels .panel table.grid tbody tr', { hasText: 'Fronthaul timing acceptance' })
+    .first().click()
+  await page.waitForTimeout(800)
+  await page.locator('.panels .panel table.grid tbody tr', { hasText: 'Fronthaul timing acceptance' })
+    .locator('button', { hasText: 'Evaluate' }).click()
+  await page.waitForTimeout(1800)
+  const rows = await page
+    .locator('.panel:has(header .title:text("Acceptance criteria")) table.grid tbody tr')
+    .evaluateAll((trs) => trs.map((tr) => [...tr.querySelectorAll('td')].map((td) => td.textContent.trim())))
+  const radioPass = rows.filter((r) => ['RSRP', 'SINR'].includes(r[0]) && r[4] === 'PASS')
+  const fhFail = rows.filter((r) => r[0].startsWith('FH_RX') && r[4] === 'FAIL')
+  step('verdict gated on fronthaul criteria radio cannot see',
+    radioPass.length === 2 && fhFail.length === 2,
+    `${radioPass.length} radio PASS, ${fhFail.length} fronthaul FAIL`)
+
+  await page.locator('.panels button', { hasText: 'Open session' }).click()
+  await page.waitForTimeout(1800)
+  const statusName = await page.locator('.statusbar .dim').last().innerText()
+  step('failed run drills through to its measured session',
+    statusName.includes('fronthaul replay'), statusName)
+}
+
+// ─── S4 · Fronthaul fault triage ─────────────────────────────────────────────
+scenario('S4 · Fronthaul fault triage (transport vs radio)')
+{
+  await openMode('Analysis')
+  await selectSession(FRONTHAUL)
+  const meta = sessions.find((s) => s.name === FRONTHAUL)
+
+  // The user's entry point is the symptom: a throughput dip somewhere in the run.
+  await page.locator('.toolbar select').nth(1).selectOption({ label: 'MAC downlink throughput' })
+  await page.waitForTimeout(1500)
+  await openWorkbook('Degradation')
+  const thrText = await page.locator('.panels').innerText()
+  step('symptom visible: throughput degrades', /CRITICAL|WARNING/.test(thrText))
+
+  // Radio-side check: the fronthaul KPI family exists because RF cannot see this.
+  await page.locator('.toolbar select').nth(1).selectOption({ label: 'CUS RX late' })
+  await page.waitForTimeout(1500)
+  const fhDeg = await apiGet(`/api/sessions/${meta.id}/degradations?kpi=FH_RX_LATE&minSamples=5`)
+  step('fronthaul window flagged CRITICAL',
+    fhDeg.length === 1 && fhDeg[0].severity === 'CRITICAL' && fhDeg[0].durationSeconds >= 90,
+    `${fhDeg[0]?.startSeq}-${fhDeg[0]?.endSeq} (${fhDeg[0]?.durationSeconds}s)`)
+
+  const mid = (fhDeg[0].startSeq + fhDeg[0].endSeq) / 2
+  await clickProgressAt(mid / (meta.sampleCount - 1))
+  const sev = await gridSeverities()
+  const fhSev = sev['CUS RX late']
+  const radio = [sev['RSRP (NR SpCell)'], sev['SS-SINR'], sev['MAC downlink BLER']]
+  const thrSev = sev['MAC downlink throughput']
+  step('inside the window: fronthaul CRITICAL', fhSev === 'CRITICAL', `CUS RX late ${fhSev}`)
+  step('inside the window: RF and BLER stay clean', radio.every((s) => s === 'NORMAL'),
+    `RSRP/SINR/BLER = ${radio.join('/')}`)
+  step('inside the window: throughput sags with it',
+    thrSev === 'WARNING' || thrSev === 'CRITICAL', `MAC DL throughput ${thrSev}`)
+
+  await openWorkbook('Fronthaul')
+  const fhTitles = await page.locator('.panel > header .title').allInnerTexts()
+  step('fronthaul workbook charts transport against radio',
+    fhTitles.some((t) => /CUS RX late/.test(t)) && fhTitles.some((t) => /CUS RX on time/.test(t))
+    && fhTitles.some((t) => /throughput/i.test(t)) && fhTitles.some((t) => /RSRP/.test(t)),
+    fhTitles.join(' | '))
+
+  const events = await apiGet(`/api/sessions/${meta.id}/events`)
+  step('root cause carried as an event + M-plane alarm',
+    events.some((e) => e.eventType === 'FRONTHAUL_TIMING'),
+    events.map((e) => e.eventType).join(','))
+}
+
+// ─── S5 · Coverage optimization ──────────────────────────────────────────────
+scenario('S5 · Coverage optimization')
+{
+  await page.locator('.toolbar select').nth(1).selectOption({ label: 'RSRP (NR SpCell)' })
+  await selectSession(HIGHWAY)
+  await openWorkbook('Overview')
+  const meta = sessions.find((s) => s.name === HIGHWAY)
+
+  await openWorkbook('Fronthaul')
+  const fhEmpty = await page.locator('.panels').innerText()
+  step('field session explains why it has no fronthaul counters',
+    /No fronthaul counters in this session/.test(fhEmpty))
+  await openWorkbook('Overview')
+
+  await page.locator('.toolbar select').nth(2).selectOption('150')
+  await page.waitForTimeout(1800)
+  const mapTitle = await page.locator('.panel > header .title').first().innerText()
+  const shapes = await page.locator('.leaflet-overlay-pane path').count()
+  step('area bins aggregate the raw route', /area bins/.test(mapTitle) && shapes > 0,
+    `${shapes} shapes`)
+
+  await openWorkbook('Coverage Issues')
+  const issueRows = page.locator('.panels .panel table.grid tbody tr')
+  const issueCount = await issueRows.count()
+  const issueText = await page.locator('.panels').innerText()
+  step('issues classified by cause', issueCount > 0
+    && /WEAK COVERAGE|INTERFERENCE|OVERSHOOT/.test(issueText), `${issueCount} issues`)
+
+  const seqBefore = await cursorSeq()
+  await issueRows.first().click()
+  await page.waitForTimeout(900)
+  step('clicking an issue jumps to its location', (await cursorSeq()) !== seqBefore)
+
+  const geo = await page.request.get(`${API}/api/sessions/${meta.id}/export.geojson?kpi=RSRP`)
+  const gj = await geo.json()
+  step('GeoJSON export for planning tools', geo.ok() && gj.type === 'FeatureCollection'
+    && gj.features.length > 0 && 'RSRP' in (gj.features[0].properties ?? {}),
+    `${gj.features?.length} features`)
+
+  await page.locator('.toolbar select').nth(2).selectOption('0')
+  await page.waitForTimeout(900)
+}
+
+// ─── S6 · Data lifecycle: export → import → analyze → delete ─────────────────
+scenario('S6 · Data lifecycle round-trip')
+{
+  const src = sessions.find((s) => s.name === CITY_B)
+  const csv = await (await page.request.get(`${API}/api/sessions/${src.id}/export.csv`)).text()
+
+  await openMode('Import')
+  await page.locator('input[type=file]').setInputFiles({
+    name: 'e2e-roundtrip.csv', mimeType: 'text/csv', buffer: Buffer.from(csv),
+  })
+  await page.locator('label:has-text("Session name") input').fill(ROUNDTRIP)
+  await page.locator('.panels button', { hasText: 'Import' }).click()
+  await page.waitForSelector('.panel header .title:text("Import result")', { timeout: 30000 })
+  await page.waitForTimeout(500)
+
+  const resultText = await page.locator('.panel:has(header .title:text("Import result"))').innerText()
+  const samplesLoaded = Number(resultText.match(/Samples loaded\s+(\d+)/)?.[1] ?? -1)
+  step('import loads every exported sample', samplesLoaded === src.sampleCount,
+    `${samplesLoaded} of ${src.sampleCount}`)
+  const ignored = resultText.match(/Ignored columns\s+(.+)/)?.[1]?.trim() ?? '?'
+  step('no data silently dropped', ignored === 'none' || ignored === 'seq', `ignored: ${ignored}`)
+
+  const histText = await page.locator('.panel:has(header .title:text("Import history"))').innerText()
+  step('import recorded in history', histText.includes('e2e-roundtrip.csv')
+    && /COMPLETED/.test(histText))
+
+  await openMode('Analysis')
+  await selectSession(ROUNDTRIP)
+  const segments = await page.locator('path.leaflet-interactive').count()
+  const totalRow = await page.locator('.dock.right .legend-row', { hasText: 'Total' }).innerText()
+  const legendTotal = Number(totalRow.match(/(\d+)/)?.[1] ?? -1)
+  step('imported session analyzes like a native one', segments > 100 && legendTotal === src.sampleCount,
+    `${segments} segments, legend ${legendTotal}`)
+
+  page.once('dialog', (d) => d.accept())
+  await page.locator('.toolbar button.danger').click()
+  await page.waitForTimeout(2000)
+  const gone = !(await apiGet('/api/sessions')).some((s) => s.name === ROUNDTRIP)
+  step('session can be deleted from the toolbar when no longer needed', gone)
+  await selectSession(CITY_A)
+}
+
+// ─── S7 · Statistics reporting ───────────────────────────────────────────────
+scenario('S7 · Statistics reporting')
+{
+  await openWorkbook('Statistics')
+  await page.waitForTimeout(800)
+  const cells = await page
+    .locator('.panel:has(header .title:has-text("Statistics")) table.grid tbody td')
+    .allInnerTexts()
+  const nums = cells.map((c) => parseFloat(c))
+  const [min, p05, p50, , p95, max] = nums
+  step('summary statistics computed', nums.length === 6 && nums.every((n) => Number.isFinite(n)),
+    cells.join(' | '))
+  step('percentiles ordered sanely', min <= p05 && p05 <= p50 && p50 <= p95 && p95 <= max)
+
+  const cdfPanel = page.locator('.panel:has(header .title:text("Cumulative distribution"))')
+  // innerText is HTML-only; SVG <text> needs textContent.
+  const marks = await cdfPanel.locator('svg text').evaluateAll((ts) => ts.map((t) => t.textContent))
+  step('CDF drawn with percentile marks', (await cdfPanel.locator('svg path').count()) > 0
+    && ['p05', 'p50', 'p95'].every((m) => marks.includes(m)))
+
+  await page.locator('.tree .kpi', { hasText: 'SS-SINR' }).click()
+  await page.waitForTimeout(1200)
+  const title = await page.locator('.panel > header .title').first().innerText()
+  step('statistics follow the selected KPI', /SINR/.test(title), title)
+
+  // Sub-select a stretch of the drive and watch statistics and legend honour it,
+  // with the active filter visible as a chip.
+  const fullMeta = await page.locator('.panel > header .meta').first().innerText()
+  const fullCount = Number(fullMeta.replace(/,/g, '').match(/(\d+) samples/)?.[1] ?? -1)
+  await clickProgressAt(0.25)
+  await page.locator('.statusbar .range-marks button', { hasText: 'From here' }).click()
+  await clickProgressAt(0.75)
+  await page.locator('.statusbar .range-marks button', { hasText: 'To here' }).click()
+  await page.waitForTimeout(1500)
+  const chip = await page.locator('.filter-chip').count()
+  const filteredMeta = await page.locator('.panel > header .meta').first().innerText()
+  const filteredCount = Number(filteredMeta.replace(/,/g, '').match(/(\d+) samples/)?.[1] ?? -1)
+  const totalRow = await page.locator('.dock.right .legend-row', { hasText: 'Total' }).innerText()
+  const legendTotal = Number(totalRow.match(/(\d+)/)?.[1] ?? -1)
+  step('range filter narrows statistics and legend, shown as a chip',
+    chip === 1 && filteredCount < fullCount && legendTotal === filteredCount,
+    `${fullCount} -> ${filteredCount} samples, legend ${legendTotal}`)
+
+  await page.locator('.filter-chip button').click()
+  await page.waitForTimeout(1500)
+  const clearedMeta = await page.locator('.panel > header .meta').first().innerText()
+  const clearedCount = Number(clearedMeta.replace(/,/g, '').match(/(\d+) samples/)?.[1] ?? -1)
+  step('clearing the chip restores the whole drive', clearedCount === fullCount,
+    `${clearedCount} samples`)
+}
+
+// ─── S8 · Responsiveness budget ──────────────────────────────────────────────
+scenario('S8 · Responsiveness budget (seeded data; scale harness: load-test.sh)')
+{
+  const biggest = [...sessions].sort((a, b) => b.sampleCount - a.sampleCount)[0]
+  const paths = [
+    `/api/sessions/${biggest.id}/track?kpi=RSRP&maxPoints=4000`,
+    `/api/sessions/${biggest.id}/series?kpis=RSRP,RSRQ,SINR,MAC_DL_THROUGHPUT,MAC_UL_THROUGHPUT,DL_BLER&maxPoints=2000`,
+    `/api/sessions/${biggest.id}/distribution?kpi=RSRP`,
+    `/api/sessions/${biggest.id}/statistics?kpi=RSRP`,
+    `/api/sessions/${biggest.id}/degradations?kpi=RSRP&minSamples=5`,
+    `/api/sessions/${biggest.id}/bins?kpi=RSRP&sizeMeters=150`,
+    `/api/sessions/${biggest.id}/coverage-issues`,
+    `/api/compare?a=1&b=2&kpis=RSRP,RSRQ,SINR,MAC_DL_THROUGHPUT`,
+  ]
+  const BUDGET_MS = 1500
+  let worst = 0; let worstPath = ''
+  let allOk = true
+  for (const p of paths) {
+    const t0 = Date.now()
+    const res = await page.request.get(`${API}${p}`)
+    const ms = Date.now() - t0
+    if (ms > worst) { worst = ms; worstPath = p.split('?')[0] }
+    if (!res.ok() || ms > BUDGET_MS) allOk = false
+  }
+  step(`all ${paths.length} analysis endpoints inside ${BUDGET_MS} ms`, allOk,
+    `worst ${worst} ms (${worstPath})`)
+}
+
+// ─── S9 · Colour scale personalisation ───────────────────────────────────────
+scenario('S9 · Colour scale personalisation')
+{
+  await openMode('Analysis')
+  await selectSession(CITY_A)
+  await openWorkbook('Overview')
+  await page.locator('.toolbar select').nth(1).selectOption({ label: 'RSRP (NR SpCell)' })
+  await page.waitForTimeout(1500)
+
+  const legendLabels = () => page.locator('.dock.right .legend-row .label').allInnerTexts()
+  const legendCounts = () => page.locator('.dock.right .legend-row .count').allInnerTexts()
+  const before = { labels: await legendLabels(), counts: await legendCounts() }
+
+  await page.locator('.legend-edit').click()
+  await page.waitForSelector('.modal', { timeout: 5000 })
+  step('legend opens its own scale editor', (await page.locator('.modal').count()) === 1)
+
+  // The legend's .label cells include its header and Total rows, so count the data
+  // bins the way the legend itself marks them: a row with a numeric count.
+  const dataBins = (await legendCounts()).filter((c) => /^\d+$/.test(c.trim())).length - 1
+  const boundaries = page.locator('.modal input.boundary')
+  const editorBins = await page.locator('.modal tbody tr').count()
+  step('editor exposes one boundary per gap between bins',
+    editorBins === dataBins && (await boundaries.count()) === editorBins - 1,
+    `${editorBins} bins (legend ${dataBins}), ${await boundaries.count()} boundaries`)
+
+  // An out-of-order ladder must be refused before it can be saved.
+  await boundaries.nth(0).fill('-50')
+  await page.waitForTimeout(300)
+  const saveBtn = page.locator('.modal footer button', { hasText: 'Save' })
+  const blocked = await saveBtn.isDisabled()
+  const warned = /Boundaries must increase/.test(await page.locator('.modal').innerText())
+  step('non-ascending boundaries block the save', blocked && warned)
+
+  // A real edit. The -90 boundary is the one that separates a degraded bin from a
+  // normal one, so moving it must change which stretches count as degraded - an
+  // edit that only moved -100 would leave the degraded set identical and prove
+  // nothing about whether the analytics read the new scale.
+  const cityId = sessions.find((s) => s.name === CITY_A).id
+  const degBefore = (await apiGet(`/api/sessions/${cityId}/degradations?kpi=RSRP&minSamples=5`)).length
+  await boundaries.nth(0).fill('-95')
+  await boundaries.nth(1).fill('-85')
+  await page.waitForTimeout(300)
+  step('valid ladder re-enables the save', !(await saveBtn.isDisabled()))
+  await saveBtn.click()
+  await page.waitForTimeout(2000)
+
+  const after = { labels: await legendLabels(), counts: await legendCounts() }
+  step('legend labels follow the new bounds',
+    after.labels.some((l) => /-95/.test(l)) && after.labels.some((l) => /-85/.test(l))
+    && !after.labels.some((l) => /-100/.test(l)),
+    after.labels.join(' | '))
+  step('bin statistics recount against the new scale',
+    JSON.stringify(after.counts) !== JSON.stringify(before.counts),
+    `${before.counts.join('/')} -> ${after.counts.join('/')}`)
+
+  // The whole view set is painted from these bins, not just the legend.
+  const degAfter = (await apiGet(`/api/sessions/${cityId}/degradations?kpi=RSRP&minSamples=5`)).length
+  step('degradation detection uses the edited scale', degAfter !== degBefore,
+    `${degBefore} -> ${degAfter} stretches`)
+
+  await page.locator('.legend-edit').click()
+  await page.waitForSelector('.modal', { timeout: 5000 })
+  await page.locator('.modal footer button', { hasText: 'Reset to default' }).click()
+  await page.waitForTimeout(1500)
+  await page.locator('.modal > header button').click()
+  await page.waitForTimeout(1500)
+  const restored = await legendLabels()
+  step('reset restores the seeded scale',
+    JSON.stringify(restored) === JSON.stringify(before.labels), restored.join(' | '))
+}
+
+// ─── S10 · A KPI with no configured scale ────────────────────────────────────
+scenario('S10 · Unconfigured KPI falls back to an auto scale')
+{
+  // Strip one KPI's bins through the API, the way a user-defined or newly imported
+  // KPI arrives: defined, measured, but with nobody's thresholds on it yet.
+  const cityId = sessions.find((s) => s.name === CITY_A).id
+  const stripped = 'CQI'
+  await page.request.delete(`${API}/api/kpi-definitions/${stripped}/thresholds`)
+
+  const dist = await apiGet(`/api/sessions/${cityId}/distribution?kpi=${stripped}`)
+  if (!dist.derived) {
+    step('KPI could be stripped for this check', false, 'still configured — check skipped')
+  } else {
+    step('unconfigured KPI still answers', Array.isArray(dist.bins) && dist.bins.length >= 2,
+      `${dist.bins.length} bins`)
+    step('auto scale is marked as derived', dist.derived === true)
+
+    // Every bin must be reachable: a bin that cannot fill wastes a quarter of the
+    // legend and a step of the ramp.
+    step('every derived bin holds samples', dist.bins.every((b) => b.count > 0),
+      dist.bins.map((b) => `${b.label}=${b.count}`).join(' '))
+
+    // Quantiles, so the bins should be roughly balanced rather than lopsided.
+    const shares = dist.bins.map((b) => b.percentage)
+    step('quartile bins are balanced', Math.max(...shares) < 45 && Math.min(...shares) > 8,
+      shares.map((p) => `${p}%`).join(' '))
+
+    // Boundaries must be readable numbers, not raw quantiles like -93.7421.
+    const bounds = dist.bins.map((b) => b.upperBound).filter((v) => v != null)
+    step('boundaries are rounded, not raw quantiles',
+      bounds.every((v) => Math.abs(v * 100 - Math.round(v * 100)) < 1e-9),
+      bounds.join(', '))
+
+    // The property the whole design turns on: filtering changes counts, never bins.
+    const filtered = await apiGet(
+      `/api/sessions/${cityId}/distribution?kpi=${stripped}&fromSeq=600&toSeq=900`)
+    const same = JSON.stringify(filtered.bins.map((b) => [b.lowerBound, b.upperBound]))
+      === JSON.stringify(dist.bins.map((b) => [b.lowerBound, b.upperBound]))
+    step('range filtering moves the counts, never the boundaries',
+      same && filtered.total < dist.total, `${dist.total} -> ${filtered.total} samples`)
+
+    // A derived scale ranks a drive against itself; it must not claim a breach.
+    step('no derived bin asserts a severity', dist.bins.every((b) => b.severity === 'NORMAL'),
+      [...new Set(dist.bins.map((b) => b.severity))].join(','))
+
+    // And the UI has to say so, or the map reads as an absolute judgement.
+    await openMode('Analysis')
+    await selectSession(CITY_A)
+    await page.locator('.toolbar select').nth(1).selectOption({ label: 'CQI' })
+    await page.waitForTimeout(1600)
+    const noteVisible = await page.locator('.dock.right .legend-note').count()
+    step('legend says the scale was derived, not configured', noteVisible === 1,
+      noteVisible ? await page.locator('.dock.right .legend-note').innerText() : 'no note')
+
+    // Editing an auto scale starts from what is on screen, not an empty form.
+    await page.locator('.legend-edit').click()
+    await page.waitForSelector('.modal', { timeout: 5000 })
+    const rows = await page.locator('.modal tbody tr').count()
+    step('editor opens pre-filled with the proposed bins', rows === dist.bins.length,
+      `${rows} rows`)
+    await page.locator('.modal > header button').click()
+    await page.waitForTimeout(500)
+
+    await page.request.post(`${API}/api/kpi-definitions/${stripped}/thresholds/reset`)
+    await page.locator('.toolbar select').nth(1).selectOption({ label: 'RSRP (NR SpCell)' })
+    await page.waitForTimeout(1200)
+  }
+}
+
+// ─── S11 · Importing a file with columns this catalogue has never seen ───────
+scenario('S11 · Unknown columns become KPIs instead of being dropped')
+{
+  const src = sessions.find((s) => s.name === CITY_B)
+  const csv = await (await page.request.get(`${API}/api/sessions/${src.id}/export.csv`)).text()
+  const lines = csv.trim().split('\n')
+  // Two columns no catalogue of ours has ever contained: one integer, one with
+  // two decimals and a unit in the conventional parenthetical form.
+  lines[0] = `${lines[0]},Beam SSB index,Custom margin (dB)`
+  for (let i = 1; i < lines.length; i++) {
+    lines[i] = `${lines[i]},${i % 8},${(3.25 + i * 0.01).toFixed(2)}`
+  }
+  const withUnknown = lines.join('\n')
+
+  const importFile = async (name, createUnknown) => {
+    await openMode('Import')
+    await page.locator('input[type=file]').setInputFiles({
+      name: `${name}.csv`, mimeType: 'text/csv', buffer: Buffer.from(withUnknown),
+    })
+    await page.locator('label:has-text("Session name") input').fill(name)
+    const box = page.locator('.panels label:has-text("Define a KPI") input[type=checkbox]')
+    if (createUnknown) await box.check(); else await box.uncheck()
+    await page.locator('.panels button', { hasText: 'Import' }).click()
+    await page.waitForSelector('.panel header .title:text("Import result")', { timeout: 30000 })
+    await page.waitForTimeout(400)
+    return page.locator('.panel:has(header .title:text("Import result"))').innerText()
+  }
+
+  const off = await importFile('S11 dropped', false)
+  step('by default an unrecognised column is reported as dropped',
+    /Ignored columns\s+Beam SSB index, Custom margin \(dB\)/.test(off)
+    && !/KPIs defined/.test(off))
+
+  const on = await importFile('S11 defined', true)
+  step('with the option the columns are defined instead',
+    /KPIs defined\s+BEAM_SSB_INDEX, CUSTOM_MARGIN/.test(on) && /Ignored columns\s+none/.test(on),
+    (on.match(/KPIs defined.*/) ?? ['-'])[0])
+
+  const defs = await apiGet('/api/kpi-definitions')
+  const beam = defs.find((d) => d.name === 'BEAM_SSB_INDEX')
+  const margin = defs.find((d) => d.name.startsWith('CUSTOM_MARGIN'))
+  step('a new KPI is NEUTRAL until someone says which end is good',
+    beam?.direction === 'NEUTRAL' && margin?.direction === 'NEUTRAL',
+    `${beam?.direction} / ${margin?.direction}`)
+  step('decimals follow the values, and a parenthetical header gives the unit',
+    beam?.decimals === 0 && margin?.decimals === 2 && margin?.unit === 'dB',
+    `beam ${beam?.decimals}dp, margin ${margin?.decimals}dp unit="${margin?.unit}"`)
+
+  // The point of defining them: they are analysable like any other KPI.
+  await openMode('Analysis')
+  await selectSession('S11 defined')
+  const tree = await page.locator('.dock .tree').innerText()
+  step('new KPIs appear in the parameter tree', /Beam SSB index/.test(tree) && /Imported/.test(tree))
+
+  await page.locator('.tree .kpi', { hasText: 'Beam SSB index' }).click()
+  await page.waitForTimeout(1800)
+  const segments = await page.locator('path.leaflet-interactive').count()
+  const note = await page.locator('.dock.right .legend-note').count()
+  step('a brand-new KPI paints the map on its auto scale', segments > 50 && note === 1,
+    `${segments} segments`)
+
+  // A KPI defined by mistake has to be removable, or a typo'd header lodges in the
+  // catalogue permanently. Built-in KPIs are refused for the same reason.
+  const refused = await page.request.delete(`${API}/api/kpi-definitions/RSRP`)
+  step('a built-in KPI cannot be deleted', refused.status() === 400,
+    `HTTP ${refused.status()}`)
+
+  await page.locator('.legend-edit').click()
+  await page.waitForSelector('.modal', { timeout: 5000 })
+  const hasDelete = await page.locator('.modal footer button', { hasText: 'Delete KPI' }).count()
+  const hasReset = await page.locator('.modal footer button', { hasText: 'Reset to default' }).count()
+  step('the editor offers Delete for a defined KPI and Reset only for built-ins',
+    hasDelete === 1 && hasReset === 0)
+  page.once('dialog', (d) => d.accept())
+  await page.locator('.modal footer button', { hasText: 'Delete KPI' }).click()
+  await page.waitForTimeout(1500)
+  page.once('dialog', (d) => d.accept())
+  await page.waitForTimeout(600)
+  const afterDelete = await apiGet('/api/kpi-definitions')
+  step('deleting a KPI removes it from the catalogue',
+    !afterDelete.some((d) => d.name === 'BEAM_SSB_INDEX'),
+    `${afterDelete.length} KPIs left`)
+
+  await page.request.delete(`${API}/api/kpi-definitions/CUSTOM_MARGIN_DB`)
+  const imported = await apiGet('/api/sessions')
+  for (const name of ['S11 dropped', 'S11 defined']) {
+    const s = imported.find((x) => x.name === name)
+    if (s) await page.request.delete(`${API}/api/sessions/${s.id}`)
+  }
+  await selectSession(CITY_A)
+  await page.locator('.toolbar select').nth(1).selectOption({ label: 'RSRP (NR SpCell)' })
+  await page.waitForTimeout(1000)
+}
+
+// ─── wrap-up ─────────────────────────────────────────────────────────────────
+const appErrors = errors.filter((e) =>
+  !/tile\.openstreetmap\.org|ERR_CONNECTION|Failed to load resource|ERR_TIMED_OUT/.test(e))
+scenario('Cross-cutting')
+step('no console errors from app code across all journeys', appErrors.length === 0,
+  appErrors.slice(0, 3).join(' | '))
+
+await browser.close()
+
+const failed = results.filter((r) => !r.ok)
+const byScenario = [...new Set(results.map((r) => r.scenario))]
+console.log('\n──────── summary')
+for (const s of byScenario) {
+  const rs = results.filter((r) => r.scenario === s)
+  const bad = rs.filter((r) => !r.ok).length
+  console.log(`${bad === 0 ? 'PASS' : 'FAIL'}  ${s}  (${rs.length - bad}/${rs.length})`)
+}
+console.log(`\n${results.length - failed.length}/${results.length} steps passed`)
+process.exit(failed.length === 0 ? 0 : 1)

@@ -1,0 +1,39 @@
+server:
+  port: 8080
+  # Analytic payloads are highly repetitive JSON; compression cuts them by ~90%.
+  compression:
+    enabled: true
+    mime-types: application/json
+    min-response-size: 2048
+
+spring:
+  application:
+    name: vdt-analyzer
+  servlet:
+    multipart:
+      max-file-size: 512MB
+      max-request-size: 512MB
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://127.0.0.1:5432/vdt}
+    username: ${DB_USER:vdt}
+    password: ${DB_PASSWORD:vdt}
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    open-in-view: false
+    properties:
+      hibernate:
+        jdbc:
+          batch_size: 500
+        order_inserts: true
+  flyway:
+    enabled: true
+    baseline-on-migrate: true
+
+vdt:
+  seed:
+    enabled: ${SEED_ENABLED:true}
+
+logging:
+  level:
+    org.hibernate.SQL: warn
