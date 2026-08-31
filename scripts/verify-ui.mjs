@@ -187,7 +187,10 @@ await page.screenshot({ path: `${OUT}/11-lab-campaign.png`, fullPage: true })
 // 22. import screen documents the recognised columns
 await page.locator('.mode-tabs button', { hasText: 'Import' }).click()
 await page.waitForTimeout(1200)
-const importText = await page.locator('.panels').innerText()
+// Joined across every .panels row rather than read from "the" one: the import screen
+// grew a second row when the KPI Workbench landed there, and a locator that assumes a
+// single match fails on the page being correct rather than on it being wrong.
+const importText = (await page.locator('.panels').allInnerTexts()).join('\n')
 check('CSV 임포트 화면', /Recognised KPI columns/.test(importText) && /RSRP/.test(importText))
 await page.screenshot({ path: `${OUT}/12-import.png` })
 
@@ -417,6 +420,145 @@ const cellCells = await page.locator('.panel:has-text("Serving cell") tbody td')
 check('서빙 셀 식별 (PCI 외 band/ARFCN/GSCN)',
   cellCells.length === 6 && cellCells.some((c) => /^\d{6}$/.test(c)), cellCells.join(' | '))
 await page.screenshot({ path: `${OUT}/25-lab-bringup.png`, fullPage: true })
+
+// ---------------------------------------------------------------- monitored set
+// The measurement V7 added, and the four screens that were blocked without it.
+await page.locator('.mode-tabs button', { hasText: 'Analysis' }).click()
+await page.waitForTimeout(800)
+// Explicitly the baseline city run, because it is the session that drives through the
+// underpass. Selecting whatever happens to be first picked the lab replay, which has no
+// deep fade - so the coverage-hole check below was asserting against data that could not
+// exhibit the defect it exists to catch, and passed for that reason rather than on merit.
+const msOpts = await page.locator('.toolbar select').first().locator('option').allInnerTexts()
+const fadeSession = msOpts.find((o) => /1\.4\.2/.test(o))
+check('깊은 페이드 구간이 있는 세션 확보', Boolean(fadeSession), fadeSession ?? 'not found')
+await page.locator('.toolbar select').first().selectOption({ label: fadeSession })
+await page.waitForTimeout(2000)
+
+// The dock the reference keeps permanently on screen.
+const msDock = page.locator('.dock.right .dock-section')
+  .filter({ has: page.locator('h3:text-is("Monitored Set")') })
+const msRows = await msDock.locator('tbody tr').count()
+check('모니터드 셋 도크', msRows >= 3, `${msRows} cells`)
+
+// Exactly one row is the serving cell, and it is the first. Asserting only "a row is
+// marked" would pass on a table that marked every row, or none.
+const msMarks = await msDock.locator('tbody tr td:nth-child(2)').allInnerTexts()
+const servingAt = msMarks.map((t, i) => (/•/.test(t) ? i : -1)).filter((i) => i >= 0)
+check('서빙 셀이 정확히 하나, 맨 위',
+  servingAt.length === 1 && servingAt[0] === 0, `marked rows: [${servingAt}]`)
+
+// The dock must agree with the serving RSRP the Numerical Data panel reports. Two panels
+// reading the same instant that disagree is the failure this guards.
+const numData = await page.locator('.dock.right table.grid').first().innerText()
+const servingRsrpCell = (await msDock.locator('tbody tr').first()
+  .locator('td').nth(2).innerText()).trim()
+check('도크 서빙 RSRP가 수치 패널과 일치',
+  numData.includes(servingRsrpCell), `dock ${servingRsrpCell}`)
+
+await page.locator('.workbook-tabs button', { hasText: 'Monitored Set' }).click()
+await page.waitForTimeout(2000)
+const msBars = await page.locator('svg[aria-label="Monitored set at the cursor"] rect').count()
+check('모니터드 셋 막대 차트', msBars >= 3, `${msBars} bars`)
+
+// The bars and the dock read the same instant, so they must report the same numbers.
+// An earlier version of this check only asserted that the bar tooltips CHANGED when the
+// cursor moved, which a chart showing wrong-but-varying values still satisfies - PCI and
+// RSRQ vary on their own. Comparing the two panels is the invariant that actually holds.
+const barLevels = async () =>
+  (await page.locator('svg[aria-label="Monitored set at the cursor"] title').allTextContents())
+    .map((t) => (/RSRP (-?[\d.]+) dBm/.exec(t) ?? [])[1])
+    .filter(Boolean)
+const dockLevels = async () =>
+  (await page.locator('.dock.right .dock-section')
+    .filter({ has: page.locator('h3:text-is("Monitored Set")') })
+    .locator('tbody tr td:nth-child(3)').allInnerTexts()).map((t) => t.trim())
+
+const bars1 = await barLevels()
+const dock1 = await dockLevels()
+check('막대와 도크가 같은 값을 보고',
+  bars1.length > 0 && JSON.stringify([...bars1].sort()) === JSON.stringify([...dock1].sort()),
+  `bars ${bars1.join(',')} vs dock ${dock1.join(',')}`)
+
+// And both must move together when the cursor does.
+await page.evaluate(() => {
+  const el = document.querySelector('.progress')
+  const r = el.getBoundingClientRect()
+  el.dispatchEvent(new MouseEvent('mousedown',
+    { clientX: r.left + r.width * 0.75, clientY: r.top + r.height / 2, bubbles: true }))
+})
+await page.waitForTimeout(1800)
+const bars2 = await barLevels()
+const dock2 = await dockLevels()
+check('막대가 시간 커서를 따라감',
+  JSON.stringify(bars1) !== JSON.stringify(bars2)
+  && JSON.stringify([...bars2].sort()) === JSON.stringify([...dock2].sort()),
+  `${bars1.join(',')} -> ${bars2.join(',')}`)
+
+const nbrRows = await page.locator('.panel:has(.title:text-is("Across the whole drive")) tbody tr')
+  .count()
+check('드라이브 전체 셀 검출 표', nbrRows >= 3, `${nbrRows} cells`)
+
+// Pilot pollution must not fire on a coverage hole: every reported stretch needs a
+// usable best cell. This is the specific defect that was found by reading the screen.
+const pollBest = await page
+  .locator('.panel:has(.title:text-is("Pilot pollution")) tbody tr td:nth-child(4)')
+  .allInnerTexts()
+check('파일럿 오염이 커버리지 홀을 오탐하지 않음',
+  pollBest.every((v) => Number(v) >= -110),
+  pollBest.length ? `best RSRP: ${pollBest.join(', ')}` : 'no stretches')
+await page.screenshot({ path: `${OUT}/26-monitored-set.png`, fullPage: true })
+
+// Lines from the terminal to the cells it can see - the pilot-pollution picture on the map.
+await page.locator('.workbook-tabs button', { hasText: 'Mobility' }).click()
+await page.waitForTimeout(2500)
+const nbrLines = await page.locator('.leaflet-overlay-pane path[stroke-dasharray="2 4"]').count()
+check('지도에 모니터드 셀 연결선', nbrLines >= 2, `${nbrLines} lines`)
+
+// ---------------------------------------------------------------- KPI Workbench
+await page.locator('.mode-tabs button', { hasText: 'Import' }).click()
+await page.waitForSelector('svg[aria-label="KPI graph canvas"]', { timeout: 10000 })
+await page.waitForTimeout(600)
+
+await page.locator('button', { hasText: '+ KPI source' }).click()
+await page.locator('button', { hasText: '+ Output' }).click()
+await page.waitForTimeout(600)
+const wbCanvas = page.locator('svg[aria-label="KPI graph canvas"]')
+check('워크벤치 캔버스에 노드 배치', await wbCanvas.locator('g rect').count() === 2)
+
+// An unwired graph must SAY why it is invalid rather than failing silently at save.
+const wbReport = () => page.locator('.panel:has(.title:text-is("KPI Workbench")) > div')
+  .last().innerText()
+const unwired = await wbReport()
+check('미연결 그래프가 이유를 표시', /takes 1 input/.test(unwired), unwired.trim().slice(0, 60))
+
+// Wire them by dragging port to port, the way a user does.
+// Scrolled into view first: sources sit on the top row and the output four rows down, so
+// on this viewport the output starts below the fold and a mouse drag to its coordinates
+// would land on whatever is there instead.
+await wbCanvas.scrollIntoViewIfNeeded()
+await page.waitForTimeout(400)
+const wbSrc = await wbCanvas.locator('g').nth(0).locator('rect').boundingBox()
+const wbOut = await wbCanvas.locator('g').nth(1).locator('rect').boundingBox()
+await page.mouse.move(wbSrc.x + wbSrc.width / 2, wbSrc.y + wbSrc.height)
+await page.mouse.down()
+await page.mouse.move(wbOut.x + wbOut.width / 2, wbOut.y, { steps: 12 })
+await page.mouse.up()
+await page.waitForTimeout(1200)
+check('포트 드래그로 노드 연결', await wbCanvas.locator('path[marker-end]').count() === 1)
+const wired = await wbReport()
+check('연결된 그래프가 유효 판정', /^Valid\./.test(wired.trim()), wired.trim().slice(0, 70))
+
+// Sources sit above the output: the reference's graphs read top-down, and a layout that
+// did not would make an edge double back on itself.
+const wbPos = await wbCanvas.locator('g[transform]').evaluateAll((gs) => gs.map((g) => {
+  const m = /translate\(([-\d.]+) ([-\d.]+)\)/.exec(g.getAttribute('transform'))
+  return { y: Number(m[2]), label: g.querySelector('text')?.textContent }
+}))
+const srcNode = wbPos.find((n) => /source/i.test(n.label ?? ''))
+const outNode = wbPos.find((n) => n.label === 'Output')
+check('그래프가 위에서 아래로 흐름', srcNode.y < outNode.y, `${srcNode.y} < ${outNode.y}`)
+await page.screenshot({ path: `${OUT}/27-kpi-workbench.png`, fullPage: true })
 
 check('앱 코드 콘솔 오류 없음', appErrors.length === 0, appErrors.slice(0, 3).join(' | '))
 const tileFailures = errors.length - appErrors.length

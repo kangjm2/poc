@@ -115,10 +115,14 @@ function MonitoredBars({ set }: { set: MonitoredSet }) {
           const h = Math.max(1, H - y(b.rsrp))
           return (
             <g key={`${b.arfcn}-${b.pci}`}>
+              {/* Formatted to one decimal, matching the dock table exactly. Rendering the
+                  raw number here spelled -82 where the dock said -82.0, which is the same
+                  measurement written two ways on one screen. */}
               <title>
-                {`PCI ${b.pci} on ${b.arfcn}: RSRP ${b.rsrp} dBm, RSRQ ${b.rsrq} dB`
+                {`PCI ${b.pci} on ${b.arfcn}: RSRP ${b.rsrp.toFixed(1)} dBm, `
+                 + `RSRQ ${b.rsrq.toFixed(1)} dB`
                  + (b.serving ? ' - serving'
-                    : `, ${b.deltaDb} dB below the strongest`)}
+                    : `, ${(b.deltaDb ?? 0).toFixed(1)} dB below the strongest`)}
               </title>
               {/* Serving vs merely-detected, not a decorative palette: the reference splits
                   its bars into the active set and the monitored-only cells, and that split
