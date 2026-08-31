@@ -213,6 +213,85 @@ public class AnalysisService {
                 (Integer) row.get("serving_pci"), byCategory);
     }
 
+    // ------------------------------------------------------- cell breakdown
+
+    /**
+     * A KPI aggregated per serving cell.
+     *
+     * The reference workbook shows exactly this shape - a bar per cell, sorted, beside the
+     * time series - because a degraded stretch is only actionable once you know which cell
+     * was serving it. Aggregation is in SQL for the same reason as everything else here:
+     * a session can hold millions of KPI rows and the client must never see them.
+     *
+     * Cells are joined to cell_ref by PCI so a bar can be labelled with its ARFCN and band,
+     * but a PCI with no reference row is still reported - dropping it would silently hide
+     * samples from the total, and an unknown cell serving a bad stretch is itself a finding.
+     */
+    public CellBreakdown cellBreakdown(long sessionId, String kpiName,
+                                       Integer fromSeq, Integer toSeq) {
+        KpiDefinition def = catalog.require(kpiName);
+        List<KpiThreshold> scale = autoScale.effective(sessionId, def);
+
+        List<Object[]> rows = jdbc.query("""
+                SELECT s.serving_pci                       AS pci,
+                       count(*)                            AS n,
+                       avg(k.value)                        AS mean_v,
+                       min(k.value)                        AS min_v,
+                       max(k.value)                        AS max_v,
+                       percentile_cont(0.05) WITHIN GROUP (ORDER BY k.value) AS p05_v
+                FROM sample_kpi k
+                JOIN sample s ON s.session_id = k.session_id AND s.seq = k.seq
+                WHERE k.session_id = ? AND k.kpi_name = ?
+                  AND k.seq >= ? AND k.seq <= ? AND s.serving_pci IS NOT NULL
+                GROUP BY s.serving_pci
+                """,
+                (rs, i) -> new Object[]{
+                        rs.getInt("pci"), rs.getLong("n"),
+                        (Double) rs.getObject("mean_v"), (Double) rs.getObject("min_v"),
+                        (Double) rs.getObject("max_v"), (Double) rs.getObject("p05_v")},
+                sessionId, kpiName, lo(fromSeq), hi(toSeq));
+
+        Map<Integer, Object[]> refs = new HashMap<>();
+        jdbc.query("SELECT pci, arfcn, band, cell_type FROM cell_ref WHERE session_id = ?",
+                rs -> { refs.put(rs.getInt("pci"), new Object[]{
+                        (Integer) rs.getObject("arfcn"), rs.getString("band"),
+                        rs.getString("cell_type")}); },
+                sessionId);
+
+        long total = rows.stream().mapToLong(r -> (Long) r[1]).sum();
+        List<CellBar> bars = new ArrayList<>();
+        for (Object[] r : rows) {
+            int pci = (Integer) r[0];
+            long n = (Long) r[1];
+            Double mean = (Double) r[2];
+            Object[] ref = refs.get(pci);
+            Optional<KpiThreshold> bin = mean == null ? Optional.empty()
+                    : catalog.binFor(scale, mean);
+            bars.add(new CellBar(
+                    pci,
+                    ref == null ? null : (Integer) ref[0],
+                    ref == null ? null : (String) ref[1],
+                    ref == null ? null : (String) ref[2],
+                    n, total == 0 ? 0 : (100.0 * n) / total,
+                    mean, (Double) r[3], (Double) r[4], (Double) r[5],
+                    bin.map(KpiThreshold::getColor).orElse("#999999"),
+                    bin.map(KpiThreshold::getLabel).orElse("no data")));
+        }
+        // Sorted by the value, not by PCI: the reference's bar chart reads as a ranking,
+        // and the worst-served cell is what the user is looking for.
+        boolean higherIsBetter = "HIGHER_IS_BETTER".equals(def.getDirection());
+        bars.sort((x, y) -> {
+            if (x.meanValue() == null) return 1;
+            if (y.meanValue() == null) return -1;
+            return higherIsBetter
+                    ? Double.compare(y.meanValue(), x.meanValue())
+                    : Double.compare(x.meanValue(), y.meanValue());
+        });
+
+        return new CellBreakdown(def.getName(), def.getDisplayName(), def.getUnit(),
+                def.getDecimals(), total, bars);
+    }
+
     // ----------------------------------------------------------- distribution
 
     /** Counts per bin, computed by the database. The legend doubles as a summary. */

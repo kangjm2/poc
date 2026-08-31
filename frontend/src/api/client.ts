@@ -2,7 +2,7 @@ import type {
   AreaBin, Campaign, CellConfig, CellRef, ChannelModel, Comparison, CoverageIssue,
   Degradation, Distribution, DuEndpoint, ImportResult, KpiDefinition, NetworkEvent,
   SeqRange, Series, SessionSummary, SignalingMessage, Snapshot, Statistics, TestRun,
-  RunBringUp,
+  RunBringUp, CellBreakdown, ProblemSurvey,
   Threshold, TrackPoint, UeProfile,
 } from './types'
 
@@ -37,6 +37,10 @@ export const api = {
     get<Series[]>(`/sessions/${id}/series?kpis=${kpis.join(',')}&maxPoints=${maxPoints}`),
   snapshot: (id: number, seq?: number) =>
     get<Snapshot>(`/sessions/${id}/snapshot${seq === undefined ? '' : `?seq=${seq}`}`),
+  problemSurvey: (id: number) =>
+    get<ProblemSurvey>(`/sessions/${id}/problem-survey`),
+  cellBreakdown: (id: number, kpi: string, range?: SeqRange | null) =>
+    get<CellBreakdown>(`/sessions/${id}/cell-breakdown?kpi=${kpi}${rangeQs(range)}`),
   distribution: (id: number, kpi: string, range?: SeqRange | null) =>
     get<Distribution>(`/sessions/${id}/distribution?kpi=${kpi}${rangeQs(range)}`),
   statistics: (id: number, kpi: string, range?: SeqRange | null) =>
@@ -136,6 +140,9 @@ export const api = {
 
   importJobs: () => get<Array<Record<string, unknown>>>('/import/jobs'),
 
+  // A report opens rather than downloads: it is meant to be read, and printed to PDF
+  // from the browser if the reader wants a file.
+  reportUrl: (id: number) => `${BASE}/sessions/${id}/report.html`,
   exportUrl: (id: number, kind: 'csv' | 'geojson', kpi?: string) =>
     kind === 'csv'
       ? `${BASE}/sessions/${id}/export.csv`

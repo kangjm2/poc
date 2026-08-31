@@ -9,6 +9,7 @@ import { mkdirSync } from 'node:fs'
 
 const BASE = process.env.BASE ?? 'http://127.0.0.1:4173'
 const OUT = process.env.OUT ?? '/tmp/shots2'
+const API_BASE = process.env.API ?? 'http://127.0.0.1:8080'
 mkdirSync(OUT, { recursive: true })
 
 const results = []
@@ -248,6 +249,59 @@ await page.waitForTimeout(300)
 check('파라미터 검색 - 내부명 매칭', (await page.locator('.tree .kpi').count()) > 0)
 await page.locator('.tree-search input').fill('')
 await page.waitForTimeout(300)
+
+// 27b. bar chart per serving cell - the reference workbook's second pane is a bar
+//      chart, and it was the one chart type we had no equivalent of.
+await page.locator('.workbook-tabs button', { hasText: 'Cells' }).click()
+await page.waitForSelector('.cell-bar')
+const bars = await page.locator('.cell-bar rect').count()
+check('셀별 바 차트', bars >= 3, `${bars} bars`)
+const barRows = await page.locator('.panel:has-text("Serving cell breakdown") tbody tr').count()
+check('셀 분해 표', barRows === bars, `${barRows} rows vs ${bars} bars`)
+const shares = await page.locator('.panel:has-text("Serving cell breakdown") tbody tr td:nth-child(6)')
+  .allInnerTexts()
+const shareSum = shares.reduce((a, t) => a + parseFloat(t), 0)
+check('셀별 비율 합계 100%', Math.abs(shareSum - 100) < 0.5, `${shareSum.toFixed(1)}%`)
+await page.screenshot({ path: `${OUT}/26-cells.png`, fullPage: true })
+
+// 27c. problem survey: aggregate by cause, drill to cases, drill to the moment. The
+//      reference's survey is that chain, and we had none of it.
+await page.locator('.workbook-tabs button', { hasText: 'Problem Survey' }).click()
+await page.waitForSelector('.panel:has-text("Problem survey per category") svg path')
+const slices = await page.locator('.panel:has-text("Problem survey per category") svg path').count()
+check('원인별 파이 차트', slices >= 3, `${slices} slices`)
+const shareTexts = await page.locator('.panel:has-text("Problem survey per category") tbody tr td:nth-child(2)')
+  .allInnerTexts()
+const pieSum = shareTexts.reduce((a, t) => a + parseFloat(t), 0)
+check('원인 비율 합계 100%', Math.abs(pieSum - 100) < 0.5, `${pieSum.toFixed(1)}%`)
+const allCases = await page.locator('.panel:has-text("All cases") tbody tr').count()
+// drill into the largest slice; the case list must shrink to that category alone
+await page.locator('.panel:has-text("Problem survey per category") tbody tr').first().click()
+await page.waitForTimeout(300)
+const drilled = await page.locator('.panel table.grid tbody tr').last().isVisible()
+const drilledRows = await page.locator('.panel:has-text("cases") tbody tr').count()
+check('슬라이스 드릴다운', drilledRows > 0 && drilledRows < allCases && drilled,
+  `${allCases} -> ${drilledRows}`)
+const cats = await page.locator('.panel:has-text("cases") tbody tr td:first-child').allInnerTexts()
+check('드릴다운 후 단일 원인만', new Set(cats).size === 1, [...new Set(cats)].join(','))
+// drill to the moment: clicking a case moves the shared cursor
+const beforeCur = await page.locator('.statusbar').first().innerText()
+await page.locator('.panel:has-text("cases") tbody tr').first().click()
+await page.waitForTimeout(900)
+const afterCur = await page.locator('.statusbar').first().innerText()
+check('사례 → 시각 이동', beforeCur !== afterCur, 'cursor moved')
+await page.screenshot({ path: `${OUT}/27-problem-survey.png`, fullPage: true })
+
+// 27d. the printable session report - what a drive test is commissioned to produce.
+const report = await page.request.get(`${API_BASE}/api/sessions/1/report.html`)
+const reportBody = await report.text()
+check('세션 리포트 생성', report.status() === 200
+  && /Problem survey/.test(reportBody)
+  && /KPI summary/.test(reportBody)
+  && /Distribution by colour bin/.test(reportBody),
+  `${report.status()}, ${reportBody.length} bytes`)
+check('리포트가 실제 수치를 담음',
+  /<td class="num">\d/.test(reportBody) && !/NaN|undefined|null<\/td>/.test(reportBody))
 
 // 28. lab bring-up: the instrument chain, its steps, and the attach detail. A virtual
 //     drive test is a chain of instruments, and which link stopped a run is the first

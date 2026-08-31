@@ -32,11 +32,15 @@
 
 ### 1.2 시각화
 
+> **2026-08-31 갱신**: 셀별 바 차트와 원인별 파이 차트를 추가했습니다. 근거는
+> [`ui-gap-vs-reference.md`](ui-gap-vs-reference.md) — 레퍼런스 워크북의 두 페인 중
+> 하나가 바 차트이고, 문제 조사 화면의 진입점이 파이입니다.
+
 | 매뉴얼 기재 기능 | 상태 | 비고 |
 |---|---|---|
 | Synchronized workbooks, pages, data views | ✅ | 공유 시간 커서 + 워크북 탭 |
 | Maps / grids / line graphs | ✅ | |
-| Bar graphs, pie charts, surface grids, color grids, spreadsheets | ⛔ | 라인·그리드·지도만 |
+| Bar graphs, pie charts, surface grids, color grids, spreadsheets | ◐ | **바 차트(셀별)·파이 차트(원인별) 추가.** surface/color grid는 아직 |
 | **Area binning** | ✅ | 50/150/500 m |
 | **Distance binning** | ⛔ | 거리 기반(Lee's criteria) 집계 없음 |
 | Base station map overlay | ✅ | 셀 마커 + 방위각 스포크 |
@@ -53,21 +57,21 @@
 |---|---|---|
 | Parameter statistics and benchmarking | ✅ | min/max/avg/p05/p50/p95 + CDF |
 | 세션 간 벤치마킹 비교 | ✅ | 판정(BETTER/WORSE) 포함 |
-| **KPI Workbench (SQL 없이 커스텀 KPI 생성)** | ⛔ | **가장 큰 단일 격차.** §3.2 |
-| Automated problem survey with drill-down | ◐ | 열화 구간·커버리지 이슈 탐지 → 커서 이동은 되나 "실패 KPI → 원인 L3 메시지" 자동 연결은 부분 |
+| **KPI Workbench (SQL 없이 커스텀 KPI 생성)** | ⛔ | **여전히 가장 큰 단일 격차.** 노드 그래프 빌더 미구현 |
+| Automated problem survey with drill-down | ✅ | **원인 분류 7종 → 파이 → 사례 그리드 → 시각 이동** 3단 연쇄 구현. 원인은 전부 기존 검출기에서 유도하며 근거 없는 원인은 만들지 않음 |
 | Automated detection of common GSM/UMTS/LTE/5G NR problems | ◐ | weak coverage / interference / overshoot 3종 |
 | 5G Advanced Analytics (pilot pollution, overspilling, weak coverage, bad quality, NSA neighbor list) | ◐ | weak coverage + bad quality 상당. **pilot pollution·overspilling·neighbor list는 이웃 셀 데이터 부재로 불가** |
 | Trend analysis | ⛔ | 세션 간 추세 없음 |
 | Advanced cell reference info (drift from antenna main lobe) | ⛔ | |
-| Root cause analysis | ⛔ | 문제 탐지는 하나 원인 지목은 안 함 |
+| Root cause analysis | ◐ | 원인 라벨과 검출 근거(`Detected by`)를 함께 제시. L3 메시지까지 자동 연결하는 단계는 아직 |
 
 ### 1.4 리포팅·내보내기
 
 | 매뉴얼 기재 기능 | 상태 |
 |---|---|
 | Data export to MapInfo / Excel / txt / Google Earth | ◐ CSV + GeoJSON |
-| Statistical reporting with Microsoft Excel | ⛔ |
-| Report templates (Excel / PowerPoint / Word) | ⛔ |
+| Statistical reporting with Microsoft Excel | ◐ 인쇄 가능한 HTML 리포트(`/report.html`) — 세션 메타 · 원인 요약 · KPI 통계 · 구간 분포. Excel 바이너리는 아님 |
+| Report templates (Excel / PowerPoint / Word) | ⛔ 템플릿 디자이너 없음. 고정 레이아웃 리포트 1종만 |
 | Benchmarking reports (CDR E2E voice/data) | ⛔ |
 | NPS (Network Performance Score) 리포트 | ⛔ |
 

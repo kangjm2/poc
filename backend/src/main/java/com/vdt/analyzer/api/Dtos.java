@@ -31,6 +31,23 @@ public final class Dtos {
     public record Distribution(String kpi, String displayName, String unit,
                                long total, List<DistributionBin> bins, boolean derived) {}
 
+    /**
+     * One serving cell's share of a session, for the per-cell bar chart.
+     *
+     * The reference workbook puts a bar chart of a KPI per cell next to the time series,
+     * because "which cell is this" is the first question a bad stretch raises. Ours is
+     * keyed on the serving PCI the samples actually recorded, enriched from the cell
+     * reference where that PCI is known.
+     */
+    public record CellBar(
+            int pci, Integer arfcn, String band, String cellType,
+            long sampleCount, double share,
+            Double meanValue, Double minValue, Double maxValue, Double p05Value,
+            String color, String binLabel) {}
+
+    public record CellBreakdown(String kpi, String displayName, String unit, int decimals,
+                                long total, List<CellBar> cells) {}
+
     public record KpiValue(String kpi, String displayName, String unit, Double value,
                            String color, String severity, String binLabel, int decimals) {}
 

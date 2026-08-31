@@ -206,3 +206,33 @@ export interface RunBringUp {
   runId: number; status: string; chain: Instrument[]; steps: RunStep[]
   rach: RachReport | null; servingCell: ServingCell | null
 }
+
+/** One serving cell's share of a session, for the per-cell bar chart. */
+export interface CellBar {
+  pci: number; arfcn: number | null; band: string | null; cellType: string | null
+  sampleCount: number; share: number
+  meanValue: number | null; minValue: number | null
+  maxValue: number | null; p05Value: number | null
+  color: string; binLabel: string
+}
+
+export interface CellBreakdown {
+  kpi: string; displayName: string; unit: string; decimals: number
+  total: number; cells: CellBar[]
+}
+
+/** One classified problem; the seq range is what the drill-down jumps to. */
+export interface ProblemInstance {
+  category: string; categoryLabel: string; severity: string
+  startSeq: number; endSeq: number
+  latitude: number | null; longitude: number | null
+  detail: string; source: string
+}
+
+export interface ProblemSlice {
+  category: string; label: string; color: string; count: number; share: number
+}
+
+export interface ProblemSurvey {
+  total: number; categories: ProblemSlice[]; instances: ProblemInstance[]
+}

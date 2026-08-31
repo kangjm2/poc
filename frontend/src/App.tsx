@@ -11,6 +11,8 @@ import {
   DegradationPanel, EventList, LegendPanel, MessageList, ParameterGrid, ParameterTree,
 } from './components/Panels'
 import { CompareView } from './components/CompareView'
+import { CellsPage } from './components/CellBarChart'
+import { ProblemSurveyPanel } from './components/ProblemSurveyPanel'
 import { StatisticsPanel } from './components/StatisticsPanel'
 import { LabView } from './components/LabView'
 import { ImportView } from './components/ImportView'
@@ -25,8 +27,10 @@ const WORKBOOKS = [
   { id: 'radio', label: 'Radio Quality' },
   { id: 'throughput', label: 'Throughput' },
   { id: 'fronthaul', label: 'Fronthaul' },
+  { id: 'cells', label: 'Cells' },
   { id: 'mobility', label: 'Mobility' },
   { id: 'signaling', label: 'L3 Signalling' },
+  { id: 'problems', label: 'Problem Survey' },
   { id: 'degradation', label: 'Degradation' },
   { id: 'coverage', label: 'Coverage Issues' },
   { id: 'statistics', label: 'Statistics' },
@@ -289,6 +293,13 @@ export function App() {
             </div>
           </div>
         )
+      case 'problems':
+        return <ProblemSurveyPanel sessionId={sessionId} onPick={setCursorSeq} />
+      case 'cells':
+        return (
+          <CellsPage sessionId={sessionId} kpi={kpi} range={range}
+                     scaleVersion={scaleVersion} />
+        )
       case 'statistics':
         return (
           <StatisticsPanel sessionId={sessionId} kpi={kpi} unit={activeDef?.unit ?? ''}
@@ -390,6 +401,8 @@ export function App() {
                 <>
                   <a href={api.exportUrl(sessionId, 'csv')} download>CSV</a>
                   <a href={api.exportUrl(sessionId, 'geojson', kpi)} download>GeoJSON</a>
+                  <a href={api.reportUrl(sessionId)} target="_blank" rel="noreferrer"
+                     title="Printable session report">Report</a>
                 </>
               )}
             </div>
