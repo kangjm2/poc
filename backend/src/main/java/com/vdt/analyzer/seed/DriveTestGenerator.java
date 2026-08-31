@@ -103,7 +103,15 @@ public class DriveTestGenerator {
             double ul = clamp(dl * (0.10 + random.nextDouble() * 0.05), 0.2, 120);
             double bler = clamp(Math.exp(-(sinr + 5) / 4.5) * 40 + random.nextDouble() * 1.5, 0, 60);
             double tx = clamp(-8 + (-70 - rsrp) * 0.62 + random.nextGaussian(), -20, 23);
-            double speed = 28 + random.nextGaussian() * 6;
+            // Speed comes from the route itself, not from a random number. Samples are one
+            // second apart, so the great-circle step to the previous point IS the speed.
+            // Generating it independently made the data contradict itself - a 4.4 km loop
+            // driven in 20 minutes was reporting 28 km/h - and the field-to-lab screen,
+            // which shows distance and speed side by side, put the two numbers next to
+            // each other where the contradiction was plain.
+            double speed = i == 0 ? 0
+                    : haversineKm(route.get(i - 1)[0], route.get(i - 1)[1], pos[0], pos[1])
+                      * 3600.0;
 
             // Network-side counters. A UE needing more retransmissions to move the same
             // data occupies more of the cell, so these track the UE-side picture.

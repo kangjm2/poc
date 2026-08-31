@@ -8,6 +8,7 @@ import com.vdt.analyzer.repo.CellRefRepo;
 import com.vdt.analyzer.repo.EventRepo;
 import com.vdt.analyzer.repo.MessageRepo;
 import com.vdt.analyzer.service.AnalysisService;
+import com.vdt.analyzer.service.FieldToLabService;
 import com.vdt.analyzer.service.ProblemSurvey;
 import org.springframework.web.bind.annotation.*;
 
@@ -23,15 +24,17 @@ public class AnalysisController {
     private final EventRepo events;
     private final MessageRepo messages;
     private final ProblemSurvey problems;
+    private final FieldToLabService fieldToLab;
 
     public AnalysisController(AnalysisService analysis, CellRefRepo cells,
                               EventRepo events, MessageRepo messages,
-                              ProblemSurvey problems) {
+                              ProblemSurvey problems, FieldToLabService fieldToLab) {
         this.analysis = analysis;
         this.cells = cells;
         this.events = events;
         this.messages = messages;
         this.problems = problems;
+        this.fieldToLab = fieldToLab;
     }
 
     @GetMapping("/sessions")
@@ -72,6 +75,23 @@ public class AnalysisController {
                                      @RequestParam(required = false) Integer fromSeq,
                                      @RequestParam(required = false) Integer toSeq) {
         return analysis.distribution(id, kpi, fromSeq, toSeq);
+    }
+
+    /**
+     * What this field measurement implies for a lab replay.
+     *
+     * The step the whole virtual drive test rests on, and the one the reference toolset
+     * gives a screen of its own. Only what our measurements actually support is reported.
+     */
+    @GetMapping("/sessions/{id}/field-to-lab")
+    public FieldToLabService.FieldToLab fieldToLab(@PathVariable long id) {
+        return fieldToLab.summarise(id);
+    }
+
+    /** Creates the lab channel model this session implies, replacing any it already made. */
+    @PostMapping("/sessions/{id}/field-to-lab/generate")
+    public java.util.Map<String, Object> generateChannelModel(@PathVariable long id) {
+        return java.util.Map.of("channelModelId", fieldToLab.generate(id));
     }
 
     /**

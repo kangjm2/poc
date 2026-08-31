@@ -13,6 +13,7 @@ import {
 import { CompareView } from './components/CompareView'
 import { CellsPage } from './components/CellBarChart'
 import { ProblemSurveyPanel } from './components/ProblemSurveyPanel'
+import { FieldToLabPanel } from './components/FieldToLabPanel'
 import { StatisticsPanel } from './components/StatisticsPanel'
 import { LabView } from './components/LabView'
 import { ImportView } from './components/ImportView'
@@ -34,6 +35,7 @@ const WORKBOOKS = [
   { id: 'degradation', label: 'Degradation' },
   { id: 'coverage', label: 'Coverage Issues' },
   { id: 'statistics', label: 'Statistics' },
+  { id: 'fieldtolab', label: 'Field-to-Lab' },
 ] as const
 type WorkbookId = (typeof WORKBOOKS)[number]['id']
 
@@ -293,6 +295,8 @@ export function App() {
             </div>
           </div>
         )
+      case 'fieldtolab':
+        return <FieldToLabPanel sessionId={sessionId} />
       case 'problems':
         return <ProblemSurveyPanel sessionId={sessionId} onPick={setCursorSeq} />
       case 'cells':

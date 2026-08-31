@@ -348,6 +348,25 @@ await page.locator('.tree-search input').fill('')
 // leave the catalogue as it was found
 await page.request.delete(`${API_BASE}/api/kpi-definitions/${DKPI}`)
 
+// 27f. field-to-lab conversion - the step the whole virtual drive test rests on.
+await page.locator('.workbook-tabs button', { hasText: 'Field-to-Lab' }).click()
+await page.waitForSelector('.panel:has-text("Extracted channel model")')
+const f2lCarriers = await page.locator('.panel:has-text("Detected carriers") tbody tr').count()
+check('검출 캐리어 표', f2lCarriers >= 1, `${f2lCarriers} carriers`)
+const f2lText = await page.locator('.panel:has-text("Extracted channel model")').innerText()
+check('도플러가 반송파에서 유도됨', /\d+ Hz/.test(f2lText) && /3\d{3}\.\d+ MHz/.test(f2lText),
+  (f2lText.match(/\d+ Hz/) ?? [''])[0] + ' @ ' + (f2lText.match(/3\d{3}\.\d+ MHz/) ?? [''])[0])
+check('추정과 측정을 구분해 표기', /Suggestion, not a measurement/.test(f2lText))
+// distance and speed must agree: the seed used to generate speed independently of the
+// route, so a 4.4 km loop driven in 20 minutes reported 28 km/h.
+const logText = await page.locator('.panel:has-text("Field log")').innerText()
+const km = Number((logText.match(/([\d.]+) km/) ?? [])[1])
+const mins = Number((logText.match(/(\d+) min/) ?? [])[1])
+const avg = Number((logText.match(/([\d.]+) km\/h/) ?? [])[1])
+check('거리와 속도가 서로 일치', Math.abs(km / (mins / 60) - avg) < 1.5,
+  `${km} km / ${mins} min implies ${(km / (mins / 60)).toFixed(1)}, recorded ${avg}`)
+await page.screenshot({ path: `${OUT}/30-field-to-lab.png`, fullPage: true })
+
 // 28. lab bring-up: the instrument chain, its steps, and the attach detail. A virtual
 //     drive test is a chain of instruments, and which link stopped a run is the first
 //     thing a lab engineer needs; a run that jumps QUEUED -> COMPLETED hides all of it.

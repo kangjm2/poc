@@ -2,7 +2,7 @@ import type {
   AreaBin, Campaign, CellConfig, CellRef, ChannelModel, Comparison, CoverageIssue,
   Degradation, Distribution, DuEndpoint, ImportResult, KpiDefinition, NetworkEvent,
   SeqRange, Series, SessionSummary, SignalingMessage, Snapshot, Statistics, TestRun,
-  RunBringUp, CellBreakdown, ProblemSurvey, DerivedKpiResult,
+  RunBringUp, CellBreakdown, ProblemSurvey, DerivedKpiResult, FieldToLab,
   Threshold, TrackPoint, UeProfile,
 } from './types'
 
@@ -52,6 +52,13 @@ export const api = {
     const json = await res.json()
     if (!res.ok) throw new Error(json.message ?? `${res.status}`)
     return json as DerivedKpiResult
+  },
+  fieldToLab: (id: number) => get<FieldToLab>(`/sessions/${id}/field-to-lab`),
+  generateChannelModel: async (id: number) => {
+    const res = await fetch(`${BASE}/sessions/${id}/field-to-lab/generate`, { method: 'POST' })
+    const json = await res.json()
+    if (!res.ok) throw new Error(json.message ?? `${res.status}`)
+    return json as { channelModelId: number }
   },
   problemSurvey: (id: number) =>
     get<ProblemSurvey>(`/sessions/${id}/problem-survey`),
