@@ -229,11 +229,146 @@ public class LabService {
         return aggregate;
     }
 
-    /** Marks a run started; the executor itself lives outside this service. */
+    /**
+     * Starts a run and lays its bring-up out on the wall clock.
+     *
+     * There is no instrument executor behind this - the real one lives outside the tool.
+     * What this does is schedule each step at its own recorded duration from now, so the
+     * chain comes up over the couple of minutes it really takes rather than flipping to
+     * done. bringUp() then reports each step against the current time, which is what
+     * makes the connection legible as a process instead of a result.
+     */
     @Transactional
     public TestRun start(long runId) {
-        jdbc.update("UPDATE test_run SET status='RUNNING', started_at=?, progress_pct=0"
-                + " WHERE id=?", Timestamp.from(Instant.now()), runId);
+        Instant now = Instant.now();
+        jdbc.update("UPDATE test_run SET status='RUNNING', started_at=?, ended_at=NULL,"
+                + " verdict=NULL, progress_pct=0 WHERE id=?", Timestamp.from(now), runId);
+
+        // Two seconds of settling between steps, matching how the seeded timeline reads.
+        List<int[]> plan = jdbc.query(
+                "SELECT ordinal, planned_ms FROM run_step WHERE run_id=? ORDER BY ordinal",
+                (rs, i) -> new int[]{rs.getInt("ordinal"), rs.getInt("planned_ms")}, runId);
+        Instant t = now;
+        for (int[] row : plan) {
+            Instant from = t;
+            Instant to = from.plusMillis(row[1]);
+            t = to.plusSeconds(2);
+            jdbc.update("UPDATE run_step SET status='PENDING', started_at=?, ended_at=?"
+                    + " WHERE run_id=? AND ordinal=?",
+                    Timestamp.from(from), Timestamp.from(to), runId, row[0]);
+        }
+
+        // The attach outcome is written now but withheld by bringUp() until the RACH
+        // step's own slot has elapsed. Writing it here keeps the read path free of
+        // writes; gating it there keeps the view honest about when it exists.
+        jdbc.update("DELETE FROM run_rach WHERE run_id=?", runId);
+        jdbc.update("DELETE FROM run_serving_cell WHERE run_id=?", runId);
+        jdbc.update("""
+                INSERT INTO run_rach (run_id, rach_type, rach_reason, rach_result,
+                    access_delay_ms, preamble_format, preamble_index, preamble_count,
+                    preamble_initial_pwr_dbm, preamble_step_db, response_window_slots,
+                    ra_rnti, ssb_id, timing_advance, pathloss_db, pusch_power_dbm,
+                    logical_root_sequence, contention_resolutions)
+                VALUES (?, 'Contention based', 'Channel request', 'Succeeded',
+                    28, 'Format A2', 3, 1, -3.0, 2.0, 10, 271, 0, 2, 94.2, 0.0, 106, 0)
+                """, runId);
+        jdbc.update("""
+                INSERT INTO run_serving_cell (run_id, cell_type, ssb_band, ssb_arfcn,
+                    ssb_gscn, pci, ta_offset)
+                VALUES (?, 'SCG PSCell', 'NR n78', 633984, 7853, 8, 25600)
+                """, runId);
         return run(runId);
+    }
+
+    // -------------------------------------------------------------- bring-up
+
+    private static final RowMapper<Instrument> INSTRUMENT = (rs, i) -> new Instrument(
+            rs.getLong("id"), rs.getString("role"), rs.getString("name"),
+            rs.getString("model"), rs.getString("serial"), rs.getString("firmware"),
+            rs.getString("address"), rs.getInt("ordinal"), rs.getString("notes"));
+
+    private static final RowMapper<RunStep> STEP = (rs, i) -> {
+        Timestamp from = rs.getTimestamp("started_at");
+        Timestamp to = rs.getTimestamp("ended_at");
+        Long ms = (from == null || to == null) ? null : to.getTime() - from.getTime();
+        return new RunStep(
+                rs.getLong("id"), rs.getInt("ordinal"), rs.getString("phase"),
+                rs.getString("name"), (Long) rs.getObject("instrument_id"),
+                rs.getString("instrument_name"), rs.getString("status"),
+                from == null ? null : from.toInstant(), to == null ? null : to.toInstant(),
+                ms, rs.getString("detail"));
+    };
+
+    private static final RowMapper<RachReport> RACH = (rs, i) -> new RachReport(
+            rs.getString("rach_type"), rs.getString("rach_reason"), rs.getString("rach_result"),
+            (Integer) rs.getObject("access_delay_ms"), rs.getString("preamble_format"),
+            (Integer) rs.getObject("preamble_index"), (Integer) rs.getObject("preamble_count"),
+            (Double) rs.getObject("preamble_initial_pwr_dbm"),
+            (Double) rs.getObject("preamble_step_db"),
+            (Integer) rs.getObject("response_window_slots"), (Integer) rs.getObject("ra_rnti"),
+            (Integer) rs.getObject("ssb_id"), (Integer) rs.getObject("timing_advance"),
+            (Double) rs.getObject("pathloss_db"), (Double) rs.getObject("pusch_power_dbm"),
+            (Integer) rs.getObject("logical_root_sequence"),
+            (Integer) rs.getObject("contention_resolutions"));
+
+    private static final RowMapper<ServingCell> SERVING = (rs, i) -> new ServingCell(
+            rs.getString("cell_type"), rs.getString("ssb_band"),
+            (Integer) rs.getObject("ssb_arfcn"), (Integer) rs.getObject("ssb_gscn"),
+            (Integer) rs.getObject("pci"), (Integer) rs.getObject("ta_offset"));
+
+    public List<Instrument> instruments() {
+        return jdbc.query("SELECT * FROM instrument ORDER BY ordinal", INSTRUMENT);
+    }
+
+    /**
+     * Everything about how one run was brought up.
+     *
+     * A run that reports only QUEUED then COMPLETED hides the whole chain: the field
+     * capture has to be converted, the network emulator has to hold a cell, the channel
+     * emulator has to load the profile, and the device has to actually attach. Each of
+     * those can fail on its own, and which one failed is the first thing a lab engineer
+     * needs. So the steps are returned even for a run that never started - as PENDING -
+     * rather than being absent until something happens.
+     */
+    public RunBringUp bringUp(long runId) {
+        String status = jdbc.query("SELECT status FROM test_run WHERE id=?",
+                (rs, i) -> rs.getString(1), runId).stream().findFirst()
+                .orElseThrow(() -> new NoSuchElementException("No run " + runId));
+
+        List<RunStep> steps = jdbc.query(
+                "SELECT s.*, i.name AS instrument_name FROM run_step s"
+                + " LEFT JOIN instrument i ON i.id = s.instrument_id"
+                + " WHERE s.run_id=? ORDER BY s.ordinal", STEP, runId);
+
+        // While a run is in flight its steps are reported against the clock. The stored
+        // status stays PENDING; deriving it here keeps the read path free of writes, so
+        // polling the view never mutates the run.
+        if ("RUNNING".equals(status)) {
+            Instant now = Instant.now();
+            steps = steps.stream().map(s -> {
+                if (s.startedAt() == null || s.endedAt() == null) return s;
+                String live = now.isAfter(s.endedAt()) ? "OK"
+                        : now.isBefore(s.startedAt()) ? "PENDING" : "RUNNING";
+                return new RunStep(s.id(), s.ordinal(), s.phase(), s.name(), s.instrumentId(),
+                        s.instrumentName(), live, s.startedAt(), s.endedAt(),
+                        s.durationMs(), s.detail());
+            }).toList();
+        }
+
+        // Attach detail belongs to the attach. Showing a RACH report while the device
+        // has not reached random access yet would be the same lie as a progress bar that
+        // starts at 100%.
+        boolean attached = steps.stream()
+                .filter(s -> s.name().startsWith("Random access"))
+                .allMatch(s -> "OK".equals(s.status()));
+
+        RachReport rach = !attached ? null
+                : jdbc.query("SELECT * FROM run_rach WHERE run_id=?", RACH, runId)
+                        .stream().findFirst().orElse(null);
+        ServingCell cell = !attached ? null
+                : jdbc.query("SELECT * FROM run_serving_cell WHERE run_id=?", SERVING, runId)
+                        .stream().findFirst().orElse(null);
+
+        return new RunBringUp(runId, status, instruments(), steps, rach, cell);
     }
 }

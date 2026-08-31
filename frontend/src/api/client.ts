@@ -2,6 +2,7 @@ import type {
   AreaBin, Campaign, CellConfig, CellRef, ChannelModel, Comparison, CoverageIssue,
   Degradation, Distribution, DuEndpoint, ImportResult, KpiDefinition, NetworkEvent,
   SeqRange, Series, SessionSummary, SignalingMessage, Snapshot, Statistics, TestRun,
+  RunBringUp,
   Threshold, TrackPoint, UeProfile,
 } from './types'
 
@@ -99,6 +100,12 @@ export const api = {
   ueProfiles: () => get<UeProfile[]>('/lab/ue-profiles'),
   duEndpoints: () => get<DuEndpoint[]>('/lab/du-endpoints'),
   campaigns: () => get<Campaign[]>('/lab/campaigns'),
+  bringUp: (id: number) => get<RunBringUp>(`/lab/runs/${id}/bring-up`),
+  startRun: async (id: number) => {
+    const res = await fetch(`${BASE}/lab/runs/${id}/start`, { method: 'POST' })
+    if (!res.ok) throw new Error(`${res.status}: ${res.statusText}`)
+    return res.json() as Promise<TestRun>
+  },
   runs: (campaignId?: number) =>
     get<TestRun[]>(`/lab/runs${campaignId === undefined ? '' : `?campaignId=${campaignId}`}`),
 

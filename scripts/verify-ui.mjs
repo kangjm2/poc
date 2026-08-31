@@ -233,6 +233,42 @@ const rowsAfter = await page.locator('.panel table.grid tbody tr').count()
 check('L3 메시지 상세 펼치기', rowsAfter > rowsBefore, `${rowsBefore} -> ${rowsAfter} rows`)
 await page.screenshot({ path: `${OUT}/16-l3-drilldown.png` })
 
+// 27. the parameter tree can be searched - the reference puts a search box above it
+//     because the catalogue is far too large to browse.
+await page.locator('.workbook-tabs button', { hasText: 'Overview' }).click()
+await page.waitForTimeout(600)
+const kpisAll = await page.locator('.tree .kpi').count()
+await page.locator('.tree-search input').fill('throughput')
+await page.waitForTimeout(300)
+const kpisFiltered = await page.locator('.tree .kpi').count()
+check('파라미터 검색', kpisFiltered > 0 && kpisFiltered < kpisAll,
+  `${kpisAll} -> ${kpisFiltered}`)
+await page.locator('.tree-search input').fill('FH_RX')
+await page.waitForTimeout(300)
+check('파라미터 검색 - 내부명 매칭', (await page.locator('.tree .kpi').count()) > 0)
+await page.locator('.tree-search input').fill('')
+await page.waitForTimeout(300)
+
+// 28. lab bring-up: the instrument chain, its steps, and the attach detail. A virtual
+//     drive test is a chain of instruments, and which link stopped a run is the first
+//     thing a lab engineer needs; a run that jumps QUEUED -> COMPLETED hides all of it.
+await page.getByRole('button', { name: 'Lab Campaigns' }).click()
+await page.waitForSelector('.chain-node')
+const chainRoles = await page.locator('.chain-role').allInnerTexts()
+check('장비 체인 표시', chainRoles.length === 4, chainRoles.join(' -> '))
+const stepRows = await page.locator('.panel:has-text("Bring-up sequence") tbody tr').count()
+check('브링업 시퀀스 표시', stepRows >= 10, `${stepRows} steps`)
+const phases = await page.locator('.panel:has-text("Bring-up sequence") tbody tr td:nth-child(2)')
+  .allInnerTexts()
+check('접속 절차 단계 포함', phases.includes('Attach'),
+  [...new Set(phases)].join(','))
+const rachRows = await page.locator('.panel:has-text("5G NR RACH metrics") tbody tr').count()
+check('RACH 지표 패널', rachRows >= 15, `${rachRows} rows`)
+const cellCells = await page.locator('.panel:has-text("Serving cell") tbody td').allInnerTexts()
+check('서빙 셀 식별 (PCI 외 band/ARFCN/GSCN)',
+  cellCells.length === 6 && cellCells.some((c) => /^\d{6}$/.test(c)), cellCells.join(' | '))
+await page.screenshot({ path: `${OUT}/25-lab-bringup.png`, fullPage: true })
+
 check('앱 코드 콘솔 오류 없음', appErrors.length === 0, appErrors.slice(0, 3).join(' | '))
 const tileFailures = errors.length - appErrors.length
 if (tileFailures > 0) console.log(`  (note: ${tileFailures} basemap tile fetches failed - network egress, not app code)`)

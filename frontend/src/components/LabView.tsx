@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { api } from '../api/client'
+import { BringUpPanel } from './BringUpPanel'
 import type {
   Campaign, CellConfig, ChannelModel, DuEndpoint, TestRun, UeProfile,
 } from '../api/types'
@@ -109,6 +110,7 @@ export function LabView({ onOpenSession }: { onOpenSession?: (id: number) => voi
 
       {run && (
         <>
+            <BringUpPanel runId={run.id as number} onStarted={reload} />
           <div className="panel">
             <header>
               <span className="title">Run configuration &mdash; {run.name}</span>

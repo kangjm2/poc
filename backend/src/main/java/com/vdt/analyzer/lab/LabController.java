@@ -45,6 +45,10 @@ public class LabController {
     @PostMapping("/runs/{id}/start")
     public TestRun start(@PathVariable long id) { return lab.start(id); }
 
+    /** How a run was brought up: the instrument chain, its steps, the attach and the cell. */
+    @GetMapping("/runs/{id}/bring-up")
+    public RunBringUp bringUp(@PathVariable long id) { return lab.bringUp(id); }
+
     /** Evaluates the run's criteria against its session and records a verdict. */
     @PostMapping("/runs/{id}/evaluate")
     public TestRun evaluate(@PathVariable long id) { return lab.evaluate(id); }
