@@ -1,5 +1,3 @@
-# syntax=docker/dockerfile:1.7
-#
 # Frontend image: Vite build, then nginx serving the static bundle.
 # Base images are build args for the same reason as in backend/Dockerfile.
 ARG NODE_IMAGE=node:22-alpine

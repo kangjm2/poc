@@ -337,8 +337,18 @@ db (postgres:16-alpine)   pg_isready -U vdt -d vdt
 ```
 
 - **백엔드 이미지**: Maven 빌드 스테이지 → JRE 런타임 스테이지. 런타임에는 JDK도
-  빌드 도구도 없고, 비루트 사용자(`vdt`)로 실행합니다. 힙은 `-XX:MaxRAMPercentage`로
-  호스트 RAM이 아니라 **컨테이너 한도**에서 잡습니다.
+  빌드 도구도 없고, 비루트 사용자(`vdt`)로 실행합니다. 힙은 `-XX:MaxRAMPercentage=75`로
+  **컨테이너 메모리 한도**에서 잡습니다 — 이 플래그는 한도가 실제로 걸려 있을 때만
+  의미가 있으므로(한도가 없으면 JVM이 호스트 RAM을 읽습니다) compose가
+  `mem_limit`(`BACKEND_MEMORY`, 기본 2 GB)를 함께 지정합니다. 분석 부하 실측은
+  약 350 MB입니다.
+- **Maven 로컬 저장소**는 `/root/.m2`가 아니라 `/m2` 캐시 마운트입니다. `/root/.m2`
+  위에 마운트하면 미러용 베이스 이미지가 거기 넣어둔 `settings.xml`을 가리게 되는데,
+  그건 `MAVEN_IMAGE`를 둔 목적과 정면으로 어긋납니다.
+- **`# syntax=` 지시자는 쓰지 않습니다.** 그 줄은 build arg로 바꿀 수 없는
+  docker.io 이미지를 강제로 당겨오므로, 역시 미러 전용 환경에서 베이스를 갈아끼울 수
+  있게 한 의도를 깹니다. 쓰는 기능(`RUN --mount=type=cache`)은 Docker 23+의 기본
+  프런트엔드가 이미 지원합니다.
 - **프론트엔드 이미지**: `npm ci` → `vite build` → nginx가 `dist/`를 서빙.
   `npm run build`가 `tsc -b`를 포함하므로 **타입 오류는 이미지 빌드를 실패시킵니다.**
 - **`/api` 프록시**: 개발 중에는 `vite preview`가, 컨테이너에서는 nginx가 같은 일을

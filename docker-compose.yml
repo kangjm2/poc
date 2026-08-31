@@ -55,6 +55,11 @@ services:
         condition: service_healthy
     ports:
       - "${BACKEND_PORT:-8080}:8080"
+    # Without a limit the JVM reads the host's RAM, and -XX:MaxRAMPercentage in the
+    # image would size the max heap off a number that has nothing to do with this
+    # service. Measured usage under analysis load is ~350 MB, so 2g is roughly 6x
+    # headroom; raise it for very large CSV imports or the load-test dataset.
+    mem_limit: ${BACKEND_MEMORY:-2g}
     restart: unless-stopped
 
   frontend:
