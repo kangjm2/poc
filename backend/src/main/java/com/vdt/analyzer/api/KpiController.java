@@ -1,5 +1,6 @@
 package com.vdt.analyzer.api;
 
+import com.vdt.analyzer.api.Dtos.DerivedKpiResult;
 import com.vdt.analyzer.api.Dtos.KpiDefinitionDto;
 import com.vdt.analyzer.api.Dtos.ThresholdDto;
 import com.vdt.analyzer.domain.KpiDefinition;
@@ -23,12 +24,15 @@ public class KpiController {
     private final KpiCatalog catalog;
     private final KpiDefinitionRepo repo;
     private final org.springframework.jdbc.core.JdbcTemplate jdbc;
+    private final com.vdt.analyzer.service.DerivedKpiService derived;
 
     public KpiController(KpiCatalog catalog, KpiDefinitionRepo repo,
-                         org.springframework.jdbc.core.JdbcTemplate jdbc) {
+                         org.springframework.jdbc.core.JdbcTemplate jdbc,
+                         com.vdt.analyzer.service.DerivedKpiService derived) {
         this.catalog = catalog;
         this.repo = repo;
         this.jdbc = jdbc;
+        this.derived = derived;
     }
 
     @GetMapping
@@ -97,6 +101,51 @@ public class KpiController {
     }
 
     /**
+     * Defines a KPI as a formula over other KPIs, and materialises it.
+     *
+     * A deliberately narrower thing than the reference tool's node-graph KPI Workbench,
+     * and named accordingly. The values are computed now and on import, not on every
+     * read - see DerivedKpiService for why - so the response reports how many were
+     * produced rather than leaving the caller to guess whether it did anything.
+     */
+    @PostMapping("/derived")
+    @Transactional
+    public DerivedKpiResult createDerived(@RequestBody KpiDefinitionDto body) {
+        KpiDefinitionDto form = KpiDefinitionForm.validate(body);
+        if (repo.existsById(form.name())) {
+            throw new IllegalArgumentException("KPI already exists: " + form.name());
+        }
+        // Validated before the definition is stored, so a bad formula never leaves a
+        // half-created KPI behind.
+        java.util.Set<String> refs = derived.validate(body.expression(), form.name());
+
+        KpiDefinition def = new KpiDefinition();
+        def.setName(form.name());
+        def.setDisplayName(form.displayName());
+        def.setUnit(form.unit());
+        def.setCategory(form.category());
+        def.setTechnology(form.technology());
+        def.setDirection(form.direction());
+        def.setSource(form.source());
+        def.setDecimals(form.decimals());
+        def.setDescription(form.description());
+        def.setExpression(body.expression());
+        repo.saveAndFlush(def);
+
+        long n = derived.recompute(form.name());
+        return new DerivedKpiResult(toDto(repo.findById(form.name()).orElseThrow()), n,
+                List.copyOf(refs));
+    }
+
+    /** Recomputes a derived KPI, e.g. after new sessions were imported. */
+    @PostMapping("/{name}/recompute")
+    public DerivedKpiResult recompute(@PathVariable String name) {
+        long n = derived.recompute(name);
+        return new DerivedKpiResult(toDto(catalog.require(name)), n,
+                List.copyOf(derived.validate(catalog.require(name).getExpression(), name)));
+    }
+
+    /**
      * Drops the configured scale so the KPI falls back to bins derived from each
      * session's own distribution. The other direction of the same loop as saving:
      * the auto scale proposes, Save pins it, this releases it again.
@@ -140,6 +189,13 @@ public class KpiController {
             throw new IllegalArgumentException(
                     "Built-in KPI cannot be deleted: " + def.getName());
         }
+        // Deleting an input out from under a formula would leave that KPI permanently
+        // uncomputable, so the dependency is reported instead of silently broken.
+        List<String> dependents = derived.dependentsOf(def.getName());
+        if (!dependents.isEmpty()) {
+            throw new IllegalArgumentException(
+                    def.getName() + " is used by derived KPI(s): " + String.join(", ", dependents));
+        }
         int removed = jdbc.update("DELETE FROM sample_kpi WHERE kpi_name = ?", def.getName());
         repo.delete(def);
         return java.util.Map.of("name", def.getName(), "removedValues", removed);
@@ -153,6 +209,6 @@ public class KpiController {
         }
         return new KpiDefinitionDto(d.getName(), d.getDisplayName(), d.getUnit(), d.getCategory(),
                 d.getTechnology(), d.getDirection(), d.getSource(), d.getDecimals(),
-                d.getDescription(), SEEDED.contains(d.getName()), ts);
+                d.getDescription(), SEEDED.contains(d.getName()), d.getExpression(), ts);
     }
 }

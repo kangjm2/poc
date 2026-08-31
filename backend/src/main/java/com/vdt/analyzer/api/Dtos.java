@@ -79,5 +79,9 @@ public final class Dtos {
     public record KpiDefinitionDto(String name, String displayName, String unit, String category,
                                    String technology, String direction, String source,
                                    int decimals, String description, boolean seeded,
-                                   List<ThresholdDto> thresholds) {}
+                                   String expression, List<ThresholdDto> thresholds) {}
+
+    /** A derived KPI definition plus how many values materialising it produced. */
+    public record DerivedKpiResult(KpiDefinitionDto kpi, long valuesComputed,
+                                   List<String> referencedKpis) {}
 }

@@ -24,6 +24,9 @@ public class KpiDefinition {
     private int decimals;
     private String description;
 
+    /** Arithmetic formula over other KPI names; null for a measured KPI. */
+    private String expression;
+
     // The catalogue is small and every read needs the bins, so fetch them with it.
     @OneToMany(mappedBy = "kpiName", cascade = CascadeType.ALL,
                orphanRemoval = true, fetch = FetchType.EAGER)
@@ -47,6 +50,10 @@ public class KpiDefinition {
     public int getDecimals() { return decimals; }
     public void setDecimals(int decimals) { this.decimals = decimals; }
     public String getDescription() { return description; }
+
+    public String getExpression() { return expression; }
+
+    public void setExpression(String expression) { this.expression = expression; }
     public void setDescription(String description) { this.description = description; }
     public List<KpiThreshold> getThresholds() { return thresholds; }
     public void setThresholds(List<KpiThreshold> thresholds) { this.thresholds = thresholds; }

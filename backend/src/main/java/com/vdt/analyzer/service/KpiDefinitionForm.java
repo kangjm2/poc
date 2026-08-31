@@ -81,8 +81,11 @@ public final class KpiDefinitionForm {
         // Thresholds start empty on purpose: a KPI without them is coloured by
         // AutoScale from each session's own distribution, which is the normal state
         // for an imported column nobody has set limits on yet. Edit scale pins them.
+        // The expression is carried through untouched: this form validates the KPI's
+        // identity, and only DerivedKpiService can say whether a formula is valid.
         return new KpiDefinitionDto(name, displayName, unit, category, technology,
-                direction, source, decimals, description, false, List.of());
+                direction, source, decimals, description, false, in.expression(),
+                List.of());
     }
 
     private static String required(String v, String field) {
