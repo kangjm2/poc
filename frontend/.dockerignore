@@ -1,0 +1,5 @@
+# The build context is frontend/ only.
+node_modules/
+dist/
+*.tsbuildinfo
+.vscode/

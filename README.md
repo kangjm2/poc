@@ -30,12 +30,29 @@ VDT 장비·소프트웨어 자체는 별도 저장소에서 개발되었으며,
 ## 구성
 
 ```
-backend/    Spring Boot 3.3 · Java 21 · JPA · Flyway · PostgreSQL 16
-frontend/   React 18 · TypeScript · Vite · Leaflet (차트는 자체 SVG 구현)
+backend/    Spring Boot 3.3 · Java 21 · JPA · Flyway · PostgreSQL 16 (+ Dockerfile)
+frontend/   React 18 · TypeScript · Vite · Leaflet (차트는 자체 SVG 구현) (+ Dockerfile, nginx/)
 scripts/    실행 및 검증 스크립트
+docker-compose.yml   PostgreSQL + 백엔드 + 프론트엔드 스택
 ```
 
 ## 실행
+
+### 컨테이너 (권장)
+
+사전 요구: Docker Engine 24+ 와 Compose v2. 그 외에는 아무것도 설치하지 않습니다.
+
+```bash
+docker compose up -d --build      # http://127.0.0.1:4173
+docker compose down               # 정지 (데이터 유지)
+docker compose down -v            # 정지 + DB 볼륨 삭제
+```
+
+PostgreSQL·백엔드·프론트엔드 세 서비스가 순서대로 올라오며, 각각 앞 서비스가 healthy가
+된 뒤에 시작합니다. 포트·DB 접속 정보·시드 여부는 `.env.example`을 `.env`로 복사해
+바꿉니다. 구성 상세는 [`docs/architecture.md`](docs/architecture.md) §7.
+
+### 호스트에서 직접
 
 사전 요구: JDK 21, Node 20+, PostgreSQL 16.
 
@@ -52,22 +69,28 @@ sudo -u postgres createdb -O vdt vdt
 # 3) 프론트엔드
 (cd frontend && npm install)
 ./scripts/frontend.sh start       # http://127.0.0.1:4173
-
-# 4) 검증 — 세 검사기가 서로 다른 실패 계열을 담당합니다
-node scripts/verify-ui.mjs          # 개별 동작 30개
-node scripts/verify-scenarios.mjs   # 사용자 여정 75단계 / 11 시나리오
-node tools/uxtest/api-surface.mjs   # 로직은 있는데 뷰가 없는 격차
-
-# 5) (선택) 대용량 부하 측정
-./scripts/load-test.sh 25      # 200 device-hours 생성 후 응답시간 출력
-./scripts/load-test.sh clean
-
-# 6) (선택) UI 검증 기법 도구 — docs/ui-testing/ 참조
-node tools/uxtest/measure-signals.mjs  # 검증 신호별 비용 측정
-node tools/uxtest/experiment.mjs       # 결함 주입 × 검출기 매트릭스
 ```
 
 중지: `./scripts/backend.sh stop`, `./scripts/frontend.sh stop`
+
+### 검증 · 부하 · 도구
+
+두 방식 모두 `:8080`/`:4173`을 쓰므로, 어느 쪽으로 띄웠든 아래는 그대로 실행됩니다.
+
+```bash
+# 검증 — 세 검사기가 서로 다른 실패 계열을 담당합니다
+node scripts/verify-ui.mjs          # 개별 동작 30개
+node scripts/verify-scenarios.mjs   # 사용자 여정 77단계 / 11 시나리오
+node tools/uxtest/api-surface.mjs   # 로직은 있는데 뷰가 없는 격차
+
+# (선택) 대용량 부하 측정
+./scripts/load-test.sh 25      # 200 device-hours 생성 후 응답시간 출력
+./scripts/load-test.sh clean
+
+# (선택) UI 검증 기법 도구 — docs/ui-testing/ 참조
+node tools/uxtest/measure-signals.mjs  # 검증 신호별 비용 측정
+node tools/uxtest/experiment.mjs       # 결함 주입 × 검출기 매트릭스
+```
 
 ## 시드 데이터
 

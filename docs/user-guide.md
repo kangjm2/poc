@@ -16,6 +16,24 @@
 
 ## 1. 실행
 
+### 1.1 컨테이너로 실행 (권장)
+
+사전 요구: Docker Engine 24+ 와 Compose v2. JDK·Node·PostgreSQL을 따로 설치하지
+않아도 됩니다 — 전부 이미지 안에서 빌드됩니다.
+
+```bash
+docker compose up -d --build
+```
+
+브라우저에서 <http://localhost:4173> 을 엽니다.
+
+정지는 `docker compose down`(데이터 유지), 데이터까지 지우려면 `docker compose down -v`.
+
+기본값을 바꾸려면 `.env.example`을 `.env`로 복사해 편집합니다. 포트(`FRONTEND_PORT`,
+`BACKEND_PORT`), DB 접속 정보, 예시 데이터 적재 여부(`SEED_ENABLED`)를 지정할 수 있습니다.
+
+### 1.2 호스트에서 직접 실행
+
 사전 요구: JDK 21, Node 20+, PostgreSQL 16.
 
 ```bash
@@ -35,11 +53,17 @@ sudo -u postgres createdb -O vdt vdt
 
 브라우저에서 <http://localhost:4173> 을 엽니다.
 
+정지는 `./scripts/backend.sh stop`, `./scripts/frontend.sh stop`.
+
+### 1.3 어느 쪽으로 띄우든 같은 것
+
+두 방식 모두 같은 포트(:4173, :8080)를 쓰므로, 아래 §2부터의 설명은 어느 쪽으로
+띄웠는지와 무관하게 동일합니다.
+
 빈 DB로 처음 기동하면 **예시 데이터가 자동으로 들어갑니다** — 도심 주행 2개(빌드 1.4.2와
 1.5.0), 고속도로 주행 1개, 프론트홀 주입 랩 세션 1개, 그리고 랩 캠페인 하나.
-바로 §3부터 따라 할 수 있습니다.
-
-정지는 `./scripts/backend.sh stop`, `./scripts/frontend.sh stop`.
+바로 §3부터 따라 할 수 있습니다. 적재가 끝난 뒤에야 API가 열리므로, 기동 직후
+바로 열어도 목록이 비어 있지 않습니다.
 
 ---
 
@@ -398,8 +422,9 @@ KPI 정의가 만들어지고 값도 함께 적재됩니다. 체크하지 않으
 | 일부 컬럼만 들어갔다 | 결과의 **Ignored columns**를 보십시오. 같은 체크박스로 살릴 수 있습니다 |
 | `Fronthaul` 워크북이 비어 있다 | 프론트홀 카운터는 프론트홀에 주입한 랩 런에만 존재합니다. 필드 주행에는 없습니다 |
 | 색을 바꿨는데 지도만 그대로 | 저장(Save)을 하지 않았을 수 있습니다. 저장하면 지도·범례·열화·값 그리드가 함께 바뀝니다 |
-| 기동 직후 세션 목록이 비어 있다 | 시드가 아직 끝나지 않았습니다. 몇 초 뒤 새로고침하십시오 |
-| 컨테이너를 다시 띄웠더니 접속이 안 된다 | `sudo service postgresql start` 후 `./scripts/backend.sh start`, `./scripts/frontend.sh start` |
+| 세션 목록이 비어 있다 | 시드 대기 문제는 아닙니다 — 적재가 끝난 뒤에야 API가 열립니다. `SEED_ENABLED=false`로 띄웠거나(§1.1), 이미 세션을 모두 지운 DB입니다. 예시 데이터가 필요하면 `docker compose down -v` 후 다시 올리십시오 |
+| 다시 띄웠더니 접속이 안 된다 | 컨테이너: `docker compose ps`로 세 서비스가 healthy인지 보고, 아니면 `docker compose logs backend`. 호스트: `sudo service postgresql start` 후 `./scripts/backend.sh start`, `./scripts/frontend.sh start` |
+| 화면은 뜨는데 데이터만 안 나온다 (컨테이너) | nginx는 살아 있고 백엔드가 아닌 경우입니다. `docker compose ps`의 backend 상태와 `curl localhost:8080/api/sessions`를 확인하십시오 |
 
 ---
 

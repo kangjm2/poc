@@ -6,9 +6,8 @@ import com.vdt.analyzer.seed.DriveTestGenerator.Point;
 import com.vdt.analyzer.seed.DriveTestGenerator.Site;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.SmartInitializingSingleton;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.boot.ApplicationArguments;
-import org.springframework.boot.ApplicationRunner;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
@@ -20,7 +19,7 @@ import java.util.List;
 
 /** Loads a demonstration dataset on first start. */
 @Component
-public class DataSeeder implements ApplicationRunner {
+public class DataSeeder implements SmartInitializingSingleton {
 
     private static final Logger log = LoggerFactory.getLogger(DataSeeder.class);
 
@@ -73,9 +72,24 @@ public class DataSeeder implements ApplicationRunner {
         this.enabled = enabled;
     }
 
+    /**
+     * Seeds once every singleton exists - still inside bean-factory initialisation,
+     * which is before finishRefresh() starts the web server.
+     *
+     * The ordering is the point. As an ApplicationRunner the seed finished about 2.5 s
+     * *after* Tomcat began listening, so anything that reads a 200 from /api/sessions as
+     * readiness - the container HEALTHCHECK, scripts/backend.sh, a verifier started
+     * straight after `docker compose up` - could go green against an empty database.
+     * A ContextRefreshedEvent listener is not early enough either: Spring Boot starts
+     * the web server from a SmartLifecycle inside finishRefresh(), which runs before
+     * that event is published.
+     *
+     * Flyway has already run: this bean reaches it transitively through the
+     * repositories, which Spring Boot makes depend on the Flyway initializer.
+     */
     @Override
     @Transactional
-    public void run(ApplicationArguments args) {
+    public void afterSingletonsInstantiated() {
         if (!enabled) return;
         if (kpis.count() == 0) {
             kpis.saveAll(KpiSeed.definitions());

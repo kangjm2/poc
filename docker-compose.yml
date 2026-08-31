@@ -1,0 +1,77 @@
+# Container deployment of the whole POC: PostgreSQL, the Spring Boot backend and the
+# nginx-served frontend.
+#
+#   docker compose up -d --build     # http://127.0.0.1:4173
+#   docker compose down              # stop, keep the data volume
+#   docker compose down -v           # stop and discard the database
+#
+# Published ports match the host-run setup (scripts/backend.sh, scripts/frontend.sh)
+# so scripts/verify-ui.mjs, scripts/verify-scenarios.mjs and tools/uxtest/api-surface.mjs
+# run against the containers unchanged.
+
+name: vdt-analyzer
+
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: ${DB_NAME:-vdt}
+      POSTGRES_USER: ${DB_USER:-vdt}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-vdt}
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    healthcheck:
+      # -U/-d because pg_isready otherwise probes as the OS user, which reports ready
+      # while the entrypoint is still creating the application database.
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-vdt} -d ${DB_NAME:-vdt}"]
+      interval: 5s
+      timeout: 5s
+      retries: 24
+    restart: unless-stopped
+    # Deliberately not published: nothing outside this network needs raw SQL. Add
+    # `ports: ["5432:5432"]` to attach psql from the host.
+
+  backend:
+    image: vdt-analyzer/backend:local
+    build:
+      context: ./backend
+      # Listed without values: taken from the environment when set, and left to the
+      # Dockerfile's own defaults when not. Only a build that has to swap the base
+      # images (private mirror, corporate CA) needs to set them.
+      args:
+        - MAVEN_IMAGE
+        - JRE_IMAGE
+    environment:
+      # application.yml reads these; no profile or config file swap is needed.
+      DB_URL: jdbc:postgresql://db:5432/${DB_NAME:-vdt}
+      DB_USER: ${DB_USER:-vdt}
+      DB_PASSWORD: ${DB_PASSWORD:-vdt}
+      # Flyway migrates on every boot; the seeder skips a database that already has
+      # sessions, so leaving this on is safe across restarts. Set false for a stack
+      # that should come up empty and be filled by CSV import.
+      SEED_ENABLED: ${SEED_ENABLED:-true}
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "${BACKEND_PORT:-8080}:8080"
+    restart: unless-stopped
+
+  frontend:
+    image: vdt-analyzer/frontend:local
+    build:
+      context: ./frontend
+      args:
+        - NODE_IMAGE
+        - NGINX_IMAGE
+    depends_on:
+      # nginx proxies /api to this service, so waiting for healthy (not just started)
+      # means the first page load cannot hit a backend that is still migrating.
+      backend:
+        condition: service_healthy
+    ports:
+      - "${FRONTEND_PORT:-4173}:8080"
+    restart: unless-stopped
+
+volumes:
+  db-data:
