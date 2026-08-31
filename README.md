@@ -73,24 +73,36 @@ sudo -u postgres createdb -O vdt vdt
 
 중지: `./scripts/backend.sh stop`, `./scripts/frontend.sh stop`
 
-### 검증 · 부하 · 도구
+### 검증
 
-두 방식 모두 `:8080`/`:4173`을 쓰므로, 어느 쪽으로 띄웠든 아래는 그대로 실행됩니다.
+세 검사기와 신호 측정 도구는 HTTP로만 붙으므로, 두 방식 중 어느 쪽으로 띄웠든 그대로
+실행됩니다.
 
 ```bash
-# 검증 — 세 검사기가 서로 다른 실패 계열을 담당합니다
-node scripts/verify-ui.mjs          # 개별 동작 30개
-node scripts/verify-scenarios.mjs   # 사용자 여정 77단계 / 11 시나리오
-node tools/uxtest/api-surface.mjs   # 로직은 있는데 뷰가 없는 격차
-
-# (선택) 대용량 부하 측정
-./scripts/load-test.sh 25      # 200 device-hours 생성 후 응답시간 출력
-./scripts/load-test.sh clean
-
-# (선택) UI 검증 기법 도구 — docs/ui-testing/ 참조
-node tools/uxtest/measure-signals.mjs  # 검증 신호별 비용 측정
-node tools/uxtest/experiment.mjs       # 결함 주입 × 검출기 매트릭스
+# 세 검사기가 서로 다른 실패 계열을 담당합니다
+node scripts/verify-ui.mjs             # 개별 동작 30개
+node scripts/verify-scenarios.mjs      # 사용자 여정 77단계 / 11 시나리오
+node tools/uxtest/api-surface.mjs      # 로직은 있는데 뷰가 없는 격차
+node tools/uxtest/measure-signals.mjs  # (선택) 검증 신호별 비용 측정
 ```
+
+### 부하 · 결함 주입 — 호스트 실행 방식 전용
+
+아래 둘은 HTTP만으로는 부족해서, **컨테이너 스택에서는 그대로 동작하지 않습니다.**
+
+```bash
+./scripts/load-test.sh 25          # 200 device-hours 생성 후 응답시간 출력
+./scripts/load-test.sh clean
+node tools/uxtest/experiment.mjs   # 결함 주입 × 검출기 매트릭스
+```
+
+- **`load-test.sh`**: API가 아니라 **psql로 DB에 직접** 붙습니다. compose는 5432를
+  의도적으로 공개하지 않으므로(`docker-compose.yml`의 `db` 서비스 주석) 컨테이너
+  스택에서는 연결이 거부됩니다. 굳이 쓰려면 `db`에 `ports: ["5432:5432"]`를 열고
+  `PGHOST`/`PGPORT`를 지정하십시오.
+- **`experiment.mjs`**: `frontend/src`를 고쳐 **호스트에서** 다시 빌드한 뒤 `:4173`을
+  관찰합니다. 컨테이너의 nginx는 이미지에 구워진 번들을 서빙하므로 호스트 재빌드가
+  반영되지 않고, 주입한 결함이 전부 "미검출"로 **조용히 잘못 보고**됩니다.
 
 ## 시드 데이터
 
