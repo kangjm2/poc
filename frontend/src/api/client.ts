@@ -5,6 +5,7 @@ import type {
   RunBringUp, CellBreakdown, ProblemSurvey, DerivedKpiResult, FieldToLab,
   Threshold, TrackPoint, UeProfile,
   MonitoredSet, NeighbourBreakdown, PollutionSpan,
+  GraphRequest, GraphValidation, StoredGraph,
 } from './types'
 
 const BASE = '/api'
@@ -178,6 +179,35 @@ export const api = {
       + (to == null ? '' : `${from == null ? '?' : '&'}toSeq=${to}`)),
 
   pilotPollution: (id: number) => get<PollutionSpan[]>(`/sessions/${id}/pilot-pollution`),
+
+  kpiGraphs: () => get<StoredGraph[]>('/kpi-definitions/graphs'),
+
+  validateKpiGraph: async (body: GraphRequest): Promise<GraphValidation> => {
+    const res = await fetch(`${BASE}/kpi-definitions/graphs/validate`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    })
+    if (!res.ok) throw new Error(`${res.status}: ${res.statusText}`)
+    return res.json() as Promise<GraphValidation>
+  },
+
+  saveKpiGraph: async (body: GraphRequest): Promise<StoredGraph> => {
+    const res = await fetch(`${BASE}/kpi-definitions/graphs`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    })
+    if (!res.ok) {
+      let detail = res.statusText
+      try { detail = (await res.json()).message ?? detail } catch { /* no JSON body */ }
+      throw new Error(detail)
+    }
+    return res.json() as Promise<StoredGraph>
+  },
+
+  deleteKpiGraph: async (id: number): Promise<void> => {
+    const res = await fetch(`${BASE}/kpi-definitions/graphs/${id}`, { method: 'DELETE' })
+    if (!res.ok) throw new Error(`${res.status}: ${res.statusText}`)
+  },
 
   // A report opens rather than downloads: it is meant to be read, and printed to PDF
   // from the browser if the reader wants a file.

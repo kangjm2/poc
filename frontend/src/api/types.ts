@@ -313,3 +313,71 @@ export interface PollutionSpan {
   fromSeq: number; toSeq: number; fromTs: string; toTs: string
   maxCells: number; meanBestRsrp: number; pcis: number[]
 }
+
+// ------------------------------------------------------------------ KPI Workbench
+
+export type GraphNodeKind =
+  | 'SOURCE_KPI' | 'SOURCE_NEIGHBOUR' | 'COMBINE' | 'EXPRESSION'
+  | 'FILTER' | 'STATE_MACHINE' | 'OUTPUT'
+
+export interface GraphStateRule { state: string; condition: string }
+
+/**
+ * One node. x/y are editor-only: the backend ignores them, but they are stored with the
+ * graph so reopening it gives back the layout the author arranged rather than a re-flow.
+ */
+export interface GraphNode {
+  id: number
+  kind: GraphNodeKind
+  label?: string | null
+  x: number
+  y: number
+  kpiName?: string | null
+  rank?: number | null
+  metric?: string | null
+  excludeServing?: boolean | null
+  expression?: string | null
+  as?: string | null
+  states?: GraphStateRule[] | null
+  defaultState?: string | null
+  column?: string | null
+}
+
+export interface GraphEdge { from: number; to: number }
+
+export interface GraphSpec { nodes: GraphNode[]; edges: GraphEdge[] }
+
+export interface GraphValidation {
+  ok: boolean
+  error: string | null
+  referencedKpis: string[]
+  readsNeighbours: boolean
+  outputColumn: string | null
+  sql: string | null
+}
+
+export interface StoredGraph {
+  id: number; name: string; outputKpiName: string
+  spec: GraphSpec; valuesComputed: number
+}
+
+/**
+ * What the workbench sends when publishing a graph.
+ *
+ * Deliberately its own type rather than KpiDefinition: that one is the RESPONSE shape and
+ * carries fields the server owns (`seeded`, the resolved thresholds), so reusing it here
+ * would mean either sending values the server ignores or widening the response type with
+ * request-only fields. `output` is null on a validate call, which checks the graph alone.
+ */
+export interface KpiOutputRequest {
+  name: string; displayName: string; unit: string; category: string
+  technology: string; direction: string; source: string; decimals: number
+  description: string | null
+  expression: string | null
+}
+
+export interface GraphRequest {
+  name: string
+  output: KpiOutputRequest | null
+  spec: GraphSpec
+}

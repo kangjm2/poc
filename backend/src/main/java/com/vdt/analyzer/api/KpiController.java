@@ -25,14 +25,79 @@ public class KpiController {
     private final KpiDefinitionRepo repo;
     private final org.springframework.jdbc.core.JdbcTemplate jdbc;
     private final com.vdt.analyzer.service.DerivedKpiService derived;
+    private final com.vdt.analyzer.service.KpiGraphService graphs;
 
     public KpiController(KpiCatalog catalog, KpiDefinitionRepo repo,
                          org.springframework.jdbc.core.JdbcTemplate jdbc,
-                         com.vdt.analyzer.service.DerivedKpiService derived) {
+                         com.vdt.analyzer.service.DerivedKpiService derived,
+                         com.vdt.analyzer.service.KpiGraphService graphs) {
         this.catalog = catalog;
         this.repo = repo;
         this.jdbc = jdbc;
         this.derived = derived;
+        this.graphs = graphs;
+    }
+
+    // ------------------------------------------------------------------ KPI Workbench
+
+    /** What the editor sends: the graph document plus the KPI it should define. */
+    public record GraphRequest(String name, KpiDefinitionDto output,
+                               com.vdt.analyzer.service.KpiGraph.Spec spec) {}
+
+    @GetMapping("/graphs")
+    public List<com.vdt.analyzer.service.KpiGraphService.StoredGraph> graphs() {
+        return graphs.list();
+    }
+
+    /**
+     * Compiles a graph without storing it.
+     *
+     * The editor calls this on every change, so it answers with the failure rather than
+     * a 400: while a graph is being drawn it is invalid by definition, and a stream of
+     * error responses for the normal state of the screen is noise.
+     */
+    @PostMapping("/graphs/validate")
+    public com.vdt.analyzer.service.KpiGraphService.Validation validateGraph(
+            @RequestBody GraphRequest body) {
+        return graphs.validate(body.spec(),
+                body.output() == null ? null : body.output().name());
+    }
+
+    /** Creates or replaces the graph that defines one KPI, and materialises its values. */
+    @PostMapping("/graphs")
+    @Transactional
+    public com.vdt.analyzer.service.KpiGraphService.StoredGraph saveGraph(
+            @RequestBody GraphRequest body) {
+        KpiDefinitionDto form = KpiDefinitionForm.validate(body.output());
+
+        KpiDefinition def = repo.findById(form.name()).orElseGet(KpiDefinition::new);
+        def.setName(form.name());
+        def.setDisplayName(form.displayName());
+        def.setUnit(form.unit());
+        def.setCategory(form.category());
+        def.setTechnology(form.technology());
+        def.setDirection(form.direction());
+        def.setSource(form.source());
+        def.setDecimals(form.decimals());
+        def.setDescription(form.description());
+        // Left null on purpose. `expression` is the formula KPI's definition, and a graph
+        // KPI is defined by its document in kpi_graph; filling both would leave two
+        // definitions of one KPI that could disagree about what it means.
+        def.setExpression(null);
+        repo.saveAndFlush(def);
+
+        return graphs.save(body.name() == null || body.name().isBlank()
+                ? form.name() : body.name(), form.name(), body.spec());
+    }
+
+    @PostMapping("/graphs/{id}/recompute")
+    public java.util.Map<String, Object> recomputeGraph(@PathVariable long id) {
+        return java.util.Map.of("valuesComputed", graphs.recompute(id));
+    }
+
+    @DeleteMapping("/graphs/{id}")
+    public void deleteGraph(@PathVariable long id) {
+        graphs.delete(id);
     }
 
     @GetMapping
@@ -195,6 +260,15 @@ public class KpiController {
         if (!dependents.isEmpty()) {
             throw new IllegalArgumentException(
                     def.getName() + " is used by derived KPI(s): " + String.join(", ", dependents));
+        }
+        // A graph reads its inputs the same way a formula does, so it needs the same
+        // protection. Checked separately rather than merged into the formula check: the
+        // message has to name which kind of thing depends on the KPI, because the two are
+        // repaired in different screens.
+        List<String> byGraphs = graphs.graphsReading(def.getName());
+        if (!byGraphs.isEmpty()) {
+            throw new IllegalArgumentException(
+                    def.getName() + " is used by KPI graph(s): " + String.join(", ", byGraphs));
         }
         int removed = jdbc.update("DELETE FROM sample_kpi WHERE kpi_name = ?", def.getName());
         repo.delete(def);
