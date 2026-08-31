@@ -7,14 +7,21 @@ VDT 장비·소프트웨어 자체는 별도 저장소에서 개발되었으며,
 
 ## 문서
 
+**처음 오셨다면**: 이 도구를 *쓰는* 분은 [`docs/user-guide.md`](docs/user-guide.md),
+*고치는* 분은 [`docs/architecture.md`](docs/architecture.md)부터 보십시오.
+
 | 문서 | 내용 |
 |---|---|
+| [`docs/user-guide.md`](docs/user-guide.md) | **사용자 가이드.** 작업별 안내 — 주행 분석, 빌드 비교, 랩 캠페인, 커버리지, 임포트, 색상 스케일, KPI 추가 |
+| [`docs/architecture.md`](docs/architecture.md) | **아키텍처.** 구성 요소, 요청 흐름, 데이터 모델, API 전체, 전체를 지탱하는 설계 규칙 |
 | [`docs/keysight-vdt-research.md`](docs/keysight-vdt-research.md) | 기존 솔루션 리서치. 제품 구성, 아키텍처, KPI, 경쟁 지형, UI 구조, 시각 디자인 언어 |
 | [`docs/requirements-analysis.md`](docs/requirements-analysis.md) | 기능 인벤토리(FR-xx), 추가 기능(NEW-xx), 화면 명세, 데이터 모델, 검증 기준 |
 | [`docs/assets/MANIFEST.md`](docs/assets/MANIFEST.md) | 참고 자료 출처·취득 방법 |
 | [`docs/architecture-and-scale.md`](docs/architecture-and-scale.md) | 데이터 수집, 가상 채널 + 실제 DU 시나리오, 대용량 처리 설계와 측정 결과 |
 | [`docs/gap-analysis.md`](docs/gap-analysis.md) | Keysight 매뉴얼 및 경쟁 솔루션(VIAVI 등) 대비 기능 격차와 우선순위 |
 | [`docs/verification.md`](docs/verification.md) | 검증 기록 |
+| [`docs/scenario-verification.md`](docs/scenario-verification.md) | 시나리오 단위 E2E 검증 — 11개 사용자 여정과 검증이 잡아낸 결함들 |
+| [`docs/research-agenda.md`](docs/research-agenda.md) | 다음 리서치 항목 (제품 19건 + 방법론 9건) |
 | [`docs/ui-testing/README.md`](docs/ui-testing/README.md) | **(별도 주제)** UI 검증 기법 리서치 — 신호별 토큰 비용 실측, 결함 주입 매트릭스, UX-driven development 근거 검토 |
 | [`docs/assets/NOTICE.md`](docs/assets/NOTICE.md) | 저작권 고지 및 구현 시 복제 금지 항목 |
 
@@ -46,15 +53,16 @@ sudo -u postgres createdb -O vdt vdt
 (cd frontend && npm install)
 ./scripts/frontend.sh start       # http://127.0.0.1:4173
 
-# 4) 검증 — 실제 브라우저를 띄워 30개 항목을 확인합니다
-node scripts/verify-ui.mjs
+# 4) 검증 — 세 검사기가 서로 다른 실패 계열을 담당합니다
+node scripts/verify-ui.mjs          # 개별 동작 30개
+node scripts/verify-scenarios.mjs   # 사용자 여정 75단계 / 11 시나리오
+node tools/uxtest/api-surface.mjs   # 로직은 있는데 뷰가 없는 격차
 
 # 5) (선택) 대용량 부하 측정
 ./scripts/load-test.sh 25      # 200 device-hours 생성 후 응답시간 출력
 ./scripts/load-test.sh clean
 
 # 6) (선택) UI 검증 기법 도구 — docs/ui-testing/ 참조
-node tools/uxtest/api-surface.mjs      # 뷰 없는 백엔드 기능 탐지 (종료 코드 1 = 격차)
 node tools/uxtest/measure-signals.mjs  # 검증 신호별 비용 측정
 node tools/uxtest/experiment.mjs       # 결함 주입 × 검출기 매트릭스
 ```
@@ -78,25 +86,15 @@ node tools/uxtest/experiment.mjs       # 결함 주입 × 검출기 매트릭스
 
 ## API
 
-| 엔드포인트 | 설명 |
+전체 엔드포인트 표는 [`docs/architecture.md`](docs/architecture.md) §5에 있습니다. 계열만 적으면:
+
+| 계열 | 예 |
 |---|---|
-| `GET /api/sessions` | 세션 목록 |
-| `GET /api/sessions/{id}/track?kpi=` | 지도용 경로 (샘플별 색상 구간 포함) |
-| `GET /api/sessions/{id}/series?kpis=` | 시계열 |
-| `GET /api/sessions/{id}/snapshot?seq=` | 특정 시점의 전체 KPI (파라미터 그리드) |
-| `GET /api/sessions/{id}/distribution?kpi=` | **색상 범례 + 구간별 건수·비율** |
-| `GET /api/sessions/{id}/statistics?kpi=` | 통계 및 CDF |
-| `GET /api/sessions/{id}/degradations?kpi=` | **자동 열화 구간 탐지** |
-| `GET /api/sessions/{id}/events` · `/messages` · `/cells` | 이벤트 / L3 시그널링 / 셀 정보 |
-| `GET /api/compare?a=&b=&kpis=` | **세션 비교** |
-| `GET /api/sessions/{id}/bins?kpi=&sizeMeters=` | **영역 비닝** |
-| `GET /api/sessions/{id}/coverage-issues` | **커버리지 문제 자동 탐지** |
-| `GET /api/sessions/{id}/export.csv` · `export.geojson` | 내보내기 (스트리밍) |
-| `POST /api/import/csv` | **CSV 임포트** |
-| `GET /api/lab/{channel-models,cell-configs,ue-profiles,du-endpoints,campaigns,runs}` | **랩 캠페인 구성** |
-| `POST /api/lab/runs/{id}/evaluate` | **합불 판정 산출** |
-| `GET /api/kpi-definitions` | KPI 카탈로그 및 임계 구간 |
-| `PUT /api/kpi-definitions/{name}/thresholds` | **임계 구간 변경** |
+| 분석 | `/api/sessions/{id}/track` · `/series` · `/snapshot` · `/distribution` · `/statistics` · `/degradations` · `/compare` |
+| 공간·내보내기 | `/bins` · `/coverage-issues` · `/export.csv` · `/export.geojson` |
+| KPI 카탈로그 | `/api/kpi-definitions` (생성·삭제, 임계 구간 저장·해제·복원) |
+| 랩 | `/api/lab/campaigns` · `/runs` · `/runs/{id}/evaluate` |
+| 임포트 | `/api/import/csv` · `/api/import/jobs` |
 
 ## 설계상 중요한 선택
 
@@ -114,7 +112,8 @@ node tools/uxtest/experiment.mjs       # 결함 주입 × 검출기 매트릭스
 파티션 프루닝이 걸립니다. 상세와 측정치는 `docs/architecture-and-scale.md`.
 
 **5. 집계는 전부 DB에서 수행합니다.** 분포·통계·열화 구간 모두 SQL로 계산하며, 응답은 서버에서
-데시메이션합니다. 200 device-hours(940만 행)에서 모든 엔드포인트가 100 ms 이내입니다.
+데시메이션합니다. 200 device-hours(1,300만 KPI 행, 4 GB)에서 모든 분석 엔드포인트가 200 ms 이내이며
+최악은 `track` 193 ms입니다.
 
 **6. UE 측과 네트워크(DU) 측 지표를 구분합니다.** 실제 DU가 피시험 대상이면 DU도 카운터를 냅니다.
 UE 측만 보면 "이 단말이 힘들다"와 "이 셀이 혼잡하다"를 구분할 수 없습니다. 프론트홀 주입 시에는
@@ -125,5 +124,7 @@ UE 측만 보면 "이 단말이 힘들다"와 "이 셀이 혼잡하다"를 구�
 - **배경 지도 타일**: 샌드박스 환경에서 브라우저의 `tile.openstreetmap.org` 접근이 차단되어 타일이
   표시되지 않습니다. 앱은 이를 감지해 안내 문구를 띄우고 격자 배경 위에 경로를 그립니다.
   일반 네트워크에서는 정상 동작합니다.
-- 로그 파일 임포트, 3D 시각화, area binning, 리포트 생성은 범위에서 제외했습니다
-  (`docs/requirements-analysis.md` §7).
+- **아직 없는 것**: 벤더 바이너리 로그(DLF 등) 파싱, 3D 시각화, 리포트 템플릿 생성,
+  랩 런 실행기, 파생 KPI 수식. 전체 목록과 우선순위는 [`docs/gap-analysis.md`](docs/gap-analysis.md),
+  다음 리서치 항목은 [`docs/research-agenda.md`](docs/research-agenda.md)에 있습니다.
+  (CSV 임포트와 area binning은 이후 구현되었습니다.)

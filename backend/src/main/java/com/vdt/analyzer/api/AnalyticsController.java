@@ -16,10 +16,13 @@ public class AnalyticsController {
 
     private final GeoAnalysisService geo;
     private final ExportService export;
+    private final com.vdt.analyzer.service.KpiCatalog catalog;
 
-    public AnalyticsController(GeoAnalysisService geo, ExportService export) {
+    public AnalyticsController(GeoAnalysisService geo, ExportService export,
+                               com.vdt.analyzer.service.KpiCatalog catalog) {
         this.geo = geo;
         this.export = export;
+        this.catalog = catalog;
     }
 
     /** Averages the route into fixed-size tiles so a long drive stays readable. */
@@ -50,6 +53,10 @@ public class AnalyticsController {
     @GetMapping("/export.geojson")
     public void exportGeoJson(@PathVariable long id, @RequestParam String kpi,
                               HttpServletResponse response) throws IOException {
+        // Every other KPI-taking endpoint rejects an unknown name with 400. Without
+        // this one the export answered 200 with a null-valued property on every
+        // feature, so a typo produced a plausible-looking file full of nulls.
+        catalog.require(kpi);
         response.setContentType("application/geo+json; charset=UTF-8");
         response.setHeader("Content-Disposition",
                 "attachment; filename=\"session-" + id + ".geojson\"");

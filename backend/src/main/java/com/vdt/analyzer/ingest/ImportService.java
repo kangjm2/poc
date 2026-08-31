@@ -40,10 +40,12 @@ public class ImportService {
 
     private final JdbcTemplate jdbc;
     private final KpiCatalog catalog;
+    private final ImportJobLog jobLog;
 
-    public ImportService(JdbcTemplate jdbc, KpiCatalog catalog) {
+    public ImportService(JdbcTemplate jdbc, KpiCatalog catalog, ImportJobLog jobLog) {
         this.jdbc = jdbc;
         this.catalog = catalog;
+        this.jobLog = jobLog;
     }
 
     public record ImportResult(
@@ -55,7 +57,7 @@ public class ImportService {
     public ImportResult importCsv(MultipartFile file, String sessionName, String device,
                                   String operator, String technology, char delimiter,
                                   boolean createUnknownColumns) {
-        long jobId = createJob(file.getOriginalFilename());
+        long jobId = jobLog.start(file.getOriginalFilename());
         try (BufferedReader reader = new BufferedReader(
                 new InputStreamReader(file.getInputStream(), StandardCharsets.UTF_8))) {
 
@@ -87,7 +89,7 @@ public class ImportService {
                     new HashSet<>(created));
             applyObservedDecimals(counters, created);
             finaliseSession(sessionId, counters);
-            finishJob(jobId, sessionId, counters, "COMPLETED", null);
+            jobLog.succeeded(jobId, sessionId, counters.rows, counters.samples, counters.kpis);
 
             log.info("Imported {} samples / {} KPI values from {}",
                     counters.samples, counters.kpis, file.getOriginalFilename());
@@ -97,7 +99,7 @@ public class ImportService {
                     layout.ignored, created, null);
 
         } catch (IOException | RuntimeException e) {
-            finishJob(jobId, null, new Counters(), "FAILED", e.getMessage());
+            jobLog.failed(jobId, e.getMessage());
             throw new IllegalArgumentException("Import failed: " + e.getMessage(), e);
         }
     }
@@ -350,19 +352,6 @@ public class ImportService {
     }
 
     // ----------------------------------------------------------------- records
-
-    private long createJob(String filename) {
-        jdbc.update("INSERT INTO import_job (filename, format, status) VALUES (?, 'CSV', 'RUNNING')",
-                filename == null ? "upload.csv" : filename);
-        Long id = jdbc.queryForObject("SELECT max(id) FROM import_job", Long.class);
-        return id == null ? 0 : id;
-    }
-
-    private void finishJob(long jobId, Long sessionId, Counters c, String status, String message) {
-        jdbc.update("UPDATE import_job SET status=?, session_id=?, rows_read=?, samples_loaded=?,"
-                + " kpis_loaded=?, finished_at=now(), message=? WHERE id=?",
-                status, sessionId, c.rows, c.samples, c.kpis, message, jobId);
-    }
 
     private long createSession(String name, String device, String operator,
                                String technology, String filename) {
