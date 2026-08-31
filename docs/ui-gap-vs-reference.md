@@ -26,14 +26,22 @@
 하단 워크북 탭, 하단 상태 바. Outdoor의 START/END/CURRENT 진행 바와 임계 강조(노랑/빨강)도
 같은 형태입니다.
 
-**그러나 빠진 것이 분명히 있습니다.** 특히 세 가지는 기존 사용자가 즉시 알아챌 부류입니다.
+**그러나 빠진 것이 분명히 있었습니다.** 최초 판정(2026-08-30) 시점에 기존 사용자가
+즉시 알아챌 부류로 세 가지를 꼽았고, 셋 다 이후 증분에서 닫았습니다.
 
-1. **접속·RACH 계열 화면이 통째로 없음** — Outdoor는 `5G NR RACH metrics` 도크를 상시
-   띄웁니다. 우리는 RACH를 이벤트 한 줄로만 표시합니다.
-2. **차트 종류가 라인 하나뿐** — 레퍼런스는 같은 워크북 안에서 라인과 **바 차트**를
-   나란히 씁니다. 문제 조사 화면에서는 **파이 차트**가 진입점입니다.
-3. **드릴다운 연쇄가 없음** — 레퍼런스의 핵심 조작은 "원인 집계 → 개별 사례 → 그 순간"
-   3단 드릴다운입니다. 우리는 각각을 별도 탭으로 나열만 합니다.
+1. ~~**접속·RACH 계열 화면이 통째로 없음**~~ — `5G NR RACH metrics` 도크와 서빙 셀 식별
+   테이블을 구현했습니다(`Lab` → 런 상세). §3 참조.
+2. ~~**차트 종류가 라인 하나뿐**~~ — 셀별 **바 차트**(`Cells` 탭)와 원인별 **파이 차트**
+   (`Problem Survey` 탭)를 추가했습니다. §2·§4 참조.
+3. ~~**드릴다운 연쇄가 없음**~~ — "원인 집계 → 개별 사례 → 그 순간" 3단을 구현했습니다.
+   §4 참조.
+
+**지금 남은 것은 성격이 다릅니다.** 아래 표에서 ⛔로 남은 항목은 대부분 UI를 안 만든 것이
+아니라 **받쳐 줄 데이터가 없는 것**입니다(이웃 셀 measurement, 주행 영상). 이 구분은
+§6에 정리했습니다.
+
+> **표 읽는 법**: §2–§4의 판정 열은 **2026-08-31 재검토 기준**입니다. 최초 판정에서 바뀐
+> 행에는 바뀐 사유를 함께 적었습니다.
 
 ---
 
@@ -45,12 +53,12 @@
 | Parameters 트리 위의 **검색창** | **없었음 → 이번에 추가** | ✅ 해소 |
 | Measurements 목록 + 검색창 | 드롭다운 | ◐ 세션이 수십 개가 되면 부족 |
 | 기술별 파라미터 카테고리 트리 (AMPS/CDMA/GSM/LTE/…) | 기능별 카테고리 (Radio Quality/Throughput/…) | ✅ 동등 |
-| 워크북 안에 **여러 개의 그래프 페인 스택** | 지도 1 + 라인 1 고정 | ◐ |
+| 워크북 안에 **여러 개의 그래프 페인 스택** | 지도 1 + 라인 1 고정 (탭에 따라 바/파이 추가) | ◐ 페인 스택을 사용자가 쌓지는 못함 |
 | 페인별 **Tools / Layers** 도크 | 없음 | ⛔ |
 | 페인별 **Numerical Data** (커서 시점 값 테이블) | 있음 (우측) | ✅ |
 | **Color Legends** (구간·건수·비율) | 있음 | ✅ |
-| **바 차트** (`RSCP monitored set` — 셀별 막대) | 없음 | ⛔ **1.2 격차** |
-| monitored set 테이블 (Ch/SC/RSCP, Ch/SC/Ec/N0) | 없음 (이웃 셀 데이터 부재) | ⛔ |
+| **바 차트** (`RSCP monitored set` — 셀별 막대) | `Cells` 탭 — 서빙 PCI별 막대 + 집계 표 | ✅ 해소. 단 축이 다름: 레퍼런스는 *monitored set*(이웃 셀)별, 우리는 *서빙 셀*별. 이웃 셀 축은 아래 행과 같은 이유로 막힘 |
+| monitored set 테이블 (Ch/SC/RSCP, Ch/SC/Ec/N0) | 없음 | ⛔ **데이터 모델 공백** — `sample`이 서빙 셀만 담고 이웃 셀 measurement를 담지 않음. UI가 아니라 스키마 작업 |
 | 시간 축 가로 스크롤(팬) | 범위 필터로 대체 | ◐ |
 | 하단 **Activity / Log** 탭 | 없음 | ⛔ |
 | 상태 바: Ready / **No global filters** / No scheduled events / Query memory | START/END/CURRENT/세션명 | ◐ 전역 필터 표시 없음 |
@@ -62,13 +70,13 @@ Outdoor 메인 윈도우에서 직접 판독한 요소입니다.
 
 | 레퍼런스 화면 요소 | 판독한 실제 필드 | 우리 상태 |
 |---|---|---|
-| **`5G NR RACH metrics` 도크** | RACH type(Contention based), RACH reason(Channel request), RACH result(Succeeded), access delay(31 ms), config(98), contention resolution, logical root sequence(106), maximum preamble, **pathloss(95.0 dB)**, preamble count(1), **preamble format(Format A2)**, preamble index(3), preamble initial power(-3.0 dBm), preamble response, preamble step, PUSCH power(0.0 dBm), **RA-RNTI(267)**, response window(10 slot), SSB ID(0), **timing advance(2)** | ⛔ 이벤트 한 줄뿐 |
-| **서빙 셀 식별 테이블** | Cell type(SCG PSCell), SSB band(NR n78), SSB NR-ARFCN(633984), PCI(8), SSB GSCN(7853) | ⛔ PCI만 |
+| **`5G NR RACH metrics` 도크** | RACH type(Contention based), RACH reason(Channel request), RACH result(Succeeded), access delay(31 ms), config(98), contention resolution, logical root sequence(106), maximum preamble, **pathloss(95.0 dB)**, preamble count(1), **preamble format(Format A2)**, preamble index(3), preamble initial power(-3.0 dBm), preamble response, preamble step, PUSCH power(0.0 dBm), **RA-RNTI(267)**, response window(10 slot), SSB ID(0), **timing advance(2)** | ✅ 해소 — 19개 필드 중 **17개** 구현(`Lab` → 런 상세, `5G NR RACH metrics` 도크). `maximum preamble`·`preamble response` 2개만 미구현. 단 레퍼런스는 *실시간 수집* 중 상시 표시, 우리는 *랩 런* 화면 |
+| **서빙 셀 식별 테이블** | Cell type(SCG PSCell), SSB band(NR n78), SSB NR-ARFCN(633984), PCI(8), SSB GSCN(7853) | ✅ 해소 — 5개 필드 전부 + `TA offset`(`Lab` → 런 상세, `Serving cell`) |
 | `5G NR key parameters` 도크 + 임계 강조 | BLER 9.96% 노랑, TX power 19.4 dBm 빨강 | ✅ 동등 |
 | 상단 **트랜스포트 컨트롤** (record/pause/stop) | 없음 (사후 분석 전용) | ⛔ |
 | 하단 진행 바 + START/END/CURRENT | 있음 | ✅ |
-| 워크북 탭 + **`+` (탭 추가)** | 고정 탭 7개 | ◐ 사용자 정의 탭 없음 |
-| 탭 구성 자체 (`5G RACH and Signalling`, `5G NR Beams`, `5G Physical Layer`) | Beams·Physical Layer 탭 없음 | ⛔ |
+| 워크북 탭 + **`+` (탭 추가)** | 고정 탭 12개 | ◐ 사용자 정의 탭 없음 |
+| 탭 구성 자체 (`5G RACH and Signalling`, `5G NR Beams`, `5G Physical Layer`) | RACH·Signalling은 있음. Beams·Physical Layer 탭 없음 | ◐ Beams는 SSB 빔 measurement가 없어 막힘(데이터), Physical Layer는 미구현(UI) |
 | 면적 차트 2계열 (scheduled vs actual throughput) | 단일 라인 | ◐ |
 | 상태 바 `Measurement: OnePlus 7 5G Oulu center 19Nov08 091517.1` | 세션명 표시 | ✅ |
 
@@ -94,14 +102,14 @@ Outdoor 메인 윈도우에서 직접 판독한 요소입니다.
 
 | 요소 | 우리 상태 |
 |---|---|
-| 원인 **분류·집계** | ⛔ 열화 구간은 찾지만 원인 라벨을 붙이지 않음 |
-| 파이 차트 | ⛔ |
-| Drill Down 컨텍스트 메뉴 | ⛔ |
-| 개별 사례 그리드 | ◐ Degradation/Coverage Issues 표 |
+| 원인 **분류·집계** | ✅ 해소 — 7개 원인(무선 링크 실패 / 약전계 / 간섭 / 셀 오버슈트 / 높은 BLER / 프론트홀 타이밍 / 처리율 열화). 레퍼런스의 `Missing neighbour`는 이웃 셀 데이터가 없어 산출 불가 |
+| 파이 차트 | ✅ 해소 (`Problem Survey` 탭) |
+| Drill Down 컨텍스트 메뉴 | ✅ 해소 — 조작은 동등하되 **우클릭 메뉴가 아니라 조각·행 클릭**. 기존 사용자에게 이질적일 수 있는 지점 |
+| 개별 사례 그리드 | ✅ 해소 — 원인별 사례 그리드(시각·구간·심각도·값). Degradation/Coverage Issues 탭은 그대로 유지 |
 | 사례 → 시각 이동 | ✅ 커서 이동 |
 | 시그널링 목록 + 커서 추종 | ✅ |
 | **메시지 본문 디코드** (3GPP 절 인용까지) | ◐ 2행 펼침 |
-| 드릴다운 breadcrumb (좌측 세로 탭) | ⛔ |
+| 드릴다운 breadcrumb (좌측 세로 탭) | ◐ `Back to all categories` 1단 복귀만. 좌측 세로 탭 형태는 아님 |
 
 ## 5. VDT 구성 — S8709A 대비
 
@@ -120,20 +128,49 @@ Nemo Tools ──Field-To-Lab Conversion──▶ UXM 5G Wireless Test Platform 
 
 ---
 
-## 6. 우선순위
+## 6. 남은 격차 — 세 부류로 나누어
 
-| 순위 | 항목 | 근거 |
-|---|---|---|
-| **P0** | 접속/브링업 시퀀스 + RACH 지표 + 서빙 셀 식별 | §3, §5. 기존 사용자가 상시 보던 도크가 통째로 없음 |
-| **P0** | 바 차트 | §2. 레퍼런스 워크북의 두 페인 중 하나가 바 차트 |
-| **P1** | 원인 분류 → 파이 → 드릴다운 연쇄 | §4. 문제 조사의 핵심 조작 |
-| **P1** | 파라미터 검색창 | §2. **완료** |
-| **P2** | 페인별 Layers/Tools, 사용자 정의 워크북 탭 | §2, §3 |
-| **P2** | Activity/Log, 전역 필터 표시 | §2 |
+최초 우선순위표(P0 접속/브링업·바 차트, P1 원인 분류·파라미터 검색창)는 **전부 닫혔습니다.**
+갱신된 표는 §7.3에 있습니다. 남은 것을 성격별로 나누면 이렇습니다. **막힌 이유가 다르면
+해결 비용도 다르므로** 한 표에 섞어 두지 않았습니다.
 
-이웃 셀(monitored set) 계열은 **스키마에 이웃 셀 측정이 없어서** 막혀 있습니다.
-파이/드릴다운의 "Missing neighbour" 원인도 같은 이유로 지금은 산출할 수 없습니다.
-이는 UI 문제가 아니라 데이터 모델 문제이므로 별도 증분으로 다룹니다.
+### (a) 데이터 모델이 막고 있는 것 — UI 작업이 아님
+
+| 항목 | 필요한 것 |
+|---|---|
+| monitored set 테이블 (§2) | `sample`에 이웃 셀 measurement(PCI/RSRP/RSRQ 리스트) 추가 |
+| 이웃 셀 바 차트 축 (§2) | 위와 동일 |
+| `Missing neighbour` 원인 분류 (§4) | 위와 동일 |
+| 서빙 셀 → *이웃* 셀 연결선 (pilot pollution 표시, §1.2) | 위와 동일. 서빙 셀 연결선은 이미 있음 |
+| `5G NR Beams` 탭 (§3) | SSB 빔 인덱스별 measurement |
+| 영상 동기화 재생 (§7) | 주행 영상 소스 자체가 없음 |
+
+이 여섯 개는 화면을 그리는 문제가 아니라 **측정에 없는 값을 어디서 가져올 것인가**의 문제입니다.
+지금 화면만 만들면 빈 표가 되므로 만들지 않았습니다.
+
+### (b) 실제로 남은 UI·분석 작업
+
+| 항목 | 규모 |
+|---|---|
+| KPI Workbench **노드 그래프** 빌더 (§7.3) | 큼 — 캔버스·노드·엣지·실행기 |
+| 거리 구간 비닝 (§1.2) | 중 — 백엔드 집계 + 축 |
+| 셀 커버리지 폴리곤 (§1.2) | 중 — `cell_ref`에 좌표·방위각은 있으나 빔폭·반경이 없음. **측정된** 서빙 샘플의 외곽으로 그리면 데이터 추가 없이 가능 |
+| 대시보드 / 추세 분석 (§1.2, §1.3) | 큼 — 세션 간 집계 모델 |
+| 리포트 템플릿 · 벤치마킹 리포트 (§1.4) | 중 |
+| 페인별 Tools/Layers 도크, 사용자 정의 워크북 탭 (§2, §3) | 중 |
+| Activity/Log 탭, 전역 필터 표시 (§2) | 작음 |
+| `5G Physical Layer` 탭 (§3) | 작음 — 값은 이미 있음 |
+| RACH `maximum preamble`·`preamble response` 2필드 (§3) | 작음 |
+| 드릴다운 breadcrumb를 좌측 세로 탭 형태로 (§4) | 작음 |
+
+### (c) 의도적으로 범위 밖
+
+| 항목 | 이유 |
+|---|---|
+| 3D Visualizer (§1.2) | 실내 층별 시각화 — 우리 대상은 야외 주행 |
+| 트랜스포트 컨트롤 record/pause/stop (§3) | 우리는 사후 분석 전용. 실시간 수집을 하지 않음 |
+| 리본 UI (File/View/Tools/…) (§2) | 의도적 단순화 |
+| Keysight/Nemo 로고·워드마크·브랜드 레드 | `docs/assets/NOTICE.md` — 복제 금지 |
 
 
 ---
