@@ -6,8 +6,11 @@
 #   ./scripts/load-test.sh [sessions]      generate and measure
 #   ./scripts/load-test.sh clean           remove generated sessions
 set -euo pipefail
-PSQL=(psql -h 127.0.0.1 -U vdt -d vdt)
-export PGPASSWORD=vdt
+# Host/port are overridable so this can also target a containerised PostgreSQL, which
+# docker-compose.yml does not publish by default - open ports 5432 on the db service and
+# set PGPORT. Defaults are unchanged for the host-run stack.
+PSQL=(psql -h "${PGHOST:-127.0.0.1}" -p "${PGPORT:-5432}" -U "${PGUSER:-vdt}" -d "${PGDATABASE:-vdt}")
+export PGPASSWORD="${PGPASSWORD:-vdt}"
 API=http://127.0.0.1:8080/api
 
 if [ "${1:-}" = "clean" ]; then

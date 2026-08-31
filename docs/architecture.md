@@ -285,7 +285,7 @@ API는 호출자가 보낸 라벨도 그대로 저장하므로, 경계와 라벨
 | 검사기 | 잡는 것 | 규모 |
 |---|---|---|
 | `scripts/verify-ui.mjs` | 개별 동작 회귀 | 30개 |
-| `scripts/verify-scenarios.mjs` | 여정 회귀 — 단계 간 상태가 이어짐 | 75단계 / 11 시나리오 |
+| `scripts/verify-scenarios.mjs` | 여정 회귀 — 단계 간 상태가 이어짐 | 77단계 / 11 시나리오 |
 | `tools/uxtest/api-surface.mjs` | **로직은 있는데 뷰가 없는** 격차 | 엔드포인트 · 클라이언트 · KPI 도달성 |
 
 세 번째가 왜 별도인지는 실제 사례가 답합니다: 임계값 저장 엔드포인트는 유니크 인덱스
@@ -354,8 +354,9 @@ db (postgres:16-alpine)   pg_isready -U vdt -d vdt
 - **`/api` 프록시**: 개발 중에는 `vite preview`가, 컨테이너에서는 nginx가 같은 일을
   합니다(`frontend/nginx/default.conf`). 덕분에 프론트엔드는 어느 쪽에서도 상대경로
   `/api`만 호출하며(`api/client.ts`), 환경마다 달라지는 빌드타임 API URL이 없습니다.
-  업스트림은 Docker 내장 DNS로 **매 요청 재확인**하므로, 백엔드 컨테이너를 새로
-  만들어 IP가 바뀌어도 nginx를 재시작할 필요가 없습니다.
+  업스트림은 Docker 내장 DNS로 **주기적으로 재확인**합니다(`valid=10s`). 설정 로드
+  시점에 IP를 고정하지 않으므로, 백엔드 컨테이너를 새로 만들어 IP가 바뀌어도 nginx를
+  재시작할 필요 없이 최대 10초 안에 따라갑니다.
 - **베이스 이미지는 build arg**입니다(`MAVEN_IMAGE`, `JRE_IMAGE`, `NODE_IMAGE`,
   `NGINX_IMAGE`). 사설 레지스트리 미러나 사내 CA를 넣은 베이스를 써야 하는 빌드가
   Dockerfile을 고치지 않고 갈아끼울 수 있습니다. 값을 주지 않으면 Dockerfile의
