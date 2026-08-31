@@ -401,6 +401,8 @@ export function App() {
                 <>
                   <a href={api.exportUrl(sessionId, 'csv')} download>CSV</a>
                   <a href={api.exportUrl(sessionId, 'geojson', kpi)} download>GeoJSON</a>
+                  <a href={api.reportUrl(sessionId)} target="_blank" rel="noreferrer"
+                     title="Printable session report">Report</a>
                 </>
               )}
             </div>

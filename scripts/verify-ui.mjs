@@ -9,6 +9,7 @@ import { mkdirSync } from 'node:fs'
 
 const BASE = process.env.BASE ?? 'http://127.0.0.1:4173'
 const OUT = process.env.OUT ?? '/tmp/shots2'
+const API_BASE = process.env.API ?? 'http://127.0.0.1:8080'
 mkdirSync(OUT, { recursive: true })
 
 const results = []
@@ -290,6 +291,17 @@ await page.waitForTimeout(900)
 const afterCur = await page.locator('.statusbar').first().innerText()
 check('사례 → 시각 이동', beforeCur !== afterCur, 'cursor moved')
 await page.screenshot({ path: `${OUT}/27-problem-survey.png`, fullPage: true })
+
+// 27d. the printable session report - what a drive test is commissioned to produce.
+const report = await page.request.get(`${API_BASE}/api/sessions/1/report.html`)
+const reportBody = await report.text()
+check('세션 리포트 생성', report.status() === 200
+  && /Problem survey/.test(reportBody)
+  && /KPI summary/.test(reportBody)
+  && /Distribution by colour bin/.test(reportBody),
+  `${report.status()}, ${reportBody.length} bytes`)
+check('리포트가 실제 수치를 담음',
+  /<td class="num">\d/.test(reportBody) && !/NaN|undefined|null<\/td>/.test(reportBody))
 
 // 28. lab bring-up: the instrument chain, its steps, and the attach detail. A virtual
 //     drive test is a chain of instruments, and which link stopped a run is the first

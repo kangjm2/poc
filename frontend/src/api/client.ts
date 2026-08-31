@@ -140,6 +140,9 @@ export const api = {
 
   importJobs: () => get<Array<Record<string, unknown>>>('/import/jobs'),
 
+  // A report opens rather than downloads: it is meant to be read, and printed to PDF
+  // from the browser if the reader wants a file.
+  reportUrl: (id: number) => `${BASE}/sessions/${id}/report.html`,
   exportUrl: (id: number, kind: 'csv' | 'geojson', kpi?: string) =>
     kind === 'csv'
       ? `${BASE}/sessions/${id}/export.csv`
