@@ -49,6 +49,10 @@ public class LabController {
     @GetMapping("/runs/{id}/bring-up")
     public RunBringUp bringUp(@PathVariable long id) { return lab.bringUp(id); }
 
+    /** Aborts a run in flight. */
+    @PostMapping("/runs/{id}/cancel")
+    public TestRun cancel(@PathVariable long id) { return lab.cancel(id); }
+
     /** Evaluates the run's criteria against its session and records a verdict. */
     @PostMapping("/runs/{id}/evaluate")
     public TestRun evaluate(@PathVariable long id) { return lab.evaluate(id); }

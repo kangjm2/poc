@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { api } from '../api/client'
-import type { RachReport, RunBringUp, ServingCell } from '../api/types'
+import type { RachReport, RunBringUp, RunCell, RunGauges, ServingCell } from '../api/types'
 
 /**
  * How a lab run was brought up.
@@ -128,6 +128,91 @@ function ServingCellPanel({ cell }: { cell: ServingCell }) {
   )
 }
 
+/**
+ * The per-cell status strip.
+ *
+ * The reference network-emulator UI keeps this on screen permanently, and the reason is
+ * that a cell's state is a condition, not an event: "the cell started" as one line of a
+ * sequence cannot say which cell, on what carrier, at what power, or whether the device
+ * is actually on it. A cell configured but deliberately left off is a normal state the
+ * strip has to be able to show, so OFF is drawn plainly rather than as a fault.
+ */
+function CellStrip({ cells }: { cells: RunCell[] }) {
+  if (cells.length === 0) return null
+  return (
+    <div className="cell-strip">
+      {cells.map((c) => (
+        <div key={c.id} className={`cell-card state-${c.state}`}>
+          <div className="cell-card-top">
+            <span className="cell-label">{c.label}</span>
+            <span className="cell-role">{c.role.replace('_', ' ')} / {c.duplex}</span>
+            <span className={`cell-state state-${c.state}`}>{c.state}</span>
+          </div>
+          <div className="cell-card-grid">
+            <span>{c.band}</span>
+            <span>{c.powerDbm == null ? '' : `${c.powerDbm} dBm`}</span>
+            <span>BW {c.bandwidthMhz ?? '-'} MHz</span>
+            <span>{c.scsKhz == null ? '' : `SCS ${c.scsKhz} kHz`}</span>
+            <span>D {c.dlArfcn ?? '-'}</span>
+            <span>U {c.ulArfcn ?? '-'}</span>
+          </div>
+        </div>
+      ))}
+    </div>
+  )
+}
+
+/** One dial. The reference run view puts duration, progress and pass rate on three. */
+function Gauge({ label, value, text }: {
+  label: string
+  value: number | null      // 0..1, or null when the number does not exist yet
+  text: string
+}) {
+  const R = 34
+  const C = 2 * Math.PI * R
+  const frac = value == null ? 0 : Math.max(0, Math.min(1, value))
+  return (
+    <div className="gauge">
+      <svg width={88} height={88} role="img" aria-label={`${label}: ${text}`}>
+        <circle cx={44} cy={44} r={R} fill="none" stroke="#e2e2e8" strokeWidth={10} />
+        {value != null && (
+          <circle cx={44} cy={44} r={R} fill="none" stroke="#e8a800" strokeWidth={10}
+                  strokeDasharray={`${C * frac} ${C}`}
+                  transform="rotate(-90 44 44)" strokeLinecap="butt" />
+        )}
+        <text x={44} y={48} textAnchor="middle" fontSize={14} fontWeight={600}
+              fill="#262626">{text}</text>
+      </svg>
+      <div className="gauge-label">{label}</div>
+    </div>
+  )
+}
+
+const hhmmss = (ms: number | null) => {
+  if (ms == null) return '-'
+  const t = Math.round(ms / 1000)
+  return `${String(Math.floor(t / 60)).padStart(2, '0')}:${String(t % 60).padStart(2, '0')}`
+}
+
+function Gauges({ g }: { g: RunGauges }) {
+  return (
+    <div className="gauges">
+      <Gauge label="Duration" value={null} text={hhmmss(g.elapsedMs)} />
+      <Gauge label="Progress" value={g.progressPct / 100} text={`${g.progressPct} %`} />
+      <Gauge label="Pass rate"
+             value={g.passRatePct == null ? null : g.passRatePct / 100}
+             text={g.passRatePct == null
+               ? 'n/a'
+               : `${g.passRatePct} %`} />
+      <div className="gauge-note">
+        {g.passRatePct == null
+          ? 'Not evaluated yet — a run without a verdict has not failed its criteria.'
+          : `${g.criteriaPassed} of ${g.criteriaTotal} acceptance criteria passed.`}
+      </div>
+    </div>
+  )
+}
+
 export function BringUpPanel({ runId, onStarted }: {
   runId: number
   onStarted?: () => void
@@ -163,8 +248,23 @@ export function BringUpPanel({ runId, onStarted }: {
     finally { setBusy(false) }
   }
 
+  const cancel = async () => {
+    setBusy(true)
+    try { await api.cancelRun(runId); await load(); onStarted?.() }
+    catch (e) { setError(e instanceof Error ? e.message : String(e)) }
+    finally { setBusy(false) }
+  }
+
   return (
     <>
+      <div className="panel">
+        <header>
+          <span className="title">Run</span>
+          <span className="meta" style={{ marginLeft: 'auto' }}>{data.status}</span>
+        </header>
+        <div style={{ padding: 10 }}><Gauges g={data.gauges} /></div>
+      </div>
+
       <div className="panel">
         <header>
           <span className="title">Instrument chain</span>
@@ -175,12 +275,26 @@ export function BringUpPanel({ runId, onStarted }: {
 
       <div className="panel">
         <header>
+          <span className="title">Cells</span>
+          <span className="meta">
+            {data.cells.filter((c) => c.state === 'CONNECTED').length} of {data.cells.length} connected
+          </span>
+        </header>
+        <div style={{ padding: 10 }}><CellStrip cells={data.cells} /></div>
+      </div>
+
+      <div className="panel">
+        <header>
           <span className="title">Bring-up sequence</span>
           <span className="meta" style={{ marginLeft: 'auto' }}>
             {done} / {data.steps.length} complete
             {running ? ' · running' : failed ? ' · failed' : ''}
           </span>
-          {!running && (
+          {running ? (
+            <button style={{ marginLeft: 8 }} disabled={busy} onClick={cancel}>
+              {busy ? 'Cancelling…' : 'Cancel test case'}
+            </button>
+          ) : (
             <button style={{ marginLeft: 8 }} disabled={busy} onClick={start}>
               {busy ? 'Starting…' : data.status === 'QUEUED' ? 'Start run' : 'Run again'}
             </button>

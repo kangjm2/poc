@@ -263,6 +263,10 @@ public class LabService {
         // writes; gating it there keeps the view honest about when it exists.
         jdbc.update("DELETE FROM run_rach WHERE run_id=?", runId);
         jdbc.update("DELETE FROM run_serving_cell WHERE run_id=?", runId);
+        // The SA carrier is configured but deliberately not started, so only the cells
+        // the bring-up actually brings up change state.
+        jdbc.update("UPDATE run_cell SET state = CASE WHEN role = 'SA_PCC' THEN 'OFF'"
+                + " ELSE 'CONNECTED' END WHERE run_id=?", runId);
         jdbc.update("""
                 INSERT INTO run_rach (run_id, rach_type, rach_reason, rach_result,
                     access_delay_ms, preamble_format, preamble_index, preamble_count,
@@ -311,10 +315,71 @@ public class LabService {
             (Integer) rs.getObject("logical_root_sequence"),
             (Integer) rs.getObject("contention_resolutions"));
 
+    private static final RowMapper<RunCell> RUN_CELL = (rs, i) -> new RunCell(
+            rs.getLong("id"), rs.getInt("ordinal"), rs.getString("label"),
+            rs.getString("role"), rs.getString("duplex"), rs.getString("band"),
+            (Integer) rs.getObject("bandwidth_mhz"), (Integer) rs.getObject("scs_khz"),
+            (Integer) rs.getObject("dl_arfcn"), (Integer) rs.getObject("ul_arfcn"),
+            (Double) rs.getObject("power_dbm"), rs.getString("state"));
+
     private static final RowMapper<ServingCell> SERVING = (rs, i) -> new ServingCell(
             rs.getString("cell_type"), rs.getString("ssb_band"),
             (Integer) rs.getObject("ssb_arfcn"), (Integer) rs.getObject("ssb_gscn"),
             (Integer) rs.getObject("pci"), (Integer) rs.getObject("ta_offset"));
+
+    /**
+     * The three numbers the reference run view puts on gauges.
+     *
+     * Pass rate is null until the run has been evaluated: a run with no verdict has not
+     * failed its criteria, it simply has not been judged, and showing 0% would read as
+     * the opposite.
+     */
+    private RunGauges gauges(long runId, String status, List<RunStep> steps) {
+        // Duration is taken from the STEP timeline, not from test_run.started_at/ended_at.
+        // evaluate() stamps ended_at with the moment the verdict was computed, which can be
+        // days after the run itself; measuring the run row gave a 54-hour "duration" for a
+        // three-minute bring-up. The steps are what actually ran, so they are what is timed.
+        Long elapsed = null;
+        List<Timestamp[]> span = jdbc.query(
+                "SELECT min(started_at) AS from_ts, max(ended_at) AS to_ts"
+                + " FROM run_step WHERE run_id=?",
+                (rs, i) -> new Timestamp[]{rs.getTimestamp("from_ts"),
+                                           rs.getTimestamp("to_ts")}, runId);
+        if (!span.isEmpty() && span.get(0)[0] != null) {
+            Timestamp from = span.get(0)[0];
+            Timestamp to = span.get(0)[1];
+            long end = "RUNNING".equals(status)
+                    ? Math.min(Instant.now().toEpochMilli(),
+                               to == null ? Instant.now().toEpochMilli() : to.getTime())
+                    : (to == null ? from.getTime() : to.getTime());
+            elapsed = Math.max(0, end - from.getTime());
+        }
+
+        int done = (int) steps.stream().filter(x -> "OK".equals(x.status())).count();
+        int pct = steps.isEmpty() ? 0 : (100 * done) / steps.size();
+
+        int[] counts = jdbc.query(
+                "SELECT count(*) FILTER (WHERE passed) AS ok, count(*) AS n,"
+                + " count(*) FILTER (WHERE passed IS NOT NULL) AS judged"
+                + " FROM run_criterion WHERE run_id=?",
+                (rs, i) -> new int[]{rs.getInt("ok"), rs.getInt("n"), rs.getInt("judged")},
+                runId).stream().findFirst().orElse(new int[]{0, 0, 0});
+
+        Integer passRate = counts[2] == 0 ? null : (100 * counts[0]) / counts[1];
+        return new RunGauges(elapsed, pct, passRate, counts[0], counts[1]);
+    }
+
+    /** Aborts a run in flight. The steps keep whatever they reached. */
+    @Transactional
+    public TestRun cancel(long runId) {
+        jdbc.update("UPDATE test_run SET status='ABORTED', ended_at=?,"
+                + " message='Cancelled by operator' WHERE id=? AND status='RUNNING'",
+                Timestamp.from(Instant.now()), runId);
+        // A step that had not started never ran; one that was mid-flight was cut short.
+        jdbc.update("UPDATE run_step SET status='SKIPPED'"
+                + " WHERE run_id=? AND status IN ('PENDING', 'RUNNING')", runId);
+        return run(runId);
+    }
 
     public List<Instrument> instruments() {
         return jdbc.query("SELECT * FROM instrument ORDER BY ordinal", INSTRUMENT);
@@ -369,6 +434,10 @@ public class LabService {
                 : jdbc.query("SELECT * FROM run_serving_cell WHERE run_id=?", SERVING, runId)
                         .stream().findFirst().orElse(null);
 
-        return new RunBringUp(runId, status, instruments(), steps, rach, cell);
+        List<RunCell> cells = jdbc.query(
+                "SELECT * FROM run_cell WHERE run_id=? ORDER BY ordinal", RUN_CELL, runId);
+
+        return new RunBringUp(runId, status, instruments(), cells, steps, rach, cell,
+                gauges(runId, status, steps));
     }
 }

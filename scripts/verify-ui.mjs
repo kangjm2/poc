@@ -316,6 +316,37 @@ const phases = await page.locator('.panel:has-text("Bring-up sequence") tbody tr
   .allInnerTexts()
 check('접속 절차 단계 포함', phases.includes('Attach'),
   [...new Set(phases)].join(','))
+// per-cell status strip: the reference keeps one on screen permanently, because a
+// cell's state is a condition rather than an event in a sequence.
+const cellCards = await page.locator('.cell-card').count()
+check('셀 상태 스트립', cellCards >= 3, `${cellCards} cells`)
+const states = await page.locator('.cell-state').allInnerTexts()
+check('셀별 CONNECTED/OFF 상태', states.includes('CONNECTED') && states.includes('OFF'),
+  states.join(','))
+// Duration must measure the run, not the wall clock since the data was seeded. It was
+// read from test_run.ended_at, which evaluate() re-stamps, giving a 54-hour "duration"
+// for a three-minute bring-up; it now comes from the step timeline.
+const durText = String(await page.locator('.gauge:has-text("Duration") svg text')
+  .evaluate((t) => t.textContent))
+const durMin = Number(durText.split(':')[0])
+check('실행 시간이 브링업 시간과 일치', Number.isFinite(durMin) && durMin < 60, durText)
+
+const gaugeLabels = await page.locator('.gauge-label').allInnerTexts()
+check('실행 게이지 3종', gaugeLabels.length === 3, gaugeLabels.join(','))
+// SVG <text> is not an HTMLElement, so innerText throws on it; read textContent.
+// The invariant, which holds whether or not this run has been evaluated yet: the gauge
+// reads n/a exactly when the note says the run is unevaluated, and otherwise matches the
+// criteria it claims to summarise. An earlier check evaluates this run, so asserting a
+// fixed value here would only be asserting the order of the checks.
+const passGauge = String(await page.locator('.gauge:has-text("Pass rate") svg text')
+  .evaluate((t) => t.textContent))
+const passNote = await page.locator('.gauge-note').innerText()
+const m = passNote.match(/(\d+) of (\d+) acceptance criteria passed/)
+const consistent = m
+  ? passGauge === `${Math.round((100 * Number(m[1])) / Number(m[2]))} %`
+  : passGauge === 'n/a' && /Not evaluated yet/.test(passNote)
+check('합격률 게이지가 판정 근거와 일치', consistent, `${passGauge} | ${passNote}`)
+
 const rachRows = await page.locator('.panel:has-text("5G NR RACH metrics") tbody tr').count()
 check('RACH 지표 패널', rachRows >= 15, `${rachRows} rows`)
 const cellCells = await page.locator('.panel:has-text("Serving cell") tbody td').allInnerTexts()
