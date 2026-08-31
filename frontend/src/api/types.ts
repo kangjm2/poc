@@ -96,12 +96,18 @@ export interface Threshold {
   ordinal: number; lowerBound: number | null; upperBound: number | null
   color: string; label: string; severity: string
 }
+export interface DerivedKpiResult {
+  kpi: KpiDefinition; valuesComputed: number; referencedKpis: string[]
+}
+
 export interface KpiDefinition {
   name: string; displayName: string; unit: string; category: string
   technology: string; direction: string; decimals: number
   description: string | null
   /** shipped with the product: it has a default scale and cannot be deleted */
   seeded: boolean
+  /** arithmetic formula over other KPIs; null for a measured KPI */
+  expression: string | null
   thresholds: Threshold[]
 }
 

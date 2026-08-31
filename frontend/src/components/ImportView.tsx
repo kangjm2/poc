@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { api } from '../api/client'
-import type { ImportResult } from '../api/types'
+import type { ImportResult, KpiDefinition } from '../api/types'
+import { DerivedKpiPanel } from './DerivedKpiPanel'
 
 /**
  * CSV import.
@@ -19,14 +20,14 @@ export function ImportView({ onImported }: { onImported: () => void }) {
   const [busy, setBusy] = useState(false)
   const [result, setResult] = useState<ImportResult | null>(null)
   const [error, setError] = useState<string | null>(null)
-  const [knownKpis, setKnownKpis] = useState<string[]>([])
+  const [defs, setDefs] = useState<KpiDefinition[]>([])
   const [createUnknown, setCreateUnknown] = useState(false)
   const [jobs, setJobs] = useState<Array<Record<string, unknown>>>([])
 
   const reloadJobs = () => { api.importJobs().then(setJobs).catch(() => {}) }
 
   useEffect(() => {
-    api.kpiDefinitions().then((d) => setKnownKpis(d.map((k) => k.name))).catch(() => {})
+    api.kpiDefinitions().then(setDefs).catch(() => {})
     reloadJobs()
   }, [])
 
@@ -105,13 +106,19 @@ export function ImportView({ onImported }: { onImported: () => void }) {
           </p>
           <p style={{ marginBottom: 0 }}>
             <b>Recognised KPI columns:</b>{' '}
-            <code style={{ fontSize: 11 }}>{knownKpis.join(', ')}</code>
+            <code style={{ fontSize: 11 }}>{defs.map((k) => k.name).join(', ')}</code>
             {' '}&mdash; display names as exported by other analysis tools
             (e.g. <code style={{ fontSize: 11 }}>RSRP (NR SpCell)</code>) are
             matched too, ignoring case and punctuation.
           </p>
         </div>
       </div>
+
+      <DerivedKpiPanel defs={defs}
+                       onChanged={() => {
+                         api.kpiDefinitions().then(setDefs).catch(() => {})
+                         onImported()
+                       }} />
 
       {error && <div className="error">{error}</div>}
 

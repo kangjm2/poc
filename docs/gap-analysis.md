@@ -57,7 +57,7 @@
 |---|---|---|
 | Parameter statistics and benchmarking | ✅ | min/max/avg/p05/p50/p95 + CDF |
 | 세션 간 벤치마킹 비교 | ✅ | 판정(BETTER/WORSE) 포함 |
-| **KPI Workbench (SQL 없이 커스텀 KPI 생성)** | ⛔ | **여전히 가장 큰 단일 격차.** 노드 그래프 빌더 미구현 |
+| **KPI Workbench (SQL 없이 커스텀 KPI 생성)** | ◐ | **수식 기반 파생 KPI**만 구현 — `+ - * / ( )`와 KPI 이름의 산술식. 레퍼런스의 **노드 그래프 편집기(Union·정렬·State Machine)는 미구현**이며, 조건·시간창·상태 기계가 필요한 KPI는 여전히 만들 수 없습니다 |
 | Automated problem survey with drill-down | ✅ | **원인 분류 7종 → 파이 → 사례 그리드 → 시각 이동** 3단 연쇄 구현. 원인은 전부 기존 검출기에서 유도하며 근거 없는 원인은 만들지 않음 |
 | Automated detection of common GSM/UMTS/LTE/5G NR problems | ◐ | weak coverage / interference / overshoot 3종 |
 | 5G Advanced Analytics (pilot pollution, overspilling, weak coverage, bad quality, NSA neighbor list) | ◐ | weak coverage + bad quality 상당. **pilot pollution·overspilling·neighbor list는 이웃 셀 데이터 부재로 불가** |

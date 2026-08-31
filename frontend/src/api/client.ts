@@ -2,7 +2,7 @@ import type {
   AreaBin, Campaign, CellConfig, CellRef, ChannelModel, Comparison, CoverageIssue,
   Degradation, Distribution, DuEndpoint, ImportResult, KpiDefinition, NetworkEvent,
   SeqRange, Series, SessionSummary, SignalingMessage, Snapshot, Statistics, TestRun,
-  RunBringUp, CellBreakdown, ProblemSurvey,
+  RunBringUp, CellBreakdown, ProblemSurvey, DerivedKpiResult,
   Threshold, TrackPoint, UeProfile,
 } from './types'
 
@@ -37,6 +37,22 @@ export const api = {
     get<Series[]>(`/sessions/${id}/series?kpis=${kpis.join(',')}&maxPoints=${maxPoints}`),
   snapshot: (id: number, seq?: number) =>
     get<Snapshot>(`/sessions/${id}/snapshot${seq === undefined ? '' : `?seq=${seq}`}`),
+  createDerivedKpi: async (body: Record<string, unknown>) => {
+    const res = await fetch(`${BASE}/kpi-definitions/derived`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    })
+    const json = await res.json()
+    if (!res.ok) throw new Error(json.message ?? `${res.status}`)
+    return json as DerivedKpiResult
+  },
+  recomputeDerivedKpi: async (name: string) => {
+    const res = await fetch(`${BASE}/kpi-definitions/${name}/recompute`, { method: 'POST' })
+    const json = await res.json()
+    if (!res.ok) throw new Error(json.message ?? `${res.status}`)
+    return json as DerivedKpiResult
+  },
   problemSurvey: (id: number) =>
     get<ProblemSurvey>(`/sessions/${id}/problem-survey`),
   cellBreakdown: (id: number, kpi: string, range?: SeqRange | null) =>

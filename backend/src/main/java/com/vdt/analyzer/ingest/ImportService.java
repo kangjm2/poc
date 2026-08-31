@@ -41,11 +41,14 @@ public class ImportService {
     private final JdbcTemplate jdbc;
     private final KpiCatalog catalog;
     private final ImportJobLog jobLog;
+    private final com.vdt.analyzer.service.DerivedKpiService derived;
 
-    public ImportService(JdbcTemplate jdbc, KpiCatalog catalog, ImportJobLog jobLog) {
+    public ImportService(JdbcTemplate jdbc, KpiCatalog catalog, ImportJobLog jobLog,
+                         com.vdt.analyzer.service.DerivedKpiService derived) {
         this.jdbc = jdbc;
         this.catalog = catalog;
         this.jobLog = jobLog;
+        this.derived = derived;
     }
 
     public record ImportResult(
@@ -90,6 +93,11 @@ public class ImportService {
             applyObservedDecimals(counters, created);
             finaliseSession(sessionId, counters);
             jobLog.succeeded(jobId, sessionId, counters.rows, counters.samples, counters.kpis);
+
+            // A derived KPI is materialised, so a newly imported session has none of its
+            // values until they are computed. Doing it here means an import never leaves
+            // a formula silently absent from the session it should cover.
+            derived.recomputeAll();
 
             log.info("Imported {} samples / {} KPI values from {}",
                     counters.samples, counters.kpis, file.getOriginalFilename());

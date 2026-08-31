@@ -303,6 +303,51 @@ check('세션 리포트 생성', report.status() === 200
 check('리포트가 실제 수치를 담음',
   /<td class="num">\d/.test(reportBody) && !/NaN|undefined|null<\/td>/.test(reportBody))
 
+// 27e. derived KPI - the honest subset of the reference's KPI Workbench. A formula over
+//      existing KPIs, materialised so it behaves like any measured KPI downstream.
+await page.getByRole('button', { name: 'Import' }).click()
+await page.waitForSelector('.panel:has-text("Derived KPIs")')
+const DKPI = 'VERIFY_DL_PER_PRB'
+// The checker must be re-runnable: a KPI left behind by an earlier run would make the
+// create fail with "already exists" and report a defect that is not one.
+await page.request.delete(`${API_BASE}/api/kpi-definitions/${DKPI}`)
+await page.locator('.panel:has-text("Derived KPIs") input').nth(0).fill(DKPI)
+await page.locator('.panel:has-text("Derived KPIs") input').nth(2).fill('Mbps/%')
+await page.locator('input[placeholder*="MAC_DL_THROUGHPUT"]')
+  .fill('MAC_DL_THROUGHPUT / DU_PRB_UTILISATION')
+await page.locator('.panel:has-text("Derived KPIs") button', { hasText: 'Create and compute' })
+  .click()
+await page.waitForTimeout(2500)
+const derivedMsg = await page.locator('.panel:has-text("Derived KPIs")').innerText()
+check('파생 KPI 생성', /values from/.test(derivedMsg), derivedMsg.split('\n').slice(-2)[0])
+
+// a formula the parser must refuse - nothing but arithmetic over known KPIs is expressible
+await page.locator('.panel:has-text("Derived KPIs") input').nth(0).fill('VERIFY_BAD')
+await page.locator('input[placeholder*="MAC_DL_THROUGHPUT"]').fill('(SELECT 1)')
+await page.locator('.panel:has-text("Derived KPIs") button', { hasText: 'Create and compute' })
+  .click()
+await page.waitForTimeout(1200)
+const badMsg = await page.locator('.panel:has-text("Derived KPIs") .error').innerText()
+check('잘못된 수식 거부', /Unknown KPI/.test(badMsg), badMsg)
+
+// the derived KPI must be a first-class KPI everywhere: it appears in the tree and paints
+await page.getByRole('button', { name: 'Analysis' }).click()
+await page.waitForSelector('.tree .kpi')
+await page.locator('.tree-search input').fill(DKPI)
+await page.waitForTimeout(400)
+const derivedInTree = await page.locator('.tree .kpi').count()
+check('파생 KPI가 파라미터 트리에 등장', derivedInTree === 1, `${derivedInTree}`)
+await page.locator('.tree .kpi').first().click()
+// The map only exists on a workbook page that has one; an earlier check left a
+// different tab active, which is why this counted zero rather than failing to paint.
+await page.locator('.workbook-tabs button', { hasText: 'Overview' }).click()
+await page.waitForTimeout(2000)
+const segs = await page.locator('path.leaflet-interactive').count()
+check('파생 KPI가 지도를 칠함', segs > 100, `${segs} segments`)
+await page.locator('.tree-search input').fill('')
+// leave the catalogue as it was found
+await page.request.delete(`${API_BASE}/api/kpi-definitions/${DKPI}`)
+
 // 28. lab bring-up: the instrument chain, its steps, and the attach detail. A virtual
 //     drive test is a chain of instruments, and which link stopped a run is the first
 //     thing a lab engineer needs; a run that jumps QUEUED -> COMPLETED hides all of it.

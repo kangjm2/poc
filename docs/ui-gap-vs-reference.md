@@ -190,7 +190,7 @@ N2 │ SA PCC / TDD │ n78 │ -19.85 dBm/BW   │ BW 100 MHz │ D/U 623334 �
 | ~~P0~~ | ~~Run/Cancel + Duration·Progress·Pass Rate 게이지~~ | §7 — **완료** |
 | ~~P1~~ | ~~원인 분류 → 파이 → 드릴다운~~ | §7.2 — **완료** (`Problem Survey` 탭) |
 | **P1** | 필드→랩 변환 화면(로그 메타·UE 데이터·검출 캐리어·추출된 채널 모델) | §7 `FIELD LOGS PROCESSING` |
-| **P1** | KPI Workbench — 노드 그래프 KPI 빌더 | gap-analysis §1.3의 최대 단일 격차 |
+| **P1** | KPI Workbench — **노드 그래프** 빌더 | 산술식 부분집합은 구현(`Import` 화면의 Derived KPIs). Union·정렬·State Machine 노드는 미구현 |
 | **P2** | 영상 동기화 재생 | §7 `TEST EXECUTION MONITORING` — 데이터 소스가 없어 보류 |
 
 > **합격률 게이지의 규칙**: 아직 평가되지 않은 런은 `n/a`로 표시합니다. 판정을 받지 않은 런은
