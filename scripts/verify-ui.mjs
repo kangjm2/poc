@@ -263,6 +263,34 @@ const shareSum = shares.reduce((a, t) => a + parseFloat(t), 0)
 check('셀별 비율 합계 100%', Math.abs(shareSum - 100) < 0.5, `${shareSum.toFixed(1)}%`)
 await page.screenshot({ path: `${OUT}/26-cells.png`, fullPage: true })
 
+// 27c. problem survey: aggregate by cause, drill to cases, drill to the moment. The
+//      reference's survey is that chain, and we had none of it.
+await page.locator('.workbook-tabs button', { hasText: 'Problem Survey' }).click()
+await page.waitForSelector('.panel:has-text("Problem survey per category") svg path')
+const slices = await page.locator('.panel:has-text("Problem survey per category") svg path').count()
+check('원인별 파이 차트', slices >= 3, `${slices} slices`)
+const shareTexts = await page.locator('.panel:has-text("Problem survey per category") tbody tr td:nth-child(2)')
+  .allInnerTexts()
+const pieSum = shareTexts.reduce((a, t) => a + parseFloat(t), 0)
+check('원인 비율 합계 100%', Math.abs(pieSum - 100) < 0.5, `${pieSum.toFixed(1)}%`)
+const allCases = await page.locator('.panel:has-text("All cases") tbody tr').count()
+// drill into the largest slice; the case list must shrink to that category alone
+await page.locator('.panel:has-text("Problem survey per category") tbody tr').first().click()
+await page.waitForTimeout(300)
+const drilled = await page.locator('.panel table.grid tbody tr').last().isVisible()
+const drilledRows = await page.locator('.panel:has-text("cases") tbody tr').count()
+check('슬라이스 드릴다운', drilledRows > 0 && drilledRows < allCases && drilled,
+  `${allCases} -> ${drilledRows}`)
+const cats = await page.locator('.panel:has-text("cases") tbody tr td:first-child').allInnerTexts()
+check('드릴다운 후 단일 원인만', new Set(cats).size === 1, [...new Set(cats)].join(','))
+// drill to the moment: clicking a case moves the shared cursor
+const beforeCur = await page.locator('.statusbar').first().innerText()
+await page.locator('.panel:has-text("cases") tbody tr').first().click()
+await page.waitForTimeout(900)
+const afterCur = await page.locator('.statusbar').first().innerText()
+check('사례 → 시각 이동', beforeCur !== afterCur, 'cursor moved')
+await page.screenshot({ path: `${OUT}/27-problem-survey.png`, fullPage: true })
+
 // 28. lab bring-up: the instrument chain, its steps, and the attach detail. A virtual
 //     drive test is a chain of instruments, and which link stopped a run is the first
 //     thing a lab engineer needs; a run that jumps QUEUED -> COMPLETED hides all of it.

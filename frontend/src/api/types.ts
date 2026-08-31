@@ -220,3 +220,19 @@ export interface CellBreakdown {
   kpi: string; displayName: string; unit: string; decimals: number
   total: number; cells: CellBar[]
 }
+
+/** One classified problem; the seq range is what the drill-down jumps to. */
+export interface ProblemInstance {
+  category: string; categoryLabel: string; severity: string
+  startSeq: number; endSeq: number
+  latitude: number | null; longitude: number | null
+  detail: string; source: string
+}
+
+export interface ProblemSlice {
+  category: string; label: string; color: string; count: number; share: number
+}
+
+export interface ProblemSurvey {
+  total: number; categories: ProblemSlice[]; instances: ProblemInstance[]
+}

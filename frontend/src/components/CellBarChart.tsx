@@ -19,25 +19,10 @@ const PAD = { left: 46, right: 12, top: 10, bottom: 34 }
 const BAR_H = 18
 const GAP = 6
 
-export function CellBarChart({ sessionId, kpi, range, scaleVersion, onPickCell }: {
-  sessionId: number | null
-  kpi: string
-  range?: SeqRange | null
-  scaleVersion?: number
+function BarChart({ data, onPickCell }: {
+  data: CellBreakdown
   onPickCell?: (pci: number) => void
 }) {
-  const [data, setData] = useState<CellBreakdown | null>(null)
-  const [error, setError] = useState<string | null>(null)
-
-  useEffect(() => {
-    setError(null)
-    if (sessionId == null) return
-    api.cellBreakdown(sessionId, kpi, range).then(setData)
-      .catch((e) => setError(e instanceof Error ? e.message : String(e)))
-  }, [sessionId, kpi, range?.from, range?.to, scaleVersion])
-
-  if (error) return <div className="error">{error}</div>
-  if (!data) return <div className="loading">Loading…</div>
   if (data.cells.length === 0) {
     return <div className="loading">No serving-cell information in this range.</div>
   }
@@ -110,20 +95,7 @@ export function CellBarChart({ sessionId, kpi, range, scaleVersion, onPickCell }
 }
 
 /** The same breakdown as numbers, because a bar chart is not a table. */
-export function CellBreakdownTable({ sessionId, kpi, range, scaleVersion }: {
-  sessionId: number | null
-  kpi: string
-  range?: SeqRange | null
-  scaleVersion?: number
-}) {
-  const [data, setData] = useState<CellBreakdown | null>(null)
-
-  useEffect(() => {
-    if (sessionId == null) return
-    api.cellBreakdown(sessionId, kpi, range).then(setData).catch(() => setData(null))
-  }, [sessionId, kpi, range?.from, range?.to, scaleVersion])
-
-  if (!data) return <div className="loading">Loading…</div>
+function BreakdownTable({ data }: { data: CellBreakdown }) {
   const d = data.decimals
   return (
     <table className="grid">
@@ -153,5 +125,54 @@ export function CellBreakdownTable({ sessionId, kpi, range, scaleVersion }: {
         ))}
       </tbody>
     </table>
+  )
+}
+
+/**
+ * The Cells page: one fetch, two views of it.
+ *
+ * The chart and the table say the same thing in different registers, so they must never
+ * disagree - and fetching twice would let them, besides doubling the query. The page owns
+ * the request; the views are pure.
+ */
+export function CellsPage({ sessionId, kpi, range, scaleVersion, onPickCell }: {
+  sessionId: number | null
+  kpi: string
+  range?: SeqRange | null
+  scaleVersion?: number
+  onPickCell?: (pci: number) => void
+}) {
+  const [data, setData] = useState<CellBreakdown | null>(null)
+  const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (sessionId == null) return
+    setError(null)
+    api.cellBreakdown(sessionId, kpi, range).then(setData)
+      .catch((e) => setError(e instanceof Error ? e.message : String(e)))
+  }, [sessionId, kpi, range?.from, range?.to, scaleVersion])
+
+  if (error) return <div className="error">{error}</div>
+  if (!data) return <div className="loading">Loading…</div>
+
+  return (
+    <>
+      <div className="panel">
+        <header>
+          <span className="title">{data.displayName} per serving cell</span>
+          <span className="meta">ranked by mean, best first</span>
+        </header>
+        <div style={{ padding: 10 }}>
+          <BarChart data={data} onPickCell={onPickCell} />
+        </div>
+      </div>
+      <div className="panel">
+        <header>
+          <span className="title">Serving cell breakdown</span>
+          <span className="meta">{data.cells.length} cells &middot; {data.total} samples</span>
+        </header>
+        <BreakdownTable data={data} />
+      </div>
+    </>
   )
 }

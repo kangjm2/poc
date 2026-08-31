@@ -8,6 +8,7 @@ import com.vdt.analyzer.repo.CellRefRepo;
 import com.vdt.analyzer.repo.EventRepo;
 import com.vdt.analyzer.repo.MessageRepo;
 import com.vdt.analyzer.service.AnalysisService;
+import com.vdt.analyzer.service.ProblemSurvey;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -21,13 +22,16 @@ public class AnalysisController {
     private final CellRefRepo cells;
     private final EventRepo events;
     private final MessageRepo messages;
+    private final ProblemSurvey problems;
 
     public AnalysisController(AnalysisService analysis, CellRefRepo cells,
-                              EventRepo events, MessageRepo messages) {
+                              EventRepo events, MessageRepo messages,
+                              ProblemSurvey problems) {
         this.analysis = analysis;
         this.cells = cells;
         this.events = events;
         this.messages = messages;
+        this.problems = problems;
     }
 
     @GetMapping("/sessions")
@@ -68,6 +72,17 @@ public class AnalysisController {
                                      @RequestParam(required = false) Integer fromSeq,
                                      @RequestParam(required = false) Integer toSeq) {
         return analysis.distribution(id, kpi, fromSeq, toSeq);
+    }
+
+    /**
+     * Problems classified by cause, with every instance addressable.
+     *
+     * The reference's problem survey is a chain - aggregate, then drill to cases, then
+     * drill to the moment - so the response carries both the slices and the instances.
+     */
+    @GetMapping("/sessions/{id}/problem-survey")
+    public ProblemSurvey.Survey problemSurvey(@PathVariable long id) {
+        return problems.survey(id);
     }
 
     /** A KPI aggregated per serving cell - the reference workbook's bar-chart pane. */

@@ -11,7 +11,8 @@ import {
   DegradationPanel, EventList, LegendPanel, MessageList, ParameterGrid, ParameterTree,
 } from './components/Panels'
 import { CompareView } from './components/CompareView'
-import { CellBarChart, CellBreakdownTable } from './components/CellBarChart'
+import { CellsPage } from './components/CellBarChart'
+import { ProblemSurveyPanel } from './components/ProblemSurveyPanel'
 import { StatisticsPanel } from './components/StatisticsPanel'
 import { LabView } from './components/LabView'
 import { ImportView } from './components/ImportView'
@@ -29,6 +30,7 @@ const WORKBOOKS = [
   { id: 'cells', label: 'Cells' },
   { id: 'mobility', label: 'Mobility' },
   { id: 'signaling', label: 'L3 Signalling' },
+  { id: 'problems', label: 'Problem Survey' },
   { id: 'degradation', label: 'Degradation' },
   { id: 'coverage', label: 'Coverage Issues' },
   { id: 'statistics', label: 'Statistics' },
@@ -291,27 +293,12 @@ export function App() {
             </div>
           </div>
         )
+      case 'problems':
+        return <ProblemSurveyPanel sessionId={sessionId} onPick={setCursorSeq} />
       case 'cells':
         return (
-          <>
-            <div className="panel">
-              <header>
-                <span className="title">
-                  {activeDef?.displayName ?? kpi} per serving cell
-                </span>
-                <span className="meta">ranked by mean, best first</span>
-              </header>
-              <div style={{ padding: 10 }}>
-                <CellBarChart sessionId={sessionId} kpi={kpi} range={range}
-                              scaleVersion={scaleVersion} />
-              </div>
-            </div>
-            <div className="panel">
-              <header><span className="title">Serving cell breakdown</span></header>
-              <CellBreakdownTable sessionId={sessionId} kpi={kpi} range={range}
-                                  scaleVersion={scaleVersion} />
-            </div>
-          </>
+          <CellsPage sessionId={sessionId} kpi={kpi} range={range}
+                     scaleVersion={scaleVersion} />
         )
       case 'statistics':
         return (
