@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
-import type { AreaBin, CellRef, TrackPoint } from '../api/types'
+import type { AreaBin, CellRef, MonitoredCell, TrackPoint } from '../api/types'
 
 interface Props {
   track: TrackPoint[]
@@ -12,6 +12,12 @@ interface Props {
   /** When present, tiles replace the raw route so a long drive stays readable. */
   bins?: AreaBin[] | null
   showServingLine?: boolean
+  /**
+   * The monitored set at the cursor. When present, a line is drawn to every cell the
+   * terminal could see, not only the one it was using - which is how pilot pollution
+   * becomes visible on the map rather than inferred from a table.
+   */
+  monitored?: MonitoredCell[] | null
 }
 
 /**
@@ -21,6 +27,7 @@ interface Props {
  */
 export function RouteMap({
   track, cells, cursorSeq, onCursorChange, kpiName, bins, showServingLine = true,
+  monitored = null,
 }: Props) {
   const hostRef = useRef<HTMLDivElement>(null)
   const mapRef = useRef<L.Map | null>(null)
@@ -28,6 +35,7 @@ export function RouteMap({
   const cellLayer = useRef<L.LayerGroup | null>(null)
   const binLayer = useRef<L.LayerGroup | null>(null)
   const servingLine = useRef<L.Polyline | null>(null)
+  const monitoredLines = useRef<L.LayerGroup | null>(null)
   const cursorMarker = useRef<L.CircleMarker | null>(null)
   const [basemapFailed, setBasemapFailed] = useState(false)
 
@@ -161,9 +169,15 @@ export function RouteMap({
       cursorMarker.current.setLatLng([p.latitude, p.longitude])
     }
 
-    // Line from the terminal to its serving cell, so which cell is in charge at this
-    // instant is visible rather than inferred from a PCI number.
+    // Lines from the terminal to the cells it can see. The serving cell is drawn solid
+    // and the merely-detected ones faint, because the question the map answers is not
+    // "which cells exist" but "did the terminal have a clear choice here" - several
+    // strong lines fanning out from one point IS pilot pollution, seen rather than
+    // computed. Weight follows level so the picture is quantitative, not just present.
     if (servingLine.current) { servingLine.current.remove(); servingLine.current = null }
+    if (monitoredLines.current) { monitoredLines.current.remove() }
+    monitoredLines.current = L.layerGroup().addTo(map)
+
     if (showServingLine && p.servingPci != null) {
       const cell = cells.find((c) => c.pci === p.servingPci)
       if (cell?.latitude != null && cell.longitude != null) {
@@ -173,7 +187,28 @@ export function RouteMap({
         ).addTo(map)
       }
     }
-  }, [cursorSeq, track, cells, showServingLine])
+
+    if (showServingLine && monitored) {
+      for (const m of monitored) {
+        if (m.serving) continue
+        const cell = cells.find((c) => c.pci === m.pci && c.arfcn === m.arfcn)
+        if (cell?.latitude == null || cell.longitude == null) continue
+        // A cell within a few dB of the best is competing; one 15 dB down is scenery.
+        const down = Math.abs(m.deltaDb ?? 0)
+        const competing = down <= 6
+        L.polyline(
+          [[p.latitude, p.longitude], [cell.latitude, cell.longitude]],
+          {
+            color: competing ? '#d4783c' : '#9aa0a6',
+            weight: competing ? 2 : 1,
+            dashArray: '2 4',
+            opacity: competing ? 0.85 : 0.4,
+          },
+        ).bindTooltip(`PCI ${m.pci} · ${m.rsrp} dBm · ${m.deltaDb} dB`)
+         .addTo(monitoredLines.current)
+      }
+    }
+  }, [cursorSeq, track, cells, showServingLine, monitored])
 
   return (
     <div className="panel map-panel">

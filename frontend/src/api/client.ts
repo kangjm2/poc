@@ -4,6 +4,7 @@ import type {
   SeqRange, Series, SessionSummary, SignalingMessage, Snapshot, Statistics, TestRun,
   RunBringUp, CellBreakdown, ProblemSurvey, DerivedKpiResult, FieldToLab,
   Threshold, TrackPoint, UeProfile,
+  MonitoredSet, NeighbourBreakdown, PollutionSpan,
 } from './types'
 
 const BASE = '/api'
@@ -167,6 +168,16 @@ export const api = {
   },
 
   importJobs: () => get<Array<Record<string, unknown>>>('/import/jobs'),
+
+  monitoredSet: (id: number, seq: number) =>
+    get<MonitoredSet>(`/sessions/${id}/monitored-set?seq=${seq}`),
+
+  neighbourBreakdown: (id: number, from?: number | null, to?: number | null) =>
+    get<NeighbourBreakdown>(`/sessions/${id}/neighbour-breakdown`
+      + (from == null ? '' : `?fromSeq=${from}`)
+      + (to == null ? '' : `${from == null ? '?' : '&'}toSeq=${to}`)),
+
+  pilotPollution: (id: number) => get<PollutionSpan[]>(`/sessions/${id}/pilot-pollution`),
 
   // A report opens rather than downloads: it is meant to be read, and printed to PDF
   // from the browser if the reader wants a file.

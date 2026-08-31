@@ -279,3 +279,37 @@ export interface FieldToLab {
   existingChannelModelId: number | null
   existingChannelModelName: string | null
 }
+
+/**
+ * One cell in the monitored set, as the reference's `RSCP monitored set` dock lists it:
+ * channel, cell identity, and the two measured quantities. `deltaDb` is the level relative
+ * to the strongest cell at that instant, which is what tells an engineer at a glance
+ * whether the terminal had a clear choice or a crowded one.
+ */
+export interface MonitoredCell {
+  arfcn: number; pci: number; rsrp: number; rsrq: number
+  serving: boolean; rank: number; deltaDb: number | null
+}
+
+export interface MonitoredSet {
+  seq: number; ts: string | null; servingPci: number | null
+  cells: MonitoredCell[]
+  /** Present only when the set needs explaining - e.g. a fade left one cell detectable. */
+  note: string | null
+}
+
+export interface NeighbourBar {
+  arfcn: number; pci: number; band: string | null
+  samplesSeen: number; samplesServing: number; seenPct: number
+  meanRsrp: number; p95Rsrp: number; samplesStrong: number
+}
+
+export interface NeighbourBreakdown {
+  totalSamples: number; strongWithinDb: number; bars: NeighbourBar[]
+}
+
+/** A stretch where several cells compete and none dominates. */
+export interface PollutionSpan {
+  fromSeq: number; toSeq: number; fromTs: string; toTs: string
+  maxCells: number; meanBestRsrp: number; pcis: number[]
+}

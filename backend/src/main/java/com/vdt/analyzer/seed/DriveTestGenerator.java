@@ -22,14 +22,50 @@ public class DriveTestGenerator {
     public record Site(int pci, int arfcn, String band, int gscn, double lat, double lon,
                        int azimuth, double eirpDbm) {}
 
+    /**
+     * One cell the terminal could measure at a sample, serving or not.
+     *
+     * These are not invented alongside the serving cell - they ARE the serving cell's
+     * calculation. The loop below already evaluates path loss for every site at every
+     * sample in order to pick the strongest and to sum interference; until now it threw
+     * all but the winner away. Keeping them is what makes the monitored set agree with the
+     * map by construction rather than by luck.
+     */
+    public record Neighbour(int pci, int arfcn, double rsrp, double rsrq) {}
+
     /** One generated sample: position plus every KPI at that instant. */
     public record Point(int seq, double lat, double lon, double speedKmh, int servingPci,
                         double rsrp, double rsrq, double sinr, double dlThroughput,
                         double ulThroughput, double bler, double cqi, double mcs,
                         double rank, double txPower,
-                        double prbUtilisation, double activeUes, double harqRetxRate) {}
+                        double prbUtilisation, double activeUes, double harqRetxRate,
+                        List<Neighbour> monitoredSet) {}
 
     private static final double NOISE_DBM = -110.0;
+
+    /**
+     * Below this a NEIGHBOUR is not reported at all.
+     *
+     * A terminal measures what it can detect. A cell that exists but is too weak produces
+     * no measurement, and the honest representation of that is no row - not a row pinned to
+     * the floor, which would read as "measured, and weak".
+     *
+     * Deliberately ABOVE the -125 clamp the levels themselves are held to. Setting the two
+     * equal let a neighbour land on the clamp floor at the same rounded value as the
+     * serving cell, and a monitored set sorted by level then had a coin-flip about which
+     * of them came first - the screen could show the strongest cell as one the terminal
+     * was not using. Separating the two means no reported neighbour is ever at the clamp
+     * value, so that tie cannot arise.
+     *
+     * The serving cell is exempt: it is measured because the terminal is camped on it, and
+     * its row carries the same value as the RSRP KPI whatever that value is. In a deep
+     * fade the monitored set therefore collapses towards the serving cell alone, which is
+     * what a coverage hole actually looks like.
+     */
+    private static final double DETECTION_FLOOR_DBM = -123.0;
+
+    /** The most cells a terminal reports at once, strongest first. */
+    private static final int MAX_MONITORED = 8;
 
     private final Random random;
     private final List<Site> sites;
@@ -69,23 +105,36 @@ public class DriveTestGenerator {
             double bestRsrp = -Double.MAX_VALUE;
             int bestPci = sites.get(0).pci();
             double interferenceMw = 0;
-            for (Site s : sites) {
+            // Every site's level at this sample, kept rather than discarded: the monitored
+            // set is built from these below, so it is the same calculation the serving cell
+            // came out of and cannot disagree with it.
+            double[] siteRsrp = new double[sites.size()];
+            for (int k = 0; k < sites.size(); k++) {
+                Site s = sites.get(k);
                 // 3GPP UMa-style NLOS path loss. Distance is in METRES; using kilometres
                 // here silently produces implausibly strong signal everywhere.
                 double dMetres = Math.max(25.0, haversineKm(pos[0], pos[1], s.lat(), s.lon()) * 1000.0);
                 double pathLoss = 32.4 + 20 * Math.log10(3.5) + 31.9 * Math.log10(dMetres);
                 double lobe = azimuthLoss(pos, s);
                 double rsrp = s.eirpDbm() + rsrpBias - pathLoss - lobe + shadow;
+                siteRsrp[k] = rsrp;
                 if (rsrp > bestRsrp) { bestRsrp = rsrp; bestPci = s.pci(); }
                 interferenceMw += Math.pow(10, rsrp / 10.0);
             }
 
-            double rsrp = bestRsrp;
+            // The tunnel attenuates the whole radio environment, so it is applied to every
+            // cell alike rather than to the serving one only. Attenuating just the serving
+            // cell would put neighbours ABOVE it inside the tunnel, and the screen would
+            // then show a monitored set whose strongest entry is not the cell being used -
+            // a contradiction with the map that no amount of plausible-looking numbers
+            // would excuse. Applying it uniformly is also order-preserving, so the serving
+            // cell stays the strongest by construction.
+            double depth = 0;
             if (tunnel != null && i >= tunnel[0] && i <= tunnel[1]) {
-                double depth = 22 + 6 * Math.sin(Math.PI * (i - tunnel[0]) / (double) (tunnel[1] - tunnel[0] + 1));
-                rsrp -= depth;
+                depth = 22 + 6 * Math.sin(Math.PI * (i - tunnel[0]) / (double) (tunnel[1] - tunnel[0] + 1));
             }
-            rsrp = clamp(rsrp, -125, -55);
+
+            double rsrp = clamp(bestRsrp - depth, -125, -55);
 
             double servingMw = Math.pow(10, rsrp / 10.0);
             double othersMw = Math.max(0, interferenceMw - servingMw);
@@ -120,10 +169,48 @@ public class DriveTestGenerator {
             double activeUes = Math.max(1, Math.round(3 + 2 * Math.sin(i / 300.0)
                     + random.nextGaussian()));
 
+            // The monitored set. The serving cell is in it, carrying the SAME rsrp and rsrq
+            // that become its KPI values rather than a separately derived pair: a user who
+            // reads the serving row off the monitored-set dock and the RSRP trace off the
+            // chart must see one number, not two that nearly agree.
+            List<Neighbour> monitored = new ArrayList<>(sites.size());
+            double noiseMw = Math.pow(10, NOISE_DBM / 10.0);
+            for (int k = 0; k < sites.size(); k++) {
+                Site s = sites.get(k);
+                if (s.pci() == bestPci) {
+                    monitored.add(new Neighbour(s.pci(), s.arfcn(), round(rsrp, 1), round(rsrq, 1)));
+                    continue;
+                }
+                // Rounded BEFORE the floor is applied, so the test is on the value that
+                // actually gets stored. Testing the full-precision level instead let
+                // -122.96 pass the -123 floor and then round to exactly -123.0 on the way
+                // into the row - a reported level at a floor that is supposed to mean
+                // "not reported".
+                double level = round(clamp(siteRsrp[k] - depth, -125, -55), 1);
+                // A cell too weak to detect produces no entry at all. The row count per
+                // sample therefore varies, and that variation is itself the measurement.
+                if (level <= DETECTION_FLOOR_DBM) continue;
+                // This cell's own signal-to-rest ratio, mapped by the same curve the serving
+                // RSRQ uses, so the column means the same thing down the whole table. The
+                // gaussian term the serving value carries is deliberately absent: it models
+                // receiver noise on the cell being demodulated, and adding an independent
+                // draw per neighbour would let the ranking flicker between samples for no
+                // physical reason.
+                double cellMw = Math.pow(10, level / 10.0);
+                double restMw = Math.max(0, interferenceMw * Math.pow(10, -depth / 10.0) - cellMw);
+                double ratio = clamp(10 * Math.log10(cellMw / (restMw + noiseMw)), -8, 30);
+                double nRsrq = clamp(-3 - (30 - ratio) * 0.45, -22, -5);
+                monitored.add(new Neighbour(s.pci(), s.arfcn(), round(level, 1), round(nRsrq, 1)));
+            }
+            monitored.sort((a, b) -> Double.compare(b.rsrp(), a.rsrp()));
+            if (monitored.size() > MAX_MONITORED) {
+                monitored = new ArrayList<>(monitored.subList(0, MAX_MONITORED));
+            }
+
             out.add(new Point(i, pos[0], pos[1], round(clamp(speed, 0, 120), 1), bestPci,
                     round(rsrp, 1), round(rsrq, 1), round(sinr, 1), round(dl, 1), round(ul, 1),
                     round(bler, 2), cqi, mcs, rank, round(tx, 1),
-                    round(prb, 1), activeUes, round(harq, 2)));
+                    round(prb, 1), activeUes, round(harq, 2), List.copyOf(monitored)));
         }
         return out;
     }

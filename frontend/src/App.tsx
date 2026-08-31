@@ -2,8 +2,8 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { api } from './api/client'
 import type {
   AreaBin, CellRef, CoverageIssue, Degradation, Distribution, KpiDefinition,
-  NetworkEvent, SeqRange, Series, SessionSummary, SignalingMessage, Snapshot,
-  TrackPoint,
+  MonitoredSet, NetworkEvent, SeqRange, Series, SessionSummary, SignalingMessage,
+  Snapshot, TrackPoint,
 } from './api/types'
 import { RouteMap } from './components/RouteMap'
 import { TimeSeriesChart } from './components/TimeSeriesChart'
@@ -12,6 +12,7 @@ import {
 } from './components/Panels'
 import { CompareView } from './components/CompareView'
 import { CellsPage } from './components/CellBarChart'
+import { MonitoredSetDock, MonitoredSetPage } from './components/MonitoredSetPanel'
 import { ProblemSurveyPanel } from './components/ProblemSurveyPanel'
 import { FieldToLabPanel } from './components/FieldToLabPanel'
 import { StatisticsPanel } from './components/StatisticsPanel'
@@ -29,6 +30,7 @@ const WORKBOOKS = [
   { id: 'throughput', label: 'Throughput' },
   { id: 'fronthaul', label: 'Fronthaul' },
   { id: 'cells', label: 'Cells' },
+  { id: 'neighbours', label: 'Monitored Set' },
   { id: 'mobility', label: 'Mobility' },
   { id: 'signaling', label: 'L3 Signalling' },
   { id: 'problems', label: 'Problem Survey' },
@@ -57,6 +59,10 @@ export function App() {
   const [series, setSeries] = useState<Series[]>([])
   const [dist, setDist] = useState<Distribution | null>(null)
   const [snapshot, setSnapshot] = useState<Snapshot | null>(null)
+  // Fetched once per cursor move and shared by the dock table, the map lines and the
+  // monitored-set bars. Three components showing one instant must not each ask for it -
+  // besides the wasted requests, they could render different answers mid-flight.
+  const [monitored, setMonitored] = useState<MonitoredSet | null>(null)
   const [events, setEvents] = useState<NetworkEvent[]>([])
   const [messages, setMessages] = useState<SignalingMessage[]>([])
   const [degradations, setDegradations] = useState<Degradation[]>([])
@@ -139,6 +145,15 @@ export function App() {
     if (sessionId == null) return
     api.snapshot(sessionId, cursorSeq).then(setSnapshot).catch(() => { /* seq may be out of range */ })
   }, [sessionId, cursorSeq, scaleVersion])
+
+  useEffect(() => {
+    if (sessionId == null) { setMonitored(null); return }
+    let live = true
+    api.monitoredSet(sessionId, cursorSeq)
+      .then((d) => { if (live) setMonitored(d) })
+      .catch(() => { if (live) setMonitored(null) })
+    return () => { live = false }
+  }, [sessionId, cursorSeq])
 
   useEffect(() => {
     if (sessionId == null || binSize === 0) { setBins(null); return }
@@ -242,8 +257,13 @@ export function App() {
       case 'mobility':
         return (
           <>
+            {/* The mobility page is where cell relationships are read, so this is the map
+                that draws lines to the monitored cells as well as the serving one. The
+                other maps stay uncluttered: a fan of lines is an investigation aid, not
+                something every view needs. */}
             <RouteMap track={track} cells={cells} cursorSeq={cursorSeq}
-                      onCursorChange={setCursorSeq} kpiName={activeDef?.displayName ?? kpi} />
+                      onCursorChange={setCursorSeq} kpiName={activeDef?.displayName ?? kpi}
+                      monitored={monitored?.cells ?? null} />
             <div className="panel">
               <header>
                 <span className="title">Cells</span>
@@ -299,6 +319,9 @@ export function App() {
         return <FieldToLabPanel sessionId={sessionId} />
       case 'problems':
         return <ProblemSurveyPanel sessionId={sessionId} onPick={setCursorSeq} />
+      case 'neighbours':
+        return <MonitoredSetPage sessionId={sessionId} set={monitored}
+                                 onJump={setCursorSeq} />
       case 'cells':
         return (
           <CellsPage sessionId={sessionId} kpi={kpi} range={range}
@@ -521,6 +544,12 @@ export function App() {
                       ))}
                     </tbody>
                   </table>
+                </div>
+              </div>
+              <div className="dock-section" style={{ maxHeight: 170 }}>
+                <h3>Monitored Set</h3>
+                <div className="content" style={{ maxHeight: 140 }}>
+                  <MonitoredSetDock data={monitored} />
                 </div>
               </div>
               <div className="dock-section" style={{ maxHeight: 190 }}>
