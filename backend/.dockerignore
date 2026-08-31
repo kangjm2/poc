@@ -1,0 +1,5 @@
+# The build context is backend/ only. Everything the image needs is pom.xml + src.
+target/
+*.iml
+.idea/
+.vscode/

@@ -304,17 +304,75 @@ API는 호출자가 보낸 라벨도 그대로 저장하므로, 경계와 라벨
 
 | 항목 | 값 |
 |---|---|
-| 백엔드 | `:8080`, 실행 가능 JAR (`scripts/backend.sh start|stop|restart`) |
-| 프론트엔드 | `:4173`, **빌드 산출물**을 서빙 (`scripts/frontend.sh start|stop`) |
+| 백엔드 | `:8080`, 실행 가능 JAR |
+| 프론트엔드 | `:4173`, **빌드 산출물**을 서빙 |
 | DB 마이그레이션 | Flyway, 기동 시 자동 (`V1` 스키마 → `V2` 파티셔닝·랩 도메인 → `V3` 미사용 테이블 제거) |
 | 시드 | 빈 DB에서만 실행. 4개 세션(도심 2빌드·고속도로·프론트홀 주입)과 랩 캠페인 |
 | 압축 | 응답 gzip |
 
-프로세스 관리는 **pid 파일 기반**입니다. `pgrep -f`로 죽이면 스크립트를 실행 중인
-셸까지 매칭되므로 쓰지 않습니다.
+### 7.1 두 가지 기동 방식
 
-> 기동 스크립트는 API가 응답하면 준비 완료로 봅니다. 시드는 그 직후에 끝나므로,
-> 기동 직후 곧바로 DB를 조회하면 아직 0건일 수 있습니다.
+| | 컨테이너 | 호스트 직접 |
+|---|---|---|
+| 기동 | `docker compose up -d --build` | `scripts/backend.sh start` · `scripts/frontend.sh start` |
+| 정지 | `docker compose down` (`-v`면 데이터까지) | `scripts/*.sh stop` |
+| 정적 서빙 | nginx | `vite preview` |
+| DB | `postgres:16-alpine` 컨테이너, 이름 있는 볼륨 | 호스트 PostgreSQL |
+| 설정 | `.env` (`.env.example` 참고) | 환경변수 또는 `application.yml` 기본값 |
+
+포트를 양쪽 모두 `:8080`/`:4173`으로 맞춘 것은 의도적입니다. §6의 세 검사기가
+`BASE`/`API`를 그대로 둔 채 어느 쪽 스택에도 붙습니다.
+
+호스트 방식의 프로세스 관리는 **pid 파일 기반**입니다. `pgrep -f`로 죽이면 스크립트를
+실행 중인 셸까지 매칭되므로 쓰지 않습니다.
+
+### 7.2 컨테이너 구성
+
+세 서비스가 순서대로 올라오며, 각 단계는 **앞 단계가 healthy가 된 뒤에** 시작합니다.
+
+```
+db (postgres:16-alpine)   pg_isready -U vdt -d vdt
+  └─ backend              wget /api/sessions   ← 스키마 + 시드까지 끝나야 200
+       └─ frontend        wget /
+```
+
+- **백엔드 이미지**: Maven 빌드 스테이지 → JRE 런타임 스테이지. 런타임에는 JDK도
+  빌드 도구도 없고, 비루트 사용자(`vdt`)로 실행합니다. 힙은 `-XX:MaxRAMPercentage=75`로
+  **컨테이너 메모리 한도**에서 잡습니다 — 이 플래그는 한도가 실제로 걸려 있을 때만
+  의미가 있으므로(한도가 없으면 JVM이 호스트 RAM을 읽습니다) compose가
+  `mem_limit`(`BACKEND_MEMORY`, 기본 2 GB)를 함께 지정합니다. 분석 부하 실측은
+  약 350 MB입니다.
+- **Maven 로컬 저장소**는 `/root/.m2`가 아니라 `/m2` 캐시 마운트입니다. `/root/.m2`
+  위에 마운트하면 미러용 베이스 이미지가 거기 넣어둔 `settings.xml`을 가리게 되는데,
+  그건 `MAVEN_IMAGE`를 둔 목적과 정면으로 어긋납니다.
+- **`# syntax=` 지시자는 쓰지 않습니다.** 그 줄은 build arg로 바꿀 수 없는
+  docker.io 이미지를 강제로 당겨오므로, 역시 미러 전용 환경에서 베이스를 갈아끼울 수
+  있게 한 의도를 깹니다. 쓰는 기능(`RUN --mount=type=cache`)은 Docker 23+의 기본
+  프런트엔드가 이미 지원합니다.
+- **프론트엔드 이미지**: `npm ci` → `vite build` → nginx가 `dist/`를 서빙.
+  `npm run build`가 `tsc -b`를 포함하므로 **타입 오류는 이미지 빌드를 실패시킵니다.**
+- **`/api` 프록시**: 개발 중에는 `vite preview`가, 컨테이너에서는 nginx가 같은 일을
+  합니다(`frontend/nginx/default.conf`). 덕분에 프론트엔드는 어느 쪽에서도 상대경로
+  `/api`만 호출하며(`api/client.ts`), 환경마다 달라지는 빌드타임 API URL이 없습니다.
+  업스트림은 Docker 내장 DNS로 **매 요청 재확인**하므로, 백엔드 컨테이너를 새로
+  만들어 IP가 바뀌어도 nginx를 재시작할 필요가 없습니다.
+- **베이스 이미지는 build arg**입니다(`MAVEN_IMAGE`, `JRE_IMAGE`, `NODE_IMAGE`,
+  `NGINX_IMAGE`). 사설 레지스트리 미러나 사내 CA를 넣은 베이스를 써야 하는 빌드가
+  Dockerfile을 고치지 않고 갈아끼울 수 있습니다. 값을 주지 않으면 Dockerfile의
+  기본값이 그대로 쓰입니다.
+
+### 7.3 준비 완료의 의미
+
+시드는 `ApplicationRunner`가 아니라 `SmartInitializingSingleton`에서 돕니다. 순서가
+핵심입니다 — `ApplicationRunner`로 두면 시드가 **Tomcat이 listen을 시작한 약 2.5초 뒤**에
+끝나므로, `/api/sessions`의 200을 준비 완료로 읽는 쪽(컨테이너 HEALTHCHECK,
+`scripts/backend.sh`, `docker compose up` 직후 실행한 검사기)이 **빈 DB를 상대로
+green이 될 수 있었습니다.**
+
+`ContextRefreshedEvent`도 늦습니다. Spring Boot는 웹 서버를 `finishRefresh()` 안의
+`SmartLifecycle`에서 띄우는데, 그 이벤트는 그보다 나중에 발행됩니다. 반면
+`SmartInitializingSingleton`은 여전히 빈 팩토리 초기화 안이라 웹 서버보다 확실히
+앞섭니다. 로그로 확인되는 순서는 `Seed complete …` → `Tomcat started on port 8080`.
 
 ---
 

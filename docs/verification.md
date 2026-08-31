@@ -15,8 +15,12 @@ tables after start: 9
 
 Flyway 마이그레이션과 시드가 최초 기동 시 자동 적용됨을 확인했습니다.
 
-> 참고: `backend.sh`의 준비 확인은 API 응답 시점을 봅니다. 시드는 그 직후 완료되므로,
+> 참고(당시): `backend.sh`의 준비 확인은 API 응답 시점을 봅니다. 시드는 그 직후 완료되므로,
 > 기동 직후 곧바로 DB를 조회하면 아직 0건일 수 있습니다.
+>
+> **이후 해소.** 컨테이너 HEALTHCHECK를 만들면서 같은 경합이 드러나 시드를
+> `SmartInitializingSingleton`으로 옮겼습니다. 이제 시드가 끝난 뒤에야 웹 서버가
+> listen을 시작합니다. 근거와 순서는 [`architecture.md`](architecture.md) §7.3.
 
 ## 2. API (14개 엔드포인트)
 

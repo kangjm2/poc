@@ -8,5 +8,10 @@ dist/
 *.class
 .DS_Store
 
+# Compose overrides: .env holds real credentials and ports for a given host.
+# .env.example is the tracked template.
+.env
+docker-compose.override.yml
+
 # TypeScript incremental build cache — machine-local, changes on every build
 *.tsbuildinfo
