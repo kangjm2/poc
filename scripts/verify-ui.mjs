@@ -249,6 +249,20 @@ check('파라미터 검색 - 내부명 매칭', (await page.locator('.tree .kpi'
 await page.locator('.tree-search input').fill('')
 await page.waitForTimeout(300)
 
+// 27b. bar chart per serving cell - the reference workbook's second pane is a bar
+//      chart, and it was the one chart type we had no equivalent of.
+await page.locator('.workbook-tabs button', { hasText: 'Cells' }).click()
+await page.waitForSelector('.cell-bar')
+const bars = await page.locator('.cell-bar rect').count()
+check('셀별 바 차트', bars >= 3, `${bars} bars`)
+const barRows = await page.locator('.panel:has-text("Serving cell breakdown") tbody tr').count()
+check('셀 분해 표', barRows === bars, `${barRows} rows vs ${bars} bars`)
+const shares = await page.locator('.panel:has-text("Serving cell breakdown") tbody tr td:nth-child(6)')
+  .allInnerTexts()
+const shareSum = shares.reduce((a, t) => a + parseFloat(t), 0)
+check('셀별 비율 합계 100%', Math.abs(shareSum - 100) < 0.5, `${shareSum.toFixed(1)}%`)
+await page.screenshot({ path: `${OUT}/26-cells.png`, fullPage: true })
+
 // 28. lab bring-up: the instrument chain, its steps, and the attach detail. A virtual
 //     drive test is a chain of instruments, and which link stopped a run is the first
 //     thing a lab engineer needs; a run that jumps QUEUED -> COMPLETED hides all of it.

@@ -11,6 +11,7 @@ import {
   DegradationPanel, EventList, LegendPanel, MessageList, ParameterGrid, ParameterTree,
 } from './components/Panels'
 import { CompareView } from './components/CompareView'
+import { CellBarChart, CellBreakdownTable } from './components/CellBarChart'
 import { StatisticsPanel } from './components/StatisticsPanel'
 import { LabView } from './components/LabView'
 import { ImportView } from './components/ImportView'
@@ -25,6 +26,7 @@ const WORKBOOKS = [
   { id: 'radio', label: 'Radio Quality' },
   { id: 'throughput', label: 'Throughput' },
   { id: 'fronthaul', label: 'Fronthaul' },
+  { id: 'cells', label: 'Cells' },
   { id: 'mobility', label: 'Mobility' },
   { id: 'signaling', label: 'L3 Signalling' },
   { id: 'degradation', label: 'Degradation' },
@@ -288,6 +290,28 @@ export function App() {
               <MessageList messages={messages} cursorTs={snapshot?.ts ?? null} />
             </div>
           </div>
+        )
+      case 'cells':
+        return (
+          <>
+            <div className="panel">
+              <header>
+                <span className="title">
+                  {activeDef?.displayName ?? kpi} per serving cell
+                </span>
+                <span className="meta">ranked by mean, best first</span>
+              </header>
+              <div style={{ padding: 10 }}>
+                <CellBarChart sessionId={sessionId} kpi={kpi} range={range}
+                              scaleVersion={scaleVersion} />
+              </div>
+            </div>
+            <div className="panel">
+              <header><span className="title">Serving cell breakdown</span></header>
+              <CellBreakdownTable sessionId={sessionId} kpi={kpi} range={range}
+                                  scaleVersion={scaleVersion} />
+            </div>
+          </>
         )
       case 'statistics':
         return (

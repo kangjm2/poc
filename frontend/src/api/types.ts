@@ -206,3 +206,17 @@ export interface RunBringUp {
   runId: number; status: string; chain: Instrument[]; steps: RunStep[]
   rach: RachReport | null; servingCell: ServingCell | null
 }
+
+/** One serving cell's share of a session, for the per-cell bar chart. */
+export interface CellBar {
+  pci: number; arfcn: number | null; band: string | null; cellType: string | null
+  sampleCount: number; share: number
+  meanValue: number | null; minValue: number | null
+  maxValue: number | null; p05Value: number | null
+  color: string; binLabel: string
+}
+
+export interface CellBreakdown {
+  kpi: string; displayName: string; unit: string; decimals: number
+  total: number; cells: CellBar[]
+}

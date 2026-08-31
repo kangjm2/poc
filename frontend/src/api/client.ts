@@ -2,7 +2,7 @@ import type {
   AreaBin, Campaign, CellConfig, CellRef, ChannelModel, Comparison, CoverageIssue,
   Degradation, Distribution, DuEndpoint, ImportResult, KpiDefinition, NetworkEvent,
   SeqRange, Series, SessionSummary, SignalingMessage, Snapshot, Statistics, TestRun,
-  RunBringUp,
+  RunBringUp, CellBreakdown,
   Threshold, TrackPoint, UeProfile,
 } from './types'
 
@@ -37,6 +37,8 @@ export const api = {
     get<Series[]>(`/sessions/${id}/series?kpis=${kpis.join(',')}&maxPoints=${maxPoints}`),
   snapshot: (id: number, seq?: number) =>
     get<Snapshot>(`/sessions/${id}/snapshot${seq === undefined ? '' : `?seq=${seq}`}`),
+  cellBreakdown: (id: number, kpi: string, range?: SeqRange | null) =>
+    get<CellBreakdown>(`/sessions/${id}/cell-breakdown?kpi=${kpi}${rangeQs(range)}`),
   distribution: (id: number, kpi: string, range?: SeqRange | null) =>
     get<Distribution>(`/sessions/${id}/distribution?kpi=${kpi}${rangeQs(range)}`),
   statistics: (id: number, kpi: string, range?: SeqRange | null) =>

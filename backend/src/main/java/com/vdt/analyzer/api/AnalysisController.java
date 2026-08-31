@@ -70,6 +70,14 @@ public class AnalysisController {
         return analysis.distribution(id, kpi, fromSeq, toSeq);
     }
 
+    /** A KPI aggregated per serving cell - the reference workbook's bar-chart pane. */
+    @GetMapping("/sessions/{id}/cell-breakdown")
+    public CellBreakdown cellBreakdown(@PathVariable long id, @RequestParam String kpi,
+                                       @RequestParam(required = false) Integer fromSeq,
+                                       @RequestParam(required = false) Integer toSeq) {
+        return analysis.cellBreakdown(id, kpi, fromSeq, toSeq);
+    }
+
     @GetMapping("/sessions/{id}/statistics")
     public Statistics statistics(@PathVariable long id, @RequestParam String kpi,
                                  @RequestParam(required = false) Integer fromSeq,
