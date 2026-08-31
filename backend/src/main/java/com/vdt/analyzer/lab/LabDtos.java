@@ -51,6 +51,39 @@ public final class LabDtos {
             int progressPct, Instant startedAt, Instant endedAt, String message,
             List<Criterion> criteria) {}
 
+    /** One instrument in the chain the run executes on, ordered capture -> DUT. */
+    public record Instrument(
+            Long id, String role, String name, String model, String serial,
+            String firmware, String address, int ordinal, String notes) {}
+
+    /**
+     * One bring-up step. The reference toolset is a chain of instruments, so a run has a
+     * sequence of things that must each succeed before a KPI means anything; this is the
+     * record of which ones did.
+     */
+    public record RunStep(
+            Long id, int ordinal, String phase, String name, Long instrumentId,
+            String instrumentName, String status, Instant startedAt, Instant endedAt,
+            Long durationMs, String detail) {}
+
+    /** Random-access outcome, mirroring the fields the reference keeps in its RACH dock. */
+    public record RachReport(
+            String rachType, String rachReason, String rachResult, Integer accessDelayMs,
+            String preambleFormat, Integer preambleIndex, Integer preambleCount,
+            Double preambleInitialPwrDbm, Double preambleStepDb, Integer responseWindowSlots,
+            Integer raRnti, Integer ssbId, Integer timingAdvance, Double pathlossDb,
+            Double puschPowerDbm, Integer logicalRootSequence, Integer contentionResolutions) {}
+
+    /** The cell the DUT camped on: PCI alone does not identify a cell. */
+    public record ServingCell(
+            String cellType, String ssbBand, Integer ssbArfcn, Integer ssbGscn,
+            Integer pci, Integer taOffset) {}
+
+    /** Everything about how a run was brought up, for the run detail view. */
+    public record RunBringUp(
+            Long runId, String status, List<Instrument> chain, List<RunStep> steps,
+            RachReport rach, ServingCell servingCell) {}
+
     public record CreateRunRequest(
             Long campaignId, String name, Long channelModelId, Long cellConfigId,
             Long ueProfileId, Long duEndpointId, Long sessionId,

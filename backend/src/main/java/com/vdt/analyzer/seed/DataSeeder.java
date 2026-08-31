@@ -131,6 +131,10 @@ public class DataSeeder implements SmartInitializingSingleton {
             LabSeed.seed(jdbc, ids.get(0), ids.get(1));
             log.info("Seeded lab campaign with {} runs",
                     jdbc.queryForObject("SELECT count(*) FROM test_run", Long.class));
+            BringUpSeed.seed(jdbc);
+            log.info("Seeded bring-up chain: {} instruments, {} run steps",
+                    jdbc.queryForObject("SELECT count(*) FROM instrument", Long.class),
+                    jdbc.queryForObject("SELECT count(*) FROM run_step", Long.class));
         }
 
         log.info("Seed complete: {} sessions, {} samples", sessions.count(),

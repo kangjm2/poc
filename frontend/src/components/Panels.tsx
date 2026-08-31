@@ -207,29 +207,69 @@ export function DegradationPanel({
   )
 }
 
+/**
+ * Parameter tree, with the search box the reference tool puts above it.
+ *
+ * The search is not a nicety at this scale. The reference documents 4000+ L1-L3 KPI
+ * statistics and puts a search field at the top of the Parameters dock for exactly that
+ * reason; a user who arrives knowing the parameter's name should never have to expand
+ * categories to find it. Matching covers the display name, the internal name and the
+ * category, because a user coming from the reference tool may know any of the three.
+ */
 export function ParameterTree({
   defs, active, onSelect,
 }: { defs: KpiDefinition[]; active: string; onSelect: (name: string) => void }) {
-  const byCat = defs.reduce<Record<string, KpiDefinition[]>>((acc, d) => {
+  const [query, setQuery] = useState('')
+
+  const q = query.trim().toLowerCase()
+  const matches = q
+    ? defs.filter((d) =>
+        d.displayName.toLowerCase().includes(q)
+        || d.name.toLowerCase().includes(q)
+        || d.category.toLowerCase().includes(q))
+    : defs
+
+  const byCat = matches.reduce<Record<string, KpiDefinition[]>>((acc, d) => {
     (acc[d.category] ??= []).push(d)
     return acc
   }, {})
+
   return (
     <div className="tree">
-      {Object.entries(byCat).map(([cat, list]) => (
-        <div key={cat}>
-          <div className="cat">{cat}</div>
-          {list.map((d) => (
-            <div key={d.name}
-                 className={`kpi${d.name === active ? ' active' : ''}`}
-                 onClick={() => onSelect(d.name)}
-                 title={d.description ?? undefined}>
-              <span>{d.displayName}</span>
-              <span className="unit">{d.unit}</span>
-            </div>
-          ))}
+      <div className="tree-search">
+        <input
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          placeholder="Search parameters"
+          aria-label="Search parameters"
+        />
+        {q && (
+          <button onClick={() => setQuery('')} title="Clear search" aria-label="Clear search">
+            &times;
+          </button>
+        )}
+      </div>
+      {q && (
+        <div className="tree-count">
+          {matches.length} of {defs.length} parameters
         </div>
-      ))}
+      )}
+      {matches.length === 0
+        ? <div className="tree-empty">No parameter matches &ldquo;{query}&rdquo;.</div>
+        : Object.entries(byCat).map(([cat, list]) => (
+          <div key={cat}>
+            <div className="cat">{cat}</div>
+            {list.map((d) => (
+              <div key={d.name}
+                   className={`kpi${d.name === active ? ' active' : ''}`}
+                   onClick={() => onSelect(d.name)}
+                   title={d.description ?? undefined}>
+                <span>{d.displayName}</span>
+                <span className="unit">{d.unit}</span>
+              </div>
+            ))}
+          </div>
+        ))}
     </div>
   )
 }

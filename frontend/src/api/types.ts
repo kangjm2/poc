@@ -168,3 +168,41 @@ export interface ImportResult {
   mappedKpis: string[]; ignoredColumns: string[]; createdKpis: string[]
   message: string | null
 }
+
+/** One instrument in the lab chain, ordered from capture host to the device. */
+export interface Instrument {
+  id: number; role: string; name: string; model: string | null
+  serial: string | null; firmware: string | null; address: string | null
+  ordinal: number; notes: string | null
+}
+
+/** One bring-up step of a run. */
+export interface RunStep {
+  id: number; ordinal: number; phase: string; name: string
+  instrumentId: number | null; instrumentName: string | null
+  status: string; startedAt: string | null; endedAt: string | null
+  durationMs: number | null; detail: string | null
+}
+
+/** Random-access outcome, the fields the reference tool keeps in its RACH dock. */
+export interface RachReport {
+  rachType: string | null; rachReason: string | null; rachResult: string | null
+  accessDelayMs: number | null; preambleFormat: string | null
+  preambleIndex: number | null; preambleCount: number | null
+  preambleInitialPwrDbm: number | null; preambleStepDb: number | null
+  responseWindowSlots: number | null; raRnti: number | null; ssbId: number | null
+  timingAdvance: number | null; pathlossDb: number | null
+  puschPowerDbm: number | null; logicalRootSequence: number | null
+  contentionResolutions: number | null
+}
+
+/** The cell the device camped on. PCI alone does not identify a cell. */
+export interface ServingCell {
+  cellType: string | null; ssbBand: string | null; ssbArfcn: number | null
+  ssbGscn: number | null; pci: number | null; taOffset: number | null
+}
+
+export interface RunBringUp {
+  runId: number; status: string; chain: Instrument[]; steps: RunStep[]
+  rach: RachReport | null; servingCell: ServingCell | null
+}
