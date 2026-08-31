@@ -526,9 +526,20 @@ export function App() {
               {snapshot ? new Date(snapshot.ts).toISOString().slice(11, 19) : '-'}
             </b></span>
             <div className="progress"
+                 // Press and drag scrubs, the way the charts already do. Click-only
+                 // meant the one control that spans the whole run could not be swept.
                  onMouseDown={(e) => {
                    const box = e.currentTarget.getBoundingClientRect()
-                   setCursorSeq(Math.round(((e.clientX - box.left) / box.width) * maxSeq))
+                   const seek = (clientX: number) => setCursorSeq(Math.max(0, Math.min(maxSeq,
+                     Math.round(((clientX - box.left) / box.width) * maxSeq))))
+                   seek(e.clientX)
+                   const move = (ev: MouseEvent) => seek(ev.clientX)
+                   const up = () => {
+                     window.removeEventListener('mousemove', move)
+                     window.removeEventListener('mouseup', up)
+                   }
+                   window.addEventListener('mousemove', move)
+                   window.addEventListener('mouseup', up)
                  }}>
               <div className="fill" style={{ width: `${(cursorSeq / Math.max(1, maxSeq)) * 100}%` }} />
               <div className="knob" style={{ left: `${(cursorSeq / Math.max(1, maxSeq)) * 100}%` }} />

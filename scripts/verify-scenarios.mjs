@@ -328,6 +328,12 @@ scenario('S5 · Coverage optimization')
     && gj.features.length > 0 && 'RSRP' in (gj.features[0].properties ?? {}),
     `${gj.features?.length} features`)
 
+  // A typo in the KPI name used to yield 200 and a file full of nulls, which looks
+  // like a successful export until someone opens it in a planning tool.
+  const badKpi = await page.request.get(`${API}/api/sessions/${meta.id}/export.geojson?kpi=NOPE`)
+  step('an unknown KPI is refused rather than exported as nulls',
+    badKpi.status() === 400, `HTTP ${badKpi.status()}`)
+
   await page.locator('.toolbar select').nth(2).selectOption('0')
   await page.waitForTimeout(900)
 }
@@ -621,6 +627,22 @@ scenario('S11 · Unknown columns become KPIs instead of being dropped')
     await page.waitForTimeout(400)
     return page.locator('.panel:has(header .title:text("Import result"))').innerText()
   }
+
+  // A file with no recognisable KPI column fails outright. The job row has to
+  // outlive the rollback, or the history can only ever show successes - which is
+  // not what anyone opens a history for.
+  const rejected = await page.request.post(`${API}/api/import/csv`, {
+    multipart: {
+      file: { name: 'S11 no-kpi.csv', mimeType: 'text/csv',
+              buffer: Buffer.from('lat,lon,nothing_useful\n65.0,25.0,1\n') },
+      sessionName: 'S11 no-kpi',
+    },
+  })
+  const jobs = await apiGet('/api/import/jobs')
+  const failed = jobs.find((j) => j.filename === 'S11 no-kpi.csv')
+  step('an import with no usable column fails and is recorded with its reason',
+    rejected.status() === 400 && failed?.status === 'FAILED' && /No column matched/.test(failed?.message ?? ''),
+    `HTTP ${rejected.status()}, history: ${failed?.status ?? 'absent'}`)
 
   const off = await importFile('S11 dropped', false)
   step('by default an unrecognised column is reported as dropped',
