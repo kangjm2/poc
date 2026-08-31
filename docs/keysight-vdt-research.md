@@ -21,9 +21,30 @@
 
 VDT(Virtual Drive Test, 가상 드라이브 테스트)는 **차량으로 실제 도로를 주행하며 수행하던 무선 품질 측정을,
 현장에서 수집한 데이터를 근거로 실험실에서 재현(replay)하는 방식**입니다. Keysight의 상용 제품명은
-**S8709A Virtual Drive Test Toolset**이며, 채널 에뮬레이션 + 네트워크 에뮬레이션 + **Nemo Outdoor** +
-5G Device Analytics를 하나로 묶은 구성입니다 【확인됨】. 이 구조에서 **Nemo Outdoor는 "현장 데이터 수집" 쪽에
-위치**하며, 수집된 데이터가 테스트 시나리오로 임포트되어 실험실에서 반복 재생됩니다 【확인됨】. 핵심 가치는
+**S8709A Virtual Drive Test Toolset**이며, 채널 에뮬레이션 + 네트워크 에뮬레이션 + **Nemo Tools**를
+하나로 묶은 구성입니다 【확인됨】. 이 구조에서 **Nemo는 "현장 데이터 수집" 쪽에
+위치**하며, 수집된 데이터가 테스트 시나리오로 임포트되어 실험실에서 반복 재생됩니다 【확인됨】.
+
+> **"Nemo가 Keysight의 유일한 VDT 솔루션인가?" — 아닙니다** 【확인됨】. 두 가지 이유로 틀립니다.
+> **첫째, Nemo는 VDT 솔루션이 아니라 그 구성요소입니다.** "Virtual Drive Test" 이름을 다는 제품은
+> S8709A 툴셋이고, Nemo는 그 안의 한 재료입니다 — 2016년과 2019년 VDT 문서는 Nemo를 아예
+> **옵션**("Optional Keysight Nemo Drive and indoor testing tools for field testing support")으로
+> 표기합니다. 저장소가 보유한 Nemo PDF 8건 전체에 문자열 "virtual"이 **한 번도** 나오지 않는 것도
+> 같은 방향의 근거입니다.
+> **둘째, S8709A조차 유일한 VDT 제품이 아닙니다.** 세 세대의 VDT 문서를 확보했습니다 —
+> `5992-1598EN`(2016, Anite VDT Toolset: Propsim F32 + Anite 9000 + Nemo),
+> `5992-3870EN`(2019, VDT Toolset: PROPSIM F64 + 네트워크 에뮬레이터 **또는 실제 망** + Nemo Outdoor),
+> `3120-1513`(2020, S8709A: UXM 5G + PROPSIM 5G + Nemo Tools). 별도 주문 가능한
+> `C8709000A` Virtual Drive Test Software도 존재합니다.
+>
+> 정확한 정리는 이렇습니다. **Nemo는 Keysight의 드라이브 테스트 "측정·분석" 제품군**입니다
+> (Outdoor=랩탑 측정, Handy=핸드헬드 측정, Invex II=차량 벤치마킹, Analyze=사후 분석,
+> Cloud=플릿 관리). **VDT는 그 Nemo 필드 로그를 소비해 PROPSIM+UXM으로 재생하는 "필드→랩 리플레이
+> 아키텍처"**입니다.
+>
+> 한 가지 뉘앙스: 현재 keysight.com의 `/products/ue-ran-and-core-emulators/cellular-virtual-drive-test-emulation.html`
+> 은 S8709A 단일 제품 페이지로 연결됩니다. **현재 카탈로그 분류상으로는** "virtual drive test
+> emulation = S8709A"가 맞으며, "유일하다"는 인상은 여기서 비롯된 것으로 보입니다. 핵심 가치는
 현장 주행으로는 불가능한 **반복 재현성과 통제 가능성**이고, 고속철도·터널·고속도로 같이 현장 재현이 어렵거나
 비싼 시나리오에서 특히 유효합니다 【확인됨】. POC 관점에서 하드웨어 없이 모사 가능한 부분은 VDT 장비 자체가
 아니라 **드라이브 테스트 데이터의 시각화·분석 UI 계층**입니다(§9).
@@ -201,8 +222,14 @@ VDT의 입력을 만드는 도구이며, 동시에 랩에서 단말을 계측하
 
 ### 5.1 구성 장비와 모델번호 【확인됨】
 
-S8709A는 단일 장비가 아니라 **Keysight 자사 스택을 묶는 통합 계층**입니다. 아래 모델번호는 모두
-Keysight 제품 페이지를 직접 fetch 하여 확인했습니다.
+S8709A는 단일 장비가 아니라 **Keysight 자사 스택을 묶는 통합 계층**입니다.
+
+> **아래 표를 읽는 법** — 이 표는 두 종류의 주장을 섞고 있습니다. **계열**(UXM + PROPSIM + Nemo)은
+> S8709A 기술개요 본문이 명시하므로 확정입니다. 그러나 **개별 모델번호**(`E7515B`, `F8800A`,
+> `F8820A`)가 S8709A 구성에 쓰인다는 것은 **어떤 문서로도 확인되지 않았습니다** — 2026-08-31
+> 재검증에서도 뒷받침하는 출처를 찾지 못했습니다. 각 모델번호가 실재하는 Keysight 제품이라는 사실과,
+> 그것이 S8709A에 들어간다는 주장은 다릅니다. 후자는 【추정】입니다.
+> (참고로 PROPSIM F64의 현행 데이터시트 모델번호는 `F8800B`입니다.)
 
 | 계층 | 모델번호 | 제품명 | 역할 |
 |---|---|---|---|
@@ -636,7 +663,7 @@ Measurement(id, name, device, location, start_ts, end_ts)
 | Nemo Outdoor | Flyer / Brochure | `5992-2057` | [PDF](https://www.keysight.com/us/en/assets/7018-05580/flyers/5992-2057.pdf) | 드라이브 테스트 측정 솔루션. 지원 모뎀 목록(Qualcomm X35~X85, Exynos, MediaTek), 5G NR SA/NSA·CA·빔 KPI·DSS, KPI 목록, "fully customizable UI". **Nemo Outdoor 실제 화면 스크린샷 포함** |
 | Nemo Analyze | Flyer / Brochure | `5992-2047` | [PDF](https://www.keysight.com/us/en/assets/7018-05573/flyers/5992-2047.pdf) | 사후 분석 도구. 다중 페이지 workbook, KPI Workbench, 5G NR 빔포밍 3D 시각화, Google Maps/OSM 매핑, PostgreSQL, NPS 리포팅, TEMS/SwissQual 임포트. **Nemo Analyze 실제 화면 스크린샷 포함** |
 | Nemo Handy | Flyer / Brochure | `5992-2050` | [PDF](https://www.keysight.com/us/en/assets/7018-05575/flyers/5992-2050.pdf) | Android 기반 측정 앱. 공중 인터페이스 진단 정보, QoS/QoE 측정 |
-| **Keysight Nemo Firmware Manager User Guide** | **User Guide (정식 매뉴얼)** | 매뉴얼 부품번호 `NTC00000A-900005` | [PDF](https://update.nemo.fi/updates/Nemo_Firmware_Manager_User_Guide_2.51.pdf) | **공개적으로 접근 가능한 유일한 정식 Nemo 매뉴얼.** Edition 3.00, 2022년 1월, SW 2.51 문서화. 35페이지, 스크린샷 42장. §11.2의 근거 |
+| **Keysight Nemo Firmware Manager User Guide** | **User Guide (정식 매뉴얼)** | 매뉴얼 부품번호 `NTC00000A-900005` | [PDF](https://update.nemo.fi/updates/Nemo_Firmware_Manager_User_Guide_2.51.pdf) | **공개적으로 접근 가능한 유일한 정식 Nemo 매뉴얼.** Edition 3.00, 2022년 1월, SW 2.51 문서화. 35페이지. **2026-08-31에 저장소에서 제거** — 단말 펌웨어 플래싱 유틸리티로, 분석 UI와 무관 |
 
 #### 11.1.2 검색으로 확인된 추가 공식 자료 (URL 존재 확인, 본문 미정독)
 
@@ -816,38 +843,14 @@ https://www.keysight.com/content/dam/keysight/en/doc/ungate/<type>/<litNumber>.p
 | 워크북 탭 바 | 하단 | Outdoor와 동일한 다중 페이지 탭 구조 | 【확인됨】 |
 | 리포트 산출물 | 별도 | **CDF 곡선 + 히스토그램 막대** 조합 차트(예: `RSCP best active set`), 범례 포함 | 【확인됨】 |
 
-#### 11.2.4 Nemo Firmware Manager 화면 (정식 매뉴얼 내 스크린샷) 【확인됨】
+#### 11.2.4 · 11.2.5 (삭제됨 — 2026-08-31)
 
-정식 매뉴얼에서 직접 판독한 유일한 화면으로, **Nemo 유틸리티 계열의 디자인 관용구**를 보여줍니다.
+Firmware Manager 화면과 Handy IoT 모바일 화면의 재구성이 여기 있었습니다. 두 절의 근거였던
+`NTC00000A-900005`(단말 펌웨어 플래싱 유틸리티)와 `5992-2774`(NB-IoT 수집 앱 브로슈어)를
+**이 프로젝트의 목적과 무관**하다고 판단해 저장소에서 제거했으며(사유는
+[`assets/MANIFEST.md`](assets/MANIFEST.md) §0), 근거가 사라진 서술을 남겨두지 않기 위해 함께 지웠습니다.
 
-- Windows 네이티브 흰색 타이틀 바 + 클래식 메뉴 바(`File`, `Help`)
-- **다크 테마 본문** — 배경 `#0C0D11`에 **육각형(hexagon) 패턴** 모티프
-- 2분할 레이아웃: 좌측 작업 영역 / 우측 디바이스 정보 패널(배경 `#1E2542` 남색)
-- 우측 정보 필드: `IMEI`, `Serial number`, `Android version`, `Build number`, `Baseband version`,
-  `CSC version`, `Country`, `Nemo ID/version`, 헤더는 `<Device not found>` 형식의 꺾쇠 표기
-- 안내 배너: 채도 높은 파랑 `#3399FE` 바탕 + 굵은 검정 글자
-- 상태 표시: 좌하단 **녹색 텍스트** 3줄(`Device driver ready` / `Connected to the firmware server` / `Ready to update devices`)
-- 하단 흰색 푸터 밴드에 **Keysight 로고(적색 파형 마크)** 와 **NEMO 워드마크(남색)** 배치
-
-> 관찰: Nemo 계열의 테마 선택은 **제품 성격이 아니라 플랫폼**을 따릅니다 — **Windows 데스크톱
-> 측정 도구(Outdoor/Analyze)는 라이트 테마 + 리본**, **Android 앱(Handy)과 Windows 유틸리티(Firmware
-> Manager)는 다크 테마**입니다 【확인됨】. (§11.2.5 참조)
-
-#### 11.2.5 Nemo Handy 화면 재구성 (모바일) 【확인됨】
-
-출처: `5992-2774.pdf`(Nemo Handy IoT 브로슈어) 1페이지 내장 이미지(2000×1520). 두 개의 화면이 실려 있습니다.
-
-| 화면 요소 | 위치 | 역할 | 확인 수준 |
-|---|---|---|---|
-| 앱 바 | 최상단 | 햄버거 메뉴 `☰` + 화면 제목(`IoT Parameters` / `IoT Measurements`), 우측 끝에 삼각형 리사이즈 어포던스 | 【확인됨】 |
-| 파라미터 목록 | 상단 | 좌측 라벨 + 우측 값의 2열 정렬. 관측 항목: `Test Round`(14/100), `Last Ping RTT`, `Last UDP Echo RTT`, `Operation Mode`, `Power Save Mode`(I-DRX), `DCI Repetitions/Count/Format`, `RACH Preamble Repetitions`, `RACH CE Level` | 【확인됨】 |
-| 차트 패널 | 중단 (세로 적층) | 각 패널 상단에 **범례 헤더 행** — 색상 스와치 + KPI명 + **현재값**. 예: `■ RSRP -109.70`, `■ Serving SNR 7.20 dB`, `■ Ping RTT 280 ms` | 【확인됨】 |
-| 차트 본문 | 각 패널 | 검정 배경, 점선 그리드, **좌·우 이중 Y축**(두 계열 동시 표시), X축은 경과 시간(`m:ss`) | 【확인됨】 |
-| 하단 상태 바 | 최하단 | **파란 배경**. 좌측 `Measurement State` / `Measuring ICMP Ping`, 우측 `Test system state` / `Ready` | 【확인됨】 |
-
-**설계상 핵심 관찰**: 데스크톱 Nemo가 "커서 동기화된 다중 패널"이라면, 모바일 Nemo는
-**"KPI명 + 현재값 + 미니 시계열"을 한 카드로 묶어 세로로 쌓는" 구조**입니다. 좁은 화면에서 현재값을
-즉시 읽히게 하는 것이 우선이며, 이 카드 구성은 POC의 반응형 레이아웃에 그대로 차용할 만합니다 【추정】.
+분석 UI의 시각 관용구는 §11.2.2(Outdoor)와 §11.2.3(Analyze)이 훨씬 강한 근거를 제공합니다.
 
 ---
 

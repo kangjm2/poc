@@ -14,6 +14,7 @@ VDT 장비·소프트웨어 자체는 별도 저장소에서 개발되었으며,
 |---|---|
 | [`docs/user-guide.md`](docs/user-guide.md) | **사용자 가이드.** 작업별 안내 — 주행 분석, 빌드 비교, 랩 캠페인, 커버리지, 임포트, 색상 스케일, KPI 추가 |
 | [`docs/architecture.md`](docs/architecture.md) | **아키텍처.** 구성 요소, 요청 흐름, 데이터 모델, API 전체, 전체를 지탱하는 설계 규칙 |
+| [`docs/ui-gap-vs-reference.md`](docs/ui-gap-vs-reference.md) | **UI 격차 분석.** 실제 제품 스크린샷 대비 우리 화면을 요소 단위로 대조 |
 | [`docs/keysight-vdt-research.md`](docs/keysight-vdt-research.md) | 기존 솔루션 리서치. 제품 구성, 아키텍처, KPI, 경쟁 지형, UI 구조, 시각 디자인 언어 |
 | [`docs/requirements-analysis.md`](docs/requirements-analysis.md) | 기능 인벤토리(FR-xx), 추가 기능(NEW-xx), 화면 명세, 데이터 모델, 검증 기준 |
 | [`docs/assets/MANIFEST.md`](docs/assets/MANIFEST.md) | 참고 자료 출처·취득 방법 |

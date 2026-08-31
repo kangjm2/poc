@@ -15,7 +15,7 @@
 | `nemo-analyze_workbook_line-and-bar.png` | Analyze 워크북 (사후 분석 — 우리 Analysis 화면의 직접 대응물) |
 | `nemo-outdoor_5g-nr_main-window_2560x1440.png` | Outdoor 실시간 측정 (연결·수집 중 화면) |
 | `nemo-analyze_troubleshooting.jpeg` | 자동 문제 조사 → 드릴다운 → 원인 규명 |
-| `s8709a-vdt_fig3-single-interface.png` | VDT 툴셋 구성 (Nemo → UXM → PROPSIM → DUT) |
+| `s8709a-vdt_fig2-equipment-chain.png` | VDT 툴셋 구성 (Nemo → UXM → PROPSIM → DUT) |
 
 ---
 
@@ -105,7 +105,7 @@ Outdoor 메인 윈도우에서 직접 판독한 요소입니다.
 
 ## 5. VDT 구성 — S8709A 대비
 
-`s8709a-vdt_fig3-single-interface.png`가 보여주는 실제 체인:
+`s8709a-vdt_fig2-equipment-chain.png`가 보여주는 실제 체인:
 
 ```
 Nemo Tools ──Field-To-Lab Conversion──▶ UXM 5G Wireless Test Platform ──▶ PROPSIM 5G Channel Emulator ──▶ Device Under Test
@@ -134,3 +134,60 @@ Nemo Tools ──Field-To-Lab Conversion──▶ UXM 5G Wireless Test Platform 
 이웃 셀(monitored set) 계열은 **스키마에 이웃 셀 측정이 없어서** 막혀 있습니다.
 파이/드릴다운의 "Missing neighbour" 원인도 같은 이유로 지금은 산출할 수 없습니다.
 이는 UI 문제가 아니라 데이터 모델 문제이므로 별도 증분으로 다룹니다.
+
+
+---
+
+## 7. 2026-08-31 보강 — 실제 VDT UI를 뒤늦게 확보
+
+§5를 쓸 때 근거로 삼은 `s8709a-vdt_fig3-single-interface.png`는 **UI가 아니라 블록 다이어그램**이었습니다
+(현재는 `s8709a-vdt_fig2-equipment-chain.png`로 개명). **진짜 Figure 3**은 S8709A 기술개요 5페이지에
+있었고, 이전 추출 스크립트의 픽셀 임계값에 걸려 누락돼 있었습니다. 이번에 추출했습니다.
+
+| 화면 | 실제 구성 | 우리 상태 |
+|---|---|---|
+| **`FIELD LOGS PROCESSING`** | 로그 메타(제품·측정일시·소요·거리·평균속도), UE 데이터(제조사·모델·펌웨어·칩셋), 검출 캐리어 표(Link/Technology/Cell ID/Frequency/Band), 경로 지도, DUT 측정 셀 파워 차트, **Extracted channel model** 상태, `Generate simulation` 버튼 | ⛔ 브링업 1단계 "Convert field capture to channel model" **한 줄**로 압축돼 있음. 레퍼런스는 **화면 하나를 통째로** 씀 |
+| **`RUN VIEW`** | Project/Campaign 드롭다운, `Run`/`Cancel Test Case`, **Duration·Progress·Pass Rate 게이지 3개**, 테스트 케이스 그리드(시작시각·진행바·상태·판정·리포트), `Result KPI` 표(Measured value / Comparison operator / Expected value) | ◐ 판정 표는 **대응물 있음**(Acceptance criteria: KPI/Aggregate/Condition/Actual/Result). 게이지 3종과 Run/Cancel은 ⛔ |
+| **`TEST EXECUTION MONITORING`** | 주행 시점 영상 + 게이지 오버레이 + 경로 지도 인셋 + 좌우 차트 카드 열 + 타임라인 커서 | ◐ 공유 시간 커서·지도·차트는 있으나 **영상 동기화 없음** |
+
+### 7.1 셀 상태 스트립 — 접속 상태의 표준 관용구
+
+S8709A 문서에는 셋업·연결 절차가 **한 줄도 없습니다.** 그래서 S8709A가 자기 구성요소로 지목한
+UXM 5G의 문서(`S8711A`)를 확보했고, 거기서 접속 상태를 어떻게 보여주는지 확인했습니다.
+
+```
+L1 │ PCC / FDD    │ n78 │ -60   dBm/15kHz │ BW  10 MHz │ D/U 18300  │ CONNECTED
+L2 │ SCC / FDD    │ n78 │       dBm/15kHz │ BW 300     │ D/U 18300  │ OFF
+N1 │ NSA PCC/TDD  │ n78 │ -19.85 dBm/BW   │ BW 100 MHz │ D/U 623334 │ CONNECTED
+N2 │ SA PCC / TDD │ n78 │ -19.85 dBm/BW   │ BW 100 MHz │ D/U 623334 │ OFF
+```
+
+우측 세로 액션은 `Main` / `Cell Off` / `RRC Release` / `Power Control` / `CA/HO` / `Blind Handover`,
+하단 탭은 `System` / `Scheduling` / `Cell` / `PHY` / `MAC·RLC·PDCP` / `RRC·NAS` / `UE Info`입니다.
+
+**우리 상태**: 장비 체인은 있으나 **셀 단위 상태 스트립이 없습니다.** 브링업 시퀀스가 "cell started"를
+한 줄로 말할 뿐, 어느 셀이 몇 MHz로 어느 ARFCN에서 붙어 있는지는 보이지 않습니다.
+`S8708A`는 같은 것을 `UE Attached` / `Calibration` 두 램프(회색→녹색)로 표시합니다.
+
+> **정직성 경계**: `S8711A`/`S8708A`는 S8709A **자체가 아니라 같은 계열 형제 툴셋**의 문서입니다.
+> S8709A가 UXM 5G를 구성요소로 명시하므로 그 UI가 랙 안에 있다는 것은 확실하지만, S8709A 운용자가
+> 저 화면을 직접 조작하는지는 공개 문서로 확인되지 않았습니다.
+
+### 7.2 문제 조사 — 2026년 판으로 갱신
+
+`nemo-analyze_problem-survey-drilldown_1836x1123.png`(2026 판)가 §4의 2020년 UMTS 판을 대체합니다.
+원인 분류가 LTE/5G 세대로 바뀌었습니다 — `Dropped RRC connection` 2.44% / `File transfer dropped`
+82.93% / `Handover failure` 9.76% / `Data server connect failure` 4.88%. 드릴다운 그리드는
+**`Handover type`(LTE FDD 1800 → LTE FDD 1800)과 `HOF cause`** 열을 갖고, 최종 워크북은 RSRP 트레이스
+위에 **핸드오버 마커**를 찍고 `PDN CONNECTIVITY REQUEST`를 IE 단위로 디코드해 보여줍니다.
+
+### 7.3 우선순위 갱신
+
+| 순위 | 항목 | 근거 |
+|---|---|---|
+| **P0** | 셀 상태 스트립(셀별 role·band·BW·ARFCN·전력·CONNECTED/OFF) | §7.1 |
+| **P0** | 바 차트 | §2 |
+| **P0** | Run/Cancel + Duration·Progress·Pass Rate 게이지 | §7 `RUN VIEW` |
+| **P1** | 필드→랩 변환 화면(로그 메타·UE 데이터·검출 캐리어·추출된 채널 모델) | §7 `FIELD LOGS PROCESSING` |
+| **P1** | 원인 분류 → 파이 → 드릴다운(`HOF cause` 같은 원인 열 포함) | §7.2 |
+| **P2** | 영상 동기화 재생 | §7 `TEST EXECUTION MONITORING` — 데이터 소스가 없어 보류 |
