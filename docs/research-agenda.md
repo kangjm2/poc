@@ -126,7 +126,7 @@
 
 **왜 지금** — kpi_threshold 시드가 업계 통례 추정에 근거. 기존 Nemo 사용자가 화면을 열었을 때 '내가 쓰던 구간 그대로'라는 인상이 전환 저항을 낮추는 직접 요소(요구사항 §1.1 UX 정체성 보존 전략).
 
-**방법** — (1) docs/assets/reference-pdfs의 나머지 그림 전수 재추출 — 5992-2005EN Figure들과 troubleshooting/data-views/benchmarking 이미지에 Color Legends 패널이 더 있는지 원본 해상도 판독(부록 A pymupdf 절차 재사용). (2) 실패 시 TEMS/XCAP/ROMES 공개 문서에서 업계 기본 구간 교차 수집('업계 관행'으로 격상). (3) 그래도 미확보면 TS 38.133 보고 범위에서 유도하고 '자체 기본값' 명시 표기.
+**방법** — (1) docs/assets/reference-pdfs의 나머지 그림 전수 재추출 — 5992-2005EN Figure들과 troubleshooting/problem-survey/benchmarking 이미지에 Color Legends 패널이 더 있는지 원본 해상도 판독(부록 A pymupdf 절차 재사용). (2) 실패 시 TEMS/XCAP/ROMES 공개 문서에서 업계 기본 구간 교차 수집('업계 관행'으로 격상). (3) 그래도 미확보면 TS 38.133 보고 범위에서 유도하고 '자체 기본값' 명시 표기.
 
 ### A16. 경쟁 분석기의 자동 문제 탐지 분류체계 (ROMES NPA·TEMS·XCAP)  ·  수익 중 / 노력 중 / competitor-landscape
 
