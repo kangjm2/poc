@@ -185,9 +185,13 @@ N2 │ SA PCC / TDD │ n78 │ -19.85 dBm/BW   │ BW 100 MHz │ D/U 623334 �
 
 | 순위 | 항목 | 근거 |
 |---|---|---|
-| **P0** | 셀 상태 스트립(셀별 role·band·BW·ARFCN·전력·CONNECTED/OFF) | §7.1 |
-| **P0** | 바 차트 | §2 |
-| **P0** | Run/Cancel + Duration·Progress·Pass Rate 게이지 | §7 `RUN VIEW` |
+| ~~P0~~ | ~~셀 상태 스트립~~ | §7.1 — **완료** |
+| ~~P0~~ | ~~바 차트~~ | §2 — **완료** (`Cells` 탭) |
+| ~~P0~~ | ~~Run/Cancel + Duration·Progress·Pass Rate 게이지~~ | §7 — **완료** |
+| ~~P1~~ | ~~원인 분류 → 파이 → 드릴다운~~ | §7.2 — **완료** (`Problem Survey` 탭) |
 | **P1** | 필드→랩 변환 화면(로그 메타·UE 데이터·검출 캐리어·추출된 채널 모델) | §7 `FIELD LOGS PROCESSING` |
-| **P1** | 원인 분류 → 파이 → 드릴다운(`HOF cause` 같은 원인 열 포함) | §7.2 |
+| **P1** | KPI Workbench — 노드 그래프 KPI 빌더 | gap-analysis §1.3의 최대 단일 격차 |
 | **P2** | 영상 동기화 재생 | §7 `TEST EXECUTION MONITORING` — 데이터 소스가 없어 보류 |
+
+> **합격률 게이지의 규칙**: 아직 평가되지 않은 런은 `n/a`로 표시합니다. 판정을 받지 않은 런은
+> 기준을 통과하지 못한 것이 아니라 아직 판단되지 않은 것이고, 0%로 쓰면 정반대로 읽힙니다.

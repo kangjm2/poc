@@ -88,15 +88,19 @@ final class BringUpSeed {
             long runId = runIds.get(i);
             boolean executed = i == 0;
             seedSteps(jdbc, runId, executed);
+            seedCells(jdbc, runId, executed);
             if (executed) {
                 seedAttachDetail(jdbc, runId);
                 // A run whose whole chain came up and whose measurement is recorded is
                 // not still queued. It is finished and waiting to be evaluated - which is
                 // the state the Evaluate button exists for.
+                // 09:08:38 is where the step timeline actually ends: 191.97 s of steps
+                // plus thirteen 2 s settling gaps from 09:05:00. Picking a round number
+                // instead would put the run row and its own steps in disagreement.
                 jdbc.update("UPDATE test_run SET status='COMPLETED', progress_pct=100,"
                         + " started_at=?, ended_at=? WHERE id=?",
                         Timestamp.from(Instant.parse("2026-08-29T09:05:00Z")),
-                        Timestamp.from(Instant.parse("2026-08-29T09:08:12Z")), runId);
+                        Timestamp.from(Instant.parse("2026-08-29T09:08:38Z")), runId);
             }
         }
     }
@@ -127,6 +131,24 @@ final class BringUpSeed {
                     executed ? Timestamp.from(to) : null,
                     executed ? s.detail() : null);
         }
+    }
+
+    /**
+     * The cells the run stands up. Two NR carriers plus an LTE anchor, which is what an
+     * NSA-capable device is actually tested against; the second NR carrier is configured
+     * but left off, because a configured-and-not-started cell is a normal state a strip
+     * has to be able to show.
+     */
+    private static void seedCells(JdbcTemplate jdbc, long runId, boolean executed) {
+        String live = executed ? "CONNECTED" : "OFF";
+        jdbc.update("""
+                INSERT INTO run_cell (run_id, ordinal, label, role, duplex, band,
+                    bandwidth_mhz, scs_khz, dl_arfcn, ul_arfcn, power_dbm, state)
+                VALUES
+                (?, 1, 'L1', 'PCC',     'FDD', 'LTE B3', 20,  15,  1575,  19575, -60.0, ?),
+                (?, 2, 'N1', 'NSA_PCC', 'TDD', 'NR n78', 100, 30, 633984, 633984, -19.9, ?),
+                (?, 3, 'N2', 'SA_PCC',  'TDD', 'NR n78', 100, 30, 636000, 636000, -19.9, 'OFF')
+                """, runId, live, runId, live, runId);
     }
 
     private static void seedAttachDetail(JdbcTemplate jdbc, long runId) {

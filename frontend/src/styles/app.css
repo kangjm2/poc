@@ -341,3 +341,27 @@ input.boundary { width: 76px; text-align: right; }
 .chain-arrow { padding: 0 8px; color: var(--text-dim); font-size: 15px; }
 .step-running { background: #fffbe6; }
 .step-ok { color: #147a14; }
+
+/* Lab: per-cell status strip and the run gauges. */
+.cell-strip { display: flex; gap: 8px; flex-wrap: wrap; }
+.cell-card {
+  border: 1px solid var(--border); border-radius: 3px; background: var(--data-bg);
+  padding: 5px 8px; min-width: 190px;
+}
+.cell-card.state-CONNECTED { border-left: 4px solid #147a14; }
+.cell-card.state-OFF { border-left: 4px solid var(--text-dim); }
+.cell-card-top { display: flex; align-items: baseline; gap: 6px; }
+.cell-label { font-weight: 700; }
+.cell-role { color: var(--text-dim); font-size: 10px; flex: 1; }
+.cell-state { font-size: 10px; font-weight: 700; letter-spacing: .03em; }
+.cell-state.state-CONNECTED { color: #147a14; }
+.cell-state.state-OFF { color: var(--text-dim); }
+.cell-card-grid {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 0 8px;
+  font-size: 10px; color: var(--text-dim); margin-top: 3px;
+}
+.gauges { display: flex; align-items: center; gap: 18px; flex-wrap: wrap; }
+.gauge { text-align: center; }
+.gauge-label { font-size: 10px; color: var(--text-dim); text-transform: uppercase;
+               letter-spacing: .04em; }
+.gauge-note { font-size: 11px; color: var(--text-dim); max-width: 320px; }

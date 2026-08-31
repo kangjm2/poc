@@ -79,10 +79,27 @@ public final class LabDtos {
             String cellType, String ssbBand, Integer ssbArfcn, Integer ssbGscn,
             Integer pci, Integer taOffset) {}
 
+    /**
+     * One cell in the run's status strip.
+     *
+     * The reference network-emulator UI keeps this strip on screen permanently, because
+     * a cell's state is not a step that happened once - it is a condition that holds.
+     */
+    public record RunCell(
+            Long id, int ordinal, String label, String role, String duplex, String band,
+            Integer bandwidthMhz, Integer scsKhz, Integer dlArfcn, Integer ulArfcn,
+            Double powerDbm, String state) {}
+
+    /** Duration, progress and pass rate - the three gauges the reference run view shows. */
+    public record RunGauges(
+            Long elapsedMs, int progressPct, Integer passRatePct,
+            int criteriaPassed, int criteriaTotal) {}
+
     /** Everything about how a run was brought up, for the run detail view. */
     public record RunBringUp(
-            Long runId, String status, List<Instrument> chain, List<RunStep> steps,
-            RachReport rach, ServingCell servingCell) {}
+            Long runId, String status, List<Instrument> chain, List<RunCell> cells,
+            List<RunStep> steps, RachReport rach, ServingCell servingCell,
+            RunGauges gauges) {}
 
     public record CreateRunRequest(
             Long campaignId, String name, Long channelModelId, Long cellConfigId,

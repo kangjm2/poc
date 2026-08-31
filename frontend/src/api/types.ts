@@ -202,9 +202,24 @@ export interface ServingCell {
   ssbGscn: number | null; pci: number | null; taOffset: number | null
 }
 
+/** One cell in the run's status strip. */
+export interface RunCell {
+  id: number; ordinal: number; label: string; role: string; duplex: string
+  band: string; bandwidthMhz: number | null; scsKhz: number | null
+  dlArfcn: number | null; ulArfcn: number | null
+  powerDbm: number | null; state: string
+}
+
+/** Duration, progress and pass rate - the reference run view's three gauges. */
+export interface RunGauges {
+  elapsedMs: number | null; progressPct: number; passRatePct: number | null
+  criteriaPassed: number; criteriaTotal: number
+}
+
 export interface RunBringUp {
-  runId: number; status: string; chain: Instrument[]; steps: RunStep[]
-  rach: RachReport | null; servingCell: ServingCell | null
+  runId: number; status: string; chain: Instrument[]; cells: RunCell[]
+  steps: RunStep[]; rach: RachReport | null; servingCell: ServingCell | null
+  gauges: RunGauges
 }
 
 /** One serving cell's share of a session, for the per-cell bar chart. */

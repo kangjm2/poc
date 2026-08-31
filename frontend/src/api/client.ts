@@ -105,6 +105,11 @@ export const api = {
   duEndpoints: () => get<DuEndpoint[]>('/lab/du-endpoints'),
   campaigns: () => get<Campaign[]>('/lab/campaigns'),
   bringUp: (id: number) => get<RunBringUp>(`/lab/runs/${id}/bring-up`),
+  cancelRun: async (id: number) => {
+    const res = await fetch(`${BASE}/lab/runs/${id}/cancel`, { method: 'POST' })
+    if (!res.ok) throw new Error(`${res.status}: ${res.statusText}`)
+    return res.json() as Promise<TestRun>
+  },
   startRun: async (id: number) => {
     const res = await fetch(`${BASE}/lab/runs/${id}/start`, { method: 'POST' })
     if (!res.ok) throw new Error(`${res.status}: ${res.statusText}`)
