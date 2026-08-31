@@ -257,3 +257,25 @@ export interface ProblemSlice {
 export interface ProblemSurvey {
   total: number; categories: ProblemSlice[]; instances: ProblemInstance[]
 }
+
+/** One carrier the drive saw. */
+export interface F2LCarrier {
+  band: string; arfcn: number | null; centreFreqMhz: number | null
+  cellCount: number; pcis: number[]
+}
+
+export interface FieldToLab {
+  session: SessionSummary
+  route: {
+    sampleCount: number; distanceKm: number
+    avgSpeedKmh: number | null; maxSpeedKmh: number | null
+  }
+  carriers: F2LCarrier[]
+  derived: {
+    maxDopplerHz: number | null; centreFreqMhz: number | null
+    rsrpSpanDb: number | null; rsrpMinDbm: number | null; rsrpMaxDbm: number | null
+    suggestedProfile: string; rationale: string
+  }
+  existingChannelModelId: number | null
+  existingChannelModelName: string | null
+}

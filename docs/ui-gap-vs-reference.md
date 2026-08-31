@@ -189,7 +189,7 @@ N2 │ SA PCC / TDD │ n78 │ -19.85 dBm/BW   │ BW 100 MHz │ D/U 623334 �
 | ~~P0~~ | ~~바 차트~~ | §2 — **완료** (`Cells` 탭) |
 | ~~P0~~ | ~~Run/Cancel + Duration·Progress·Pass Rate 게이지~~ | §7 — **완료** |
 | ~~P1~~ | ~~원인 분류 → 파이 → 드릴다운~~ | §7.2 — **완료** (`Problem Survey` 탭) |
-| **P1** | 필드→랩 변환 화면(로그 메타·UE 데이터·검출 캐리어·추출된 채널 모델) | §7 `FIELD LOGS PROCESSING` |
+| ~~P1~~ | ~~필드→랩 변환 화면~~ | §7 — **완료** (`Field-to-Lab` 탭). 단 UE 데이터의 칩셋·펌웨어·SW 빌드는 **우리가 기록하지 않는 항목**이라 그럴듯한 값으로 채우지 않고 아예 빼놓았습니다 |
 | **P1** | KPI Workbench — **노드 그래프** 빌더 | 산술식 부분집합은 구현(`Import` 화면의 Derived KPIs). Union·정렬·State Machine 노드는 미구현 |
 | **P2** | 영상 동기화 재생 | §7 `TEST EXECUTION MONITORING` — 데이터 소스가 없어 보류 |
 
