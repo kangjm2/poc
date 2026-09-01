@@ -21,7 +21,7 @@ final class KpiSql {
      * An empty scale yields the bare literal: "CASE ELSE -1 END" has no WHEN branch
      * and is a syntax error, which turned every unconfigured KPI into a 500.
      */
-    static String binOrdinalExpr(List<KpiThreshold> bins, String column) {
+    public static String binOrdinalExpr(List<KpiThreshold> bins, String column) {
         if (bins.isEmpty()) return "-1";
         StringBuilder sb = new StringBuilder("CASE");
         for (KpiThreshold t : bins) {

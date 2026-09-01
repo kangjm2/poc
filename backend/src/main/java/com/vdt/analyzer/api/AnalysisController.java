@@ -83,8 +83,9 @@ public class AnalysisController {
     @GetMapping("/sessions/{id}/distribution")
     public Distribution distribution(@PathVariable long id, @RequestParam String kpi,
                                      @RequestParam(required = false) Integer fromSeq,
-                                     @RequestParam(required = false) Integer toSeq) {
-        return analysis.distribution(id, kpi, fromSeq, toSeq);
+                                     @RequestParam(required = false) Integer toSeq,
+                                     @RequestParam(defaultValue = "SAMPLE") String weightedBy) {
+        return analysis.distribution(id, kpi, fromSeq, toSeq, weightedBy);
     }
 
     /**
@@ -123,11 +124,20 @@ public class AnalysisController {
         return analysis.cellBreakdown(id, kpi, fromSeq, toSeq);
     }
 
+    /**
+     * Summary statistics under a stated basis.
+     *
+     * Both parameters default to what the tool did before they existed, so an old link or
+     * an unaware caller gets exactly the numbers it used to - and now gets them with the
+     * basis attached, which is the part that was missing.
+     */
     @GetMapping("/sessions/{id}/statistics")
     public Statistics statistics(@PathVariable long id, @RequestParam String kpi,
                                  @RequestParam(required = false) Integer fromSeq,
-                                 @RequestParam(required = false) Integer toSeq) {
-        return analysis.statistics(id, kpi, fromSeq, toSeq);
+                                 @RequestParam(required = false) Integer toSeq,
+                                 @RequestParam(defaultValue = "SAMPLE") String weightedBy,
+                                 @RequestParam(defaultValue = "AS_RECORDED") String domain) {
+        return analysis.statistics(id, kpi, fromSeq, toSeq, weightedBy, domain);
     }
 
     /**
@@ -222,7 +232,9 @@ public class AnalysisController {
 
     @GetMapping("/compare")
     public Comparison compare(@RequestParam long a, @RequestParam long b,
-                              @RequestParam List<String> kpis) {
-        return analysis.compare(a, b, kpis);
+                              @RequestParam List<String> kpis,
+                              @RequestParam(defaultValue = "SAMPLE") String weightedBy,
+                              @RequestParam(defaultValue = "AS_RECORDED") String domain) {
+        return analysis.compare(a, b, kpis, weightedBy, domain);
     }
 }

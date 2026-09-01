@@ -58,7 +58,7 @@ final class RouteContinuity {
      * Great-circle metres from the previous sample, NULL on the first row of a session.
      * Callers must order the window by seq, which every caller already does.
      */
-    static final String STEP_METRES = """
+    public static final String STEP_METRES = """
             2 * 6371000 * asin(sqrt(
                 power(sin(radians(latitude - lag(latitude) OVER (ORDER BY seq)) / 2), 2)
                 + cos(radians(lag(latitude) OVER (ORDER BY seq)))
@@ -67,7 +67,7 @@ final class RouteContinuity {
             ))""";
 
     /** Seconds since the previous sample, NULL on the first row. */
-    static final String SECONDS_SINCE_PREV =
+    public static final String SECONDS_SINCE_PREV =
             "extract(epoch FROM (ts - lag(ts) OVER (ORDER BY seq)))";
 
     /**
@@ -77,7 +77,7 @@ final class RouteContinuity {
      * Glitch is tested first: an implausible jump also satisfies the gap rule, and
      * calling it a gap would credit the excursion to distance travelled.
      */
-    static String classify(String stepMetresColumn, String secondsColumn) {
+    public static String classify(String stepMetresColumn, String secondsColumn) {
         double maxMetresPerSecond = MAX_PLAUSIBLE_KMH / 3.6;
         return """
                 CASE
@@ -98,7 +98,7 @@ final class RouteContinuity {
      * dropping it would under-report the route length. A GLITCH does not: the excursion
      * never happened.
      */
-    static String travelledMetres(String stepMetresColumn, String breakColumn) {
+    public static String travelledMetres(String stepMetresColumn, String breakColumn) {
         return "CASE WHEN %s = %d THEN 0 ELSE coalesce(%s, 0) END"
                 .formatted(breakColumn, GLITCH, stepMetresColumn);
     }

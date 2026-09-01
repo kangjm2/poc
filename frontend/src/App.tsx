@@ -113,6 +113,8 @@ export function App() {
   const [colorBy, setColorBy] = useState<ColorBy>('kpi')
   /** One bin shown alone on the map, the rest muted. */
   const [isolate, setIsolate] = useState<string | null>(null)
+  /** What the legend's shares are weighted by. See view of AggregationBasis on the server. */
+  const [legendBasis, setLegendBasis] = useState('SAMPLE')
   const [pciBars, setPciBars] = useState<NeighbourBar[]>([])
   /** A shape is a question being asked now, so it lives in state and is not persisted. */
   const [drawingArea, setDrawingArea] = useState(false)
@@ -262,7 +264,7 @@ export function App() {
 
   useEffect(() => {
     if (sessionId == null) return
-    api.distribution(sessionId, kpi, range)
+    api.distribution(sessionId, kpi, range, legendBasis)
       .then((d) => {
         setDist(d)
         // "Is this a real parameter" is answered by the catalogue, which reconcile()
@@ -281,7 +283,7 @@ export function App() {
       })
       .catch(fail)
     api.degradations(sessionId, kpi, 5, range).then(setDegradations).catch(fail)
-  }, [sessionId, kpi, range, scaleVersion, fail])
+  }, [sessionId, kpi, range, scaleVersion, legendBasis, fail])
 
   useEffect(() => {
     if (sessionId == null || SERIES_KPIS.includes(kpi)) { setExtraSeries(null); return }
@@ -989,7 +991,8 @@ export function App() {
                   ) : (
                     <LegendPanel dist={dist}
                                  onEdit={activeDef ? () => setEditingScale(true) : undefined}
-                                 isolate={isolate} onIsolate={setIsolate} />
+                                 isolate={isolate} onIsolate={setIsolate}
+                                 weightedBy={legendBasis} onWeightedBy={setLegendBasis} />
                   )}
                 </div>
               </div>

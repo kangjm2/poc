@@ -53,12 +53,15 @@ export function ParameterGrid({ snapshot }: { snapshot: Snapshot | null }) {
  * Ours are weighted by sample, so it says so rather than borrowing "[Time]":
  * with an irregular log the two do differ, and the reader has to know which.
  */
-export function LegendPanel({ dist, onEdit, isolate, onIsolate }: {
+export function LegendPanel({ dist, onEdit, isolate, onIsolate, weightedBy, onWeightedBy }: {
   dist: Distribution | null
   onEdit?: () => void
   /** The bin currently shown alone on the map, if any. */
   isolate?: string | null
   onIsolate?: (binLabel: string | null) => void
+  /** What the shares are weighted by. The heading always says which. */
+  weightedBy?: string
+  onWeightedBy?: (v: string) => void
 }) {
   if (!dist) return <div className="loading">Loading…</div>
   return (
@@ -67,10 +70,25 @@ export function LegendPanel({ dist, onEdit, isolate, onIsolate }: {
         <button className="legend-edit" onClick={onEdit}
                 title="Edit this KPI's colour scale">Edit scale</button>
       )}
+      {onWeightedBy && (
+        // The legend is where the stopped-vehicle bias is least suspected: a car held
+        // ninety seconds in one bad spot puts ninety samples in the worst bin, and the
+        // share reads as ninety samples' worth of bad coverage rather than one spot.
+        <select className="legend-basis" value={weightedBy ?? 'SAMPLE'}
+                aria-label="Legend weight by"
+                title="Share of samples, or share of the ground covered"
+                onChange={(e) => { onWeightedBy(e.target.value); e.currentTarget.blur() }}>
+          <option value="SAMPLE">by sample</option>
+          <option value="DISTANCE">by distance</option>
+        </select>
+      )}
       <div className="legend-row" style={{ fontWeight: 600, borderBottom: '1px solid #e2e2e8' }}>
         <span className="swatch" style={{ visibility: 'hidden' }} />
         <span className="label">
-          {dist.displayName}{dist.unit ? ` (${dist.unit})` : ''} [Sample]
+          {/* From the server, not typed here. The literal "[Sample]" lived in this one
+              component while the statistics panel, the report and the CSV export - the
+              same numbers, three more screens - explained nothing at all. */}
+          {dist.displayName}{dist.unit ? ` (${dist.unit})` : ''} {dist.basisLabel}
         </span>
         <span className="count">n</span><span className="pct">%</span>
       </div>
@@ -140,7 +158,7 @@ export function PciLegend({ colors, bars, total }: {
     <div>
       <div className="legend-row" style={{ fontWeight: 600, borderBottom: '1px solid #e2e2e8' }}>
         <span className="swatch" style={{ visibility: 'hidden' }} />
-        <span className="label">Serving cell [Sample]</span>
+        <span className="label">Serving cell [Sample]</span>{/* sample-weighted by construction: one row per sample */}
         <span className="count">n</span><span className="pct">%</span>
       </div>
       {/* The same honesty the derived colour scale already owes: these colours are

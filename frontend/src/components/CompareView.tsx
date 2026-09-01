@@ -27,11 +27,20 @@ export function CompareView({ sessions }: { sessions: SessionSummary[] }) {
     }
   }, [sessions, a, b])
 
+  /**
+   * This is where the choice earns its keep. A build compared on sample weighting is
+   * partly a comparison of where the two drives happened to stop; on distance weighting
+   * it compares the road. On the seeded drives the basis roughly doubles the measured
+   * deltas - it does not flip a verdict there, but a delta near the threshold would.
+   */
+  const [weightedBy, setWeightedBy] = useState('SAMPLE')
+
   useEffect(() => {
     if (a === null || b === null) return
     setError(null)
-    api.compare(a, b, COMPARE_KPIS).then(setData).catch((e) => setError(String(e)))
-  }, [a, b])
+    api.compare(a, b, COMPARE_KPIS, weightedBy)
+      .then(setData).catch((e) => setError(String(e)))
+  }, [a, b, weightedBy])
 
   // The row whose CDFs are overlaid; defaults to the first KPI both sides measured.
   const selectedRow = data
@@ -65,10 +74,27 @@ export function CompareView({ sessions }: { sessions: SessionSummary[] }) {
             <span className="title">
               {data.sessionA.buildLabel} vs {data.sessionB.buildLabel}
             </span>
+            <span className="basis-controls">
+              <label>Weight by</label>
+              <select value={weightedBy} aria-label="Compare weight by"
+                      title="Sample weighting partly compares where the drives stopped; distance weighting compares the road"
+                      onChange={(e) => setWeightedBy(e.target.value)}>
+                <option value="SAMPLE">Sample</option>
+                <option value="DISTANCE">Distance</option>
+              </select>
+            </span>
             <span className="meta">
               {data.sessionA.sampleCount} / {data.sessionB.sampleCount} samples
             </span>
           </header>
+          {/* The verdict is only as meaningful as the basis behind it, so the basis is
+              printed with it rather than left to be assumed. */}
+          <div className="basis-note">
+            Means and percentiles <b>{data.rows[0]?.a?.basisLabel ?? '[Sample]'}</b>
+            {weightedBy === 'DISTANCE'
+              ? ' — comparing the road rather than where each drive happened to stop'
+              : ' — one row per sample, so time spent stopped counts once per second'}
+          </div>
           <table className="grid">
             <thead>
               <tr>

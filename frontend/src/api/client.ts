@@ -68,10 +68,18 @@ export const api = {
     get<ProblemSurvey>(`/sessions/${id}/problem-survey`),
   cellBreakdown: (id: number, kpi: string, range?: SeqRange | null) =>
     get<CellBreakdown>(`/sessions/${id}/cell-breakdown?kpi=${kpi}${rangeQs(range)}`),
-  distribution: (id: number, kpi: string, range?: SeqRange | null) =>
-    get<Distribution>(`/sessions/${id}/distribution?kpi=${kpi}${rangeQs(range)}`),
-  statistics: (id: number, kpi: string, range?: SeqRange | null) =>
-    get<Statistics>(`/sessions/${id}/statistics?kpi=${kpi}${rangeQs(range)}`),
+  distribution: (id: number, kpi: string, range?: SeqRange | null, weightedBy = 'SAMPLE') =>
+    get<Distribution>(`/sessions/${id}/distribution?kpi=${kpi}${rangeQs(range)}`
+      + `&weightedBy=${weightedBy}`),
+  /**
+   * `weightedBy` and `domain` default to what the tool did before they existed, so a
+   * caller that does not care gets exactly the old numbers - now with a label saying
+   * which basis produced them.
+   */
+  statistics: (id: number, kpi: string, range?: SeqRange | null,
+               weightedBy = 'SAMPLE', domain = 'AS_RECORDED') =>
+    get<Statistics>(`/sessions/${id}/statistics?kpi=${kpi}${rangeQs(range)}`
+      + `&weightedBy=${weightedBy}&domain=${domain}`),
   degradations: (id: number, kpi: string, minSamples = 5, range?: SeqRange | null) =>
     get<Degradation[]>(
       `/sessions/${id}/degradations?kpi=${kpi}&minSamples=${minSamples}${rangeQs(range)}`),
@@ -119,8 +127,10 @@ export const api = {
     }
     return res.json() as Promise<KpiDefinition>
   },
-  compare: (a: number, b: number, kpis: string[]) =>
-    get<Comparison>(`/compare?a=${a}&b=${b}&kpis=${kpis.join(',')}`),
+  compare: (a: number, b: number, kpis: string[],
+            weightedBy = 'SAMPLE', domain = 'AS_RECORDED') =>
+    get<Comparison>(`/compare?a=${a}&b=${b}&kpis=${kpis.join(',')}`
+      + `&weightedBy=${weightedBy}&domain=${domain}`),
 
   bins: (id: number, kpi: string, sizeMeters: number) =>
     get<AreaBin[]>(`/sessions/${id}/bins?kpi=${kpi}&sizeMeters=${sizeMeters}`),
