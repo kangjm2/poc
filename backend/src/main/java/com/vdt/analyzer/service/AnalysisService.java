@@ -149,6 +149,36 @@ public class AnalysisService {
         }, sessionId, sessionId, kpiName, stride);
     }
 
+    /**
+     * A session's events, each placed on the sample grid.
+     *
+     * The nearest-sample resolution lives here rather than in each caller: network_event
+     * has a ts and no seq, and the browser used to work the seq out by scanning the
+     * DECIMATED track, so on a long drive an event landed on whichever sample survived
+     * thinning rather than on its own. Same rule as ProblemSurvey uses, in one place.
+     */
+    public List<EventDto> events(long sessionId) {
+        return jdbc.query("""
+                SELECT e.id, e.ts, e.event_type, e.severity, e.detail,
+                       e.latitude, e.longitude,
+                       (SELECT s.seq FROM sample s
+                         WHERE s.session_id = e.session_id
+                         ORDER BY abs(extract(epoch FROM (s.ts - e.ts))) LIMIT 1) AS seq
+                FROM network_event e
+                WHERE e.session_id = ?
+                ORDER BY e.ts
+                """,
+                (rs, i) -> {
+                    Integer seq = (Integer) rs.getObject("seq");
+                    return new EventDto(rs.getLong("id"), rs.getTimestamp("ts").toInstant(),
+                            seq == null ? 0 : seq,
+                            rs.getString("event_type"), rs.getString("severity"),
+                            rs.getString("detail"),
+                            (Double) rs.getObject("latitude"),
+                            (Double) rs.getObject("longitude"));
+                }, sessionId);
+    }
+
     // ----------------------------------------------------------------- series
 
     /**

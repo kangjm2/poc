@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { api } from './api/client'
 import type {
-  AreaBin, CellRef, CoverageIssue, Degradation, Distribution, KpiDefinition,
+  AreaBin, CellRef, CoverageIssue, Degradation, Distribution, EventType, KpiDefinition,
   CellFootprint, MonitoredSet, NetworkEvent, SeqRange, Series, SessionSummary,
   SignalingMessage, Snapshot, TrackPoint, Workbook,
 } from './api/types'
@@ -85,6 +85,8 @@ export function App() {
   // The single time cursor every panel reads from. This shared cursor is the
   // interaction existing users rely on most, so it lives at the top of the tree.
   const [cursorSeq, setCursorSeq] = useState(0)
+  // Session-independent, so it is fetched once rather than per drive.
+  const [eventTypes, setEventTypes] = useState<Map<string, EventType>>(new Map())
   const [playing, setPlaying] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -115,6 +117,9 @@ export function App() {
       if (s.length) setSessionId([...s].sort((a, b) => a.id - b.id)[0].id)
     }).catch(fail)
     api.kpiDefinitions().then(setDefs).catch(fail)
+    api.eventTypes()
+      .then((ts) => setEventTypes(new Map(ts.map((t) => [t.name, t]))))
+      .catch(fail)
   }, [fail])
 
   const SERIES_KPIS = useMemo(() => [
@@ -233,22 +238,24 @@ export function App() {
     setSessionId(id)
   }
 
-  const jumpToTime = (ts: string) => {
-    const p = track.find((t) => t.ts >= ts)
-    if (p) setCursorSeq(p.seq)
-  }
+  // Events now arrive with the seq the server resolved against the FULL sample table.
+  // This used to scan `track`, which is decimated, so on a long drive an event jumped to
+  // whichever sample happened to survive thinning rather than to its own.
+  const jumpToSeq = (seq: number) => setCursorSeq(seq)
 
   const chart = (name: string, filled = false) => {
     const s = seriesFor(name)
     return s ? (
       <TimeSeriesChart key={name} series={s} cursorSeq={cursorSeq}
-                       onCursorChange={setCursorSeq} filled={filled} />
+                       onCursorChange={setCursorSeq} filled={filled}
+                       events={events} eventTypes={eventTypes} />
     ) : null
   }
 
   const chartOf = (s: Series, filled = false) => (
     <TimeSeriesChart key={s.kpi} series={s} cursorSeq={cursorSeq}
-                     onCursorChange={setCursorSeq} filled={filled} />
+                     onCursorChange={setCursorSeq} filled={filled}
+                     events={events} eventTypes={eventTypes} />
   )
 
   const renderWorkbook = () => {
@@ -281,7 +288,8 @@ export function App() {
           <>
             <RouteMap track={track} cells={cells} cursorSeq={cursorSeq}
                       onCursorChange={setCursorSeq} kpiName={activeDef?.displayName ?? kpi}
-                      bins={bins} footprints={footprints} />
+                      bins={bins} footprints={footprints}
+                      events={events} eventTypes={eventTypes} />
             {distanceStep > 0 && (
               <DistanceProfile sessionId={sessionId} kpiName={kpi} stepMeters={distanceStep}
                                cursorSeq={cursorSeq} onJump={setCursorSeq} />
@@ -321,7 +329,8 @@ export function App() {
                 something every view needs. */}
             <RouteMap track={track} cells={cells} cursorSeq={cursorSeq}
                       onCursorChange={setCursorSeq} kpiName={activeDef?.displayName ?? kpi}
-                      monitored={monitored?.cells ?? null} footprints={footprints} />
+                      monitored={monitored?.cells ?? null} footprints={footprints}
+                      events={events} eventTypes={eventTypes} />
             <div className="panel">
               <header>
                 <span className="title">Cells</span>
@@ -353,7 +362,7 @@ export function App() {
               <header><span className="title">Events</span>
                 <span className="meta">{events.length}</span></header>
               <div style={{ maxHeight: 260, overflow: 'auto' }}>
-                <EventList events={events} onPick={jumpToTime} />
+                <EventList events={events} types={eventTypes} onPick={jumpToSeq} />
               </div>
             </div>
           </>
@@ -376,7 +385,8 @@ export function App() {
       case 'fieldtolab':
         return <FieldToLabPanel sessionId={sessionId} />
       case 'problems':
-        return <ProblemSurveyPanel sessionId={sessionId} onPick={setCursorSeq} />
+        return <ProblemSurveyPanel sessionId={sessionId} onPick={setCursorSeq}
+                                events={events} eventTypes={eventTypes} />
       case 'neighbours':
         return <MonitoredSetPage sessionId={sessionId} set={monitored}
                                  onJump={setCursorSeq} />
@@ -395,7 +405,8 @@ export function App() {
           <>
             <RouteMap track={track} cells={cells} cursorSeq={cursorSeq}
                       onCursorChange={setCursorSeq} kpiName={activeDef?.displayName ?? kpi}
-                      bins={bins} footprints={footprints} />
+                      bins={bins} footprints={footprints}
+                      events={events} eventTypes={eventTypes} />
             <div className="panel">
               <header>
                 <span className="title">Detected coverage issues</span>
@@ -648,7 +659,7 @@ export function App() {
               <div className="dock-section" style={{ maxHeight: 190 }}>
                 <h3>Events ({events.length})</h3>
                 <div className="content" style={{ maxHeight: 160 }}>
-                  <EventList events={events} onPick={jumpToTime} />
+                  <EventList events={events} types={eventTypes} onPick={jumpToSeq} />
                 </div>
               </div>
             </div>

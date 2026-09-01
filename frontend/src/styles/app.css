@@ -365,3 +365,39 @@ input.boundary { width: 76px; text-align: right; }
 .gauge-label { font-size: 10px; color: var(--text-dim); text-transform: uppercase;
                letter-spacing: .04em; }
 .gauge-note { font-size: 11px; color: var(--text-dim); max-width: 320px; }
+
+/* ── Events as a visual channel ───────────────────────────────────────────────
+   The same glyph and colour identify an event in the dock table, on the map and
+   on the chart, so the three are recognisably one thing. */
+.ev-symbol {
+  display: inline-block;
+  width: 14px;
+  font-weight: 700;
+  text-align: center;
+}
+/* Leaflet's divIcon wrapper: strip its default box so only our dot shows. */
+.event-marker { background: none; border: 0; }
+.ev-dot {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  border: 2px solid;
+  border-radius: 50%;
+  /* Opaque, not translucent: these sit on top of a 6px coloured route line, and a
+     see-through marker takes the route's colour and stops identifying anything. */
+  background: #fff;
+  font-size: 9px;
+  font-weight: 700;
+  line-height: 1;
+}
+.chart-event { cursor: pointer; }
+.chart-event:hover line { opacity: 1; }
+
+/* The context window the drilldown opens around a case. */
+.case-context .meta { color: var(--text-dim); }
+.case-context .ctx-span {
+  font: 11px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace;
+  color: var(--text-dim);
+}

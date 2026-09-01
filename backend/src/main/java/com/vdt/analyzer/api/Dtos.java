@@ -24,6 +24,23 @@ public final class Dtos {
             Double value, String color, String binLabel, Integer servingPci, Double speedKmh,
             int breakBefore) {}
 
+    /**
+     * A network event, placed on the sample grid.
+     *
+     * network_event carries a ts and no seq, so every screen that wants to show an event
+     * against the samples has to resolve one. That derivation used to exist twice - in SQL
+     * inside ProblemSurvey, and again in the browser by scanning the DECIMATED track, which
+     * silently landed on the wrong sample whenever the track had been thinned. Resolving it
+     * once here means the map marker, the chart tick, the Events dock and the problem
+     * survey all point at the same sample.
+     */
+    public record EventDto(long id, Instant ts, int seq, String eventType, String severity,
+                           String detail, Double latitude, Double longitude) {}
+
+    /** Display identity for an event type: what to call it, what colour, which glyph. */
+    public record EventTypeDto(String name, String displayName, String color, String symbol,
+                               String kind) {}
+
     public record SeriesPoint(int seq, Instant ts, Double value) {}
 
     public record Series(String kpi, String displayName, String unit, List<SeriesPoint> points) {}

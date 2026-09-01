@@ -81,6 +81,14 @@ export interface Comparison {
 export interface NetworkEvent {
   id: number; ts: string; eventType: string; severity: string
   detail: string | null; latitude: number | null; longitude: number | null
+  /** The sample this event lands on. Resolved server-side; see Dtos.EventDto. */
+  seq: number
+}
+
+/** How an event type is named, coloured and drawn. One row of `event_type`. */
+export interface EventType {
+  name: string; displayName: string; color: string; symbol: string
+  kind: 'LOGGED' | 'DERIVED'
 }
 
 export interface SignalingMessage {

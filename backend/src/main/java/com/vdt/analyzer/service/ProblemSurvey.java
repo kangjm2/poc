@@ -28,21 +28,11 @@ import java.util.Map;
 public class ProblemSurvey {
 
     /**
-     * The categories, with the colour each slice carries. Reds are radio-side failures,
-     * amber is transport, blue-grey is capacity - so the pie separates by kind at a glance
-     * rather than by an arbitrary palette order.
+     * The pie's category order and colours come from {@code event_type}
+     * (V10), so the same failure is the same word and the same colour in the Events dock,
+     * on the map, on the chart and here. The ordering the palette encodes - red radio,
+     * amber transport, blue-grey capacity - is preserved as that table's ordinal.
      */
-    private static final Map<String, String[]> CATEGORY = new LinkedHashMap<>(Map.of());
-
-    static {
-        CATEGORY.put("RADIO_LINK_FAILURE", new String[]{"Radio link failure", "#c00000"});
-        CATEGORY.put("WEAK_COVERAGE", new String[]{"Weak coverage", "#ff6820"});
-        CATEGORY.put("INTERFERENCE", new String[]{"Interference / bad quality", "#ffb000"});
-        CATEGORY.put("OVERSHOOT", new String[]{"Cell overshoot", "#e0d000"});
-        CATEGORY.put("HIGH_BLER", new String[]{"High block error rate", "#8a2be2"});
-        CATEGORY.put("FRONTHAUL_TIMING", new String[]{"Fronthaul timing", "#0080c0"});
-        CATEGORY.put("THROUGHPUT_DEGRADATION", new String[]{"Throughput degradation", "#4a80be"});
-    }
 
     /** One problem, addressable: the seq range is what the drill-down jumps to. */
     public record Instance(
@@ -59,13 +49,16 @@ public class ProblemSurvey {
     private final AnalysisService analysis;
     private final KpiCatalog catalog;
     private final JdbcTemplate jdbc;
+    private final EventTypeCatalog eventTypes;
 
     public ProblemSurvey(GeoAnalysisService geo, AnalysisService analysis,
-                         KpiCatalog catalog, JdbcTemplate jdbc) {
+                         KpiCatalog catalog, JdbcTemplate jdbc,
+                         EventTypeCatalog eventTypes) {
         this.geo = geo;
         this.analysis = analysis;
         this.catalog = catalog;
         this.jdbc = jdbc;
+        this.eventTypes = eventTypes;
     }
 
     public Survey survey(long sessionId) {
@@ -74,7 +67,7 @@ public class ProblemSurvey {
         // 1. Spatial problems the coverage detector already finds.
         for (GeoAnalysisService.CoverageIssue i
                 : geo.coverageIssues(sessionId, -105, 0, 3.0)) {
-            String cat = CATEGORY.containsKey(i.type()) ? i.type() : "WEAK_COVERAGE";
+            String cat = eventTypes.knows(i.type()) ? i.type() : "WEAK_COVERAGE";
             found.add(new Instance(cat, label(cat), i.severity(),
                     i.startSeq(), i.endSeq(), i.latitude(), i.longitude(),
                     i.detail(), "coverage detector"));
@@ -132,10 +125,10 @@ public class ProblemSurvey {
         for (Instance i : found) counts.merge(i.category(), 1, Integer::sum);
 
         List<Slice> slices = new ArrayList<>();
-        for (var e : CATEGORY.entrySet()) {
-            int n = counts.getOrDefault(e.getKey(), 0);
+        for (EventTypeCatalog.EventType t : eventTypes.all()) {
+            int n = counts.getOrDefault(t.name(), 0);
             if (n == 0) continue;
-            slices.add(new Slice(e.getKey(), e.getValue()[0], e.getValue()[1], n,
+            slices.add(new Slice(t.name(), t.displayName(), t.color(), n,
                     found.isEmpty() ? 0 : (100.0 * n) / found.size()));
         }
         slices.sort(Comparator.comparingInt(Slice::count).reversed());
@@ -153,8 +146,7 @@ public class ProblemSurvey {
         return null;
     }
 
-    private static String label(String category) {
-        String[] v = CATEGORY.get(category);
-        return v == null ? category : v[0];
+    private String label(String category) {
+        return eventTypes.label(category);
     }
 }
