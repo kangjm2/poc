@@ -1,0 +1,1286 @@
+[
+ {
+  "title": "Nemo Analyze User Guide  4 Table of Contents 1 Quick Guide",
+  "page": 13
+ },
+ {
+  "title": "Setting up the system",
+  "page": 13
+ },
+ {
+  "title": "2 Introduction",
+  "page": 14
+ },
+ {
+  "title": "Before you begin",
+  "page": 14
+ },
+ {
+  "title": "End-user license agreement",
+  "page": 14
+ },
+ {
+  "title": "Important",
+  "page": 14
+ },
+ {
+  "title": "3 Installing Nemo Analyze",
+  "page": 15
+ },
+ {
+  "title": "Nemo Analyze system requirements",
+  "page": 15
+ },
+ {
+  "title": "Nemo Analyze installation",
+  "page": 15
+ },
+ {
+  "title": "0 or later",
+  "page": 16
+ },
+ {
+  "title": "0 or later version 16 Licensing",
+  "page": 18
+ },
+ {
+  "title": "Global License Server",
+  "page": 18
+ },
+ {
+  "title": "HASP USB key",
+  "page": 18
+ },
+ {
+  "title": "Technical support expiration",
+  "page": 20
+ },
+ {
+  "title": "4 Starting Nemo Analyze",
+  "page": 22
+ },
+ {
+  "title": "5 Using Nemo Analyze",
+  "page": 23
+ },
+ {
+  "title": "6 Workspace",
+  "page": 24
+ },
+ {
+  "title": "Exporting/importing favorite parameters",
+  "page": 27
+ },
+ {
+  "title": "Workspace filters",
+  "page": 28
+ },
+ {
+  "title": "7 Creating the Database",
+  "page": 30
+ },
+ {
+  "title": "Adding files to the database",
+  "page": 30
+ },
+ {
+  "title": "Migrating Nemo Analyze database to a new laptop",
+  "page": 30
+ },
+ {
+  "title": "Importing image files as maps",
+  "page": 31
+ },
+ {
+  "title": "31 Organize measurements",
+  "page": 32
+ },
+ {
+  "title": "Drag & drop folders",
+  "page": 34
+ },
+ {
+  "title": "Search folders",
+  "page": 35
+ },
+ {
+  "title": "Hiding measurements",
+  "page": 42
+ },
+ {
+  "title": "Query folders",
+  "page": 43
+ },
+ {
+  "title": "Voice Quality folders",
+  "page": 44
+ },
+ {
+  "title": "Refresh All Folders",
+  "page": 44
+ },
+ {
+  "title": "Server Folders",
+  "page": 45
+ },
+ {
+  "title": "Subsets",
+  "page": 45
+ },
+ {
+  "title": "Joined measurements",
+  "page": 46
+ },
+ {
+  "title": "Nemo Analyze User Guide  5 Adding descriptions to measurement files and folders",
+  "page": 46
+ },
+ {
+  "title": "Delete Folder Contents",
+  "page": 47
+ },
+ {
+  "title": "Retrieving original files from the database",
+  "page": 47
+ },
+ {
+  "title": "Database clean-up",
+  "page": 47
+ },
+ {
+  "title": "8 Viewing Measurement Data",
+  "page": 48
+ },
+ {
+  "title": "Parameters",
+  "page": 48
+ },
+ {
+  "title": "Statistics/Statistics with filters over parameter",
+  "page": 50
+ },
+ {
+  "title": "Statistics by/Statistics with Filters By: No Grouping",
+  "page": 51
+ },
+ {
+  "title": "Statistics by: Fixed Geographical Bin Area",
+  "page": 52
+ },
+ {
+  "title": "Lee’s criteria sampling for scanner measurements",
+  "page": 55
+ },
+ {
+  "title": "Parameter launchpad",
+  "page": 57
+ },
+ {
+  "title": "Distance binning",
+  "page": 59
+ },
+ {
+  "title": "Change defaults",
+  "page": 59
+ },
+ {
+  "title": "Viewing measurement data in graphs",
+  "page": 60
+ },
+ {
+  "title": "Viewing measurement data on map",
+  "page": 61
+ },
+ {
+  "title": "Changing default map",
+  "page": 61
+ },
+ {
+  "title": "Opening measurement files on map",
+  "page": 61
+ },
+ {
+  "title": "Opening BTS files on map",
+  "page": 63
+ },
+ {
+  "title": "Viewing notification icons on map",
+  "page": 65
+ },
+ {
+  "title": "Use Case 1: Viewing cell footprints, RSCP footprints, and LTE footprints",
+  "page": 66
+ },
+ {
+  "title": "Use Case 2: Viewing uplink voice quality server data",
+  "page": 68
+ },
+ {
+  "title": "Use Case 3: Viewing IP/UDP packet trace data",
+  "page": 69
+ },
+ {
+  "title": "Use Case 4: Viewing Binary Log Data",
+  "page": 72
+ },
+ {
+  "title": "Parameter filtering",
+  "page": 74
+ },
+ {
+  "title": "Filtering based on polygon area",
+  "page": 75
+ },
+ {
+  "title": "Use Case 5: Global parameter filtering based on a secondary parameter",
+  "page": 77
+ },
+ {
+  "title": "Filtering data and creating custom KPIs",
+  "page": 83
+ },
+ {
+  "title": "Drilldown",
+  "page": 87
+ },
+ {
+  "title": "Drilling down from map data view",
+  "page": 91
+ },
+ {
+  "title": "Drilling down from event type parameters in Map Data view",
+  "page": 92
+ },
+ {
+  "title": "Exclude events",
+  "page": 94
+ },
+ {
+  "title": "Data views",
+  "page": 94
+ },
+ {
+  "title": "Graphs",
+  "page": 94
+ },
+ {
+  "title": "Graph Tools menu",
+  "page": 94
+ },
+ {
+  "title": "Graph popup menu",
+  "page": 95
+ },
+ {
+  "title": "Change graph type",
+  "page": 95
+ },
+ {
+  "title": "Reset",
+  "page": 95
+ },
+ {
+  "title": "Query",
+  "page": 95
+ },
+ {
+  "title": "Pick parameter",
+  "page": 95
+ },
+ {
+  "title": "Add function",
+  "page": 96
+ },
+ {
+  "title": "Add reference line",
+  "page": 97
+ },
+ {
+  "title": "Nemo Analyze User Guide  6 Tool",
+  "page": 97
+ },
+ {
+  "title": "Mode",
+  "page": 97
+ },
+ {
+  "title": "Side panel",
+  "page": 99
+ },
+ {
+  "title": "3D mode",
+  "page": 101
+ },
+ {
+  "title": "Line graph filled",
+  "page": 101
+ },
+ {
+  "title": "Group values",
+  "page": 101
+ },
+ {
+  "title": "Graph properties",
+  "page": 103
+ },
+ {
+  "title": "Layer properties",
+  "page": 104
+ },
+ {
+  "title": "Layer properties for line graphs",
+  "page": 106
+ },
+ {
+  "title": "Layer properties for bar graphs",
+  "page": 107
+ },
+ {
+  "title": "Layer properties for scatter graphs",
+  "page": 107
+ },
+ {
+  "title": "Use Case 6: Multiple graph layers",
+  "page": 108
+ },
+ {
+  "title": "Use Case 7: Notification icons in graphs",
+  "page": 110
+ },
+ {
+  "title": "Use Case 8: Correlating parameters using color grids and surface graphs",
+  "page": 110
+ },
+ {
+  "title": "Use Case 9: Viewing 5G measurement results in 3D Visualizer (optional)",
+  "page": 112
+ },
+ {
+  "title": "Grids",
+  "page": 112
+ },
+ {
+  "title": "Side panel",
+  "page": 112
+ },
+ {
+  "title": "Row details",
+  "page": 115
+ },
+ {
+  "title": "Export data to",
+  "page": 115
+ },
+ {
+  "title": "Grid properties",
+  "page": 116
+ },
+ {
+  "title": "Use Case 10: Color sets in grids",
+  "page": 118
+ },
+ {
+  "title": "Use Case 11: Play audio sample",
+  "page": 120
+ },
+ {
+  "title": "Use Case 12: Using L3 and RRC message search parameters",
+  "page": 121
+ },
+ {
+  "title": "Maps",
+  "page": 122
+ },
+ {
+  "title": "Viewing in live maps",
+  "page": 123
+ },
+ {
+  "title": "Google Street View",
+  "page": 125
+ },
+ {
+  "title": "Map/Live Map Tools menu",
+  "page": 126
+ },
+ {
+  "title": "Map popup menu",
+  "page": 126
+ },
+ {
+  "title": "Add",
+  "page": 126
+ },
+ {
+  "title": "Find",
+  "page": 127
+ },
+ {
+  "title": "Generate color set",
+  "page": 128
+ },
+ {
+  "title": "Export to KML file",
+  "page": 128
+ },
+ {
+  "title": "Zoom to Layers",
+  "page": 129
+ },
+ {
+  "title": "Create New Folder From This Area",
+  "page": 129
+ },
+ {
+  "title": "Set As Default Location",
+  "page": 129
+ },
+ {
+  "title": "Show Street View on Location",
+  "page": 129
+ },
+ {
+  "title": "Hide Street View",
+  "page": 129
+ },
+ {
+  "title": "Side Panel - Map",
+  "page": 130
+ },
+ {
+  "title": "Drawing options",
+  "page": 132
+ },
+ {
+  "title": "Tool",
+  "page": 132
+ },
+ {
+  "title": "Nemo Analyze User Guide  7 MapX",
+  "page": 132
+ },
+ {
+  "title": "Map Properties",
+  "page": 133
+ },
+ {
+  "title": "Route Properties",
+  "page": 134
+ },
+ {
+  "title": "Draw route as symbols",
+  "page": 138
+ },
+ {
+  "title": "BTS files",
+  "page": 140
+ },
+ {
+  "title": "BTS properties",
+  "page": 144
+ },
+ {
+  "title": "Use Case 13: Adding map layers and saving layer combinations as geosets",
+  "page": 147
+ },
+ {
+  "title": "Use Case 14: Coloring routes based on BTS coverage",
+  "page": 148
+ },
+ {
+  "title": "Use Case 15: Performing area binning",
+  "page": 150
+ },
+ {
+  "title": "158 Use Case 17: Displaying base station cell beam range on map",
+  "page": 162
+ },
+ {
+  "title": "Use Case 18: Synchronizing base station map overlay with grid rows",
+  "page": 168
+ },
+ {
+  "title": "Use Case 19: Using BTS reference parameters",
+  "page": 171
+ },
+ {
+  "title": "172 Use Case 21: Cell locator analysis",
+  "page": 174
+ },
+ {
+  "title": "Use Case 22: 5G beam visualization",
+  "page": 177
+ },
+ {
+  "title": "Use Case 23: Exporting Serving Cell Lines to Google Earth",
+  "page": 177
+ },
+ {
+  "title": "Spreadsheet grid",
+  "page": 180
+ },
+ {
+  "title": "Editing cell format",
+  "page": 182
+ },
+ {
+  "title": "Filtering data",
+  "page": 186
+ },
+ {
+  "title": "Creating formulas",
+  "page": 188
+ },
+ {
+  "title": "Adding functions",
+  "page": 189
+ },
+ {
+  "title": "Use Case 24: Retrieving data from minimized data sets",
+  "page": 190
+ },
+ {
+  "title": "Processing uplink voice quality data",
+  "page": 191
+ },
+ {
+  "title": "Indoor measurements",
+  "page": 192
+ },
+ {
+  "title": "In-building measurements with IBWC maps",
+  "page": 194
+ },
+ {
+  "title": "Numerical data views",
+  "page": 200
+ },
+ {
+  "title": "Info views",
+  "page": 202
+ },
+ {
+  "title": "Timeline view",
+  "page": 203
+ },
+ {
+  "title": "Highlight Parameter in Timeline view",
+  "page": 204
+ },
+ {
+  "title": "Notifications in Timeline view",
+  "page": 207
+ },
+ {
+  "title": "Range selection in Timeline view",
+  "page": 207
+ },
+ {
+  "title": "Other views",
+  "page": 209
+ },
+ {
+  "title": "Network Parameters",
+  "page": 209
+ },
+ {
+  "title": "Measurement Settings",
+  "page": 210
+ },
+ {
+  "title": "Properties",
+  "page": 211
+ },
+ {
+  "title": "Query clipboard",
+  "page": 212
+ },
+ {
+  "title": "Activity",
+  "page": 213
+ },
+ {
+  "title": "Log window",
+  "page": 213
+ },
+ {
+  "title": "9 Workbooks",
+  "page": 215
+ },
+ {
+  "title": "Adding data views",
+  "page": 217
+ },
+ {
+  "title": "Nemo Analyze User Guide  8 Adding pages",
+  "page": 220
+ },
+ {
+  "title": "Saving a workbook",
+  "page": 222
+ },
+ {
+  "title": "Exporting workbooks",
+  "page": 223
+ },
+ {
+  "title": "Exporting workbooks as PDF/MS Word/MS PowerPoint files",
+  "page": 223
+ },
+ {
+  "title": "Exporting workbooks as image files",
+  "page": 223
+ },
+ {
+  "title": "Copying a workbook",
+  "page": 224
+ },
+ {
+  "title": "Workbook Properties",
+  "page": 225
+ },
+ {
+  "title": "Page properties",
+  "page": 226
+ },
+ {
+  "title": "Example workbook",
+  "page": 227
+ },
+ {
+  "title": "Sharing workbooks",
+  "page": 230
+ },
+ {
+  "title": "10 Reports",
+  "page": 231
+ },
+ {
+  "title": "231 Workbooks",
+  "page": 231
+ },
+ {
+  "title": "Generating reports",
+  "page": 232
+ },
+ {
+  "title": "Creating custom reports with Spreadsheet Report Designer",
+  "page": 235
+ },
+ {
+  "title": "Creating and opening a report template",
+  "page": 235
+ },
+ {
+  "title": "Adding a workbook image to the worksheet",
+  "page": 237
+ },
+ {
+  "title": "Adding a map image to the worksheet",
+  "page": 238
+ },
+ {
+  "title": "Adding other elements to the worksheet",
+  "page": 244
+ },
+ {
+  "title": "Passing color set information to MS Excel charts",
+  "page": 245
+ },
+ {
+  "title": "Adding a dynamic image to the worksheet in Spreadsheet Report Designer",
+  "page": 246
+ },
+ {
+  "title": "Saving a report template",
+  "page": 246
+ },
+ {
+  "title": "Column group",
+  "page": 247
+ },
+ {
+  "title": "Insert columns",
+  "page": 248
+ },
+ {
+  "title": "Cumulation and density for specific parameters",
+  "page": 249
+ },
+ {
+  "title": "Modifying a spreadsheet report template",
+  "page": 249
+ },
+ {
+  "title": "Handling of deleted or renamed worksheets",
+  "page": 254
+ },
+ {
+  "title": "Using VBA macros in Analyze Spreadsheet reports",
+  "page": 255
+ },
+ {
+  "title": "Showing PDF/CDF charts in reports",
+  "page": 258
+ },
+ {
+  "title": "Showing map plots in report templates",
+  "page": 265
+ },
+ {
+  "title": "Showing inbuilding map plots in report templates",
+  "page": 267
+ },
+ {
+  "title": "Showing BTS plots for selected BTS files in report templates",
+  "page": 269
+ },
+ {
+  "title": "Copying and pasting individual statistics table",
+  "page": 270
+ },
+ {
+  "title": "Reporting with Microsoft Excel",
+  "page": 271
+ },
+ {
+  "title": "Reporting with Crystal Reports",
+  "page": 280
+ },
+ {
+  "title": "Exporting reports",
+  "page": 281
+ },
+ {
+  "title": "Configuring reports",
+  "page": 282
+ },
+ {
+  "title": "Reporting with MS PowerPoint/Word",
+  "page": 284
+ },
+ {
+  "title": "PowerPoint 2007 setup",
+  "page": 288
+ },
+ {
+  "title": "Report Automation",
+  "page": 293
+ },
+ {
+  "title": "Scheduling events with Nemo Analyze client",
+  "page": 294
+ },
+ {
+  "title": "Nemo Analyze User Guide  9 Reporting automation with Nemo Analyze Enterprise",
+  "page": 310
+ },
+ {
+  "title": "11 Customization",
+  "page": 319
+ },
+ {
+  "title": "Creating Custom Queries",
+  "page": 319
+ },
+ {
+  "title": "SQL queries",
+  "page": 320
+ },
+ {
+  "title": "Getting started",
+  "page": 320
+ },
+ {
+  "title": "Nemo Analyze database schema",
+  "page": 320
+ },
+ {
+  "title": "Relations between tables",
+  "page": 320
+ },
+ {
+  "title": "Mapping of Nemo log file events to database tables",
+  "page": 321
+ },
+ {
+  "title": "Views – Automatically joined tables",
+  "page": 323
+ },
+ {
+  "title": "Database timestamps",
+  "page": 325
+ },
+ {
+  "title": "Filtering log files",
+  "page": 326
+ },
+ {
+  "title": "Value enumeration",
+  "page": 327
+ },
+ {
+  "title": "Connections",
+  "page": 328
+ },
+ {
+  "title": "Correlating tables based on time",
+  "page": 330
+ },
+ {
+  "title": "Time range correlation",
+  "page": 331
+ },
+ {
+  "title": "Guidelines for creating SQL queries",
+  "page": 331
+ },
+ {
+  "title": "Unique features of Nemo Analyze SQL interface",
+  "page": 332
+ },
+ {
+  "title": "KPI workbench",
+  "page": 333
+ },
+ {
+  "title": "Query Manager",
+  "page": 333
+ },
+ {
+  "title": "Pick Measurement Parameter",
+  "page": 334
+ },
+ {
+  "title": "Generic Query Wizard",
+  "page": 337
+ },
+ {
+  "title": "Manual query",
+  "page": 342
+ },
+ {
+  "title": "Correlate parameters",
+  "page": 343
+ },
+ {
+  "title": "Database Browser",
+  "page": 344
+ },
+ {
+  "title": "Custom KPI Workbench",
+  "page": 344
+ },
+ {
+  "title": "Designing custom KPIs and adding input data sets",
+  "page": 345
+ },
+ {
+  "title": "Parameter",
+  "page": 347
+ },
+ {
+  "title": "Combining input data sets",
+  "page": 348
+ },
+ {
+  "title": "Correlation: Previous/Current/Next Value",
+  "page": 350
+ },
+ {
+  "title": "Correlation: Previous Or Current Value/Next Or Current Value",
+  "page": 351
+ },
+ {
+  "title": "Correlation: All Values Within Time Range",
+  "page": 353
+ },
+ {
+  "title": "Join: Inner Join",
+  "page": 355
+ },
+ {
+  "title": "Join: Left Outer Join",
+  "page": 357
+ },
+ {
+  "title": "Join: Union",
+  "page": 359
+ },
+ {
+  "title": "Join: Cartesian Product",
+  "page": 361
+ },
+ {
+  "title": "Adding operations",
+  "page": 362
+ },
+ {
+  "title": "Operation: Case",
+  "page": 363
+ },
+ {
+  "title": "Operation: Moving Average",
+  "page": 365
+ },
+ {
+  "title": "Operation: Conversion",
+  "page": 366
+ },
+ {
+  "title": "Operation: State Machine",
+  "page": 367
+ },
+ {
+  "title": "Operation: Group By/Binning",
+  "page": 372
+ },
+ {
+  "title": "Nemo Analyze User Guide  10 Aggregate Functions",
+  "page": 376
+ },
+ {
+  "title": "Sort elements",
+  "page": 378
+ },
+ {
+  "title": "Filters",
+  "page": 379
+ },
+ {
+  "title": "Filters: Top-N, Bottom-N, Nth Best, Nth Worst, and Discard Worst",
+  "page": 384
+ },
+ {
+  "title": "Mathematical functions",
+  "page": 386
+ },
+ {
+  "title": "Time functions: Resample",
+  "page": 388
+ },
+ {
+  "title": "Time functions: Time Shift",
+  "page": 389
+ },
+ {
+  "title": "Running and testing KPIs",
+  "page": 391
+ },
+ {
+  "title": "Saving KPIs as components",
+  "page": 392
+ },
+ {
+  "title": "Saving Custom KPIs",
+  "page": 393
+ },
+ {
+  "title": "Reopening custom KPIs for editing",
+  "page": 394
+ },
+ {
+  "title": "Defining KPI execution method and value constants",
+  "page": 395
+ },
+ {
+  "title": "Defining value constants",
+  "page": 396
+ },
+ {
+  "title": "Use Case 26: Creating complex filters using multiple conditions",
+  "page": 396
+ },
+ {
+  "title": "KPI for dropped calls resulting from a missing handover403 12 Other tasks",
+  "page": 427
+ },
+ {
+  "title": "Editing color sets",
+  "page": 427
+ },
+ {
+  "title": "Importing color sets",
+  "page": 428
+ },
+ {
+  "title": "Automatic generation of color sets",
+  "page": 429
+ },
+ {
+  "title": "Use Case 28: Automatic generation of color set for a value range",
+  "page": 432
+ },
+ {
+  "title": "Use Case 29: Creating a color set",
+  "page": 434
+ },
+ {
+  "title": "Use Case 30: Creating and applying a color set on map",
+  "page": 436
+ },
+ {
+  "title": "Use Case 31: Creating and applying a color set in grid",
+  "page": 440
+ },
+ {
+  "title": "Managing Workspace with Projects",
+  "page": 444
+ },
+ {
+  "title": "Managing users and user groups",
+  "page": 447
+ },
+ {
+  "title": "User groups",
+  "page": 447
+ },
+ {
+  "title": "Viewing Server statistics",
+  "page": 449
+ },
+ {
+  "title": "Editing Operator Settings",
+  "page": 449
+ },
+ {
+  "title": "Editing CDMA operator settings",
+  "page": 450
+ },
+ {
+  "title": "Configuring notification icons",
+  "page": 451
+ },
+ {
+  "title": "Configuring notifications using the Parameters view",
+  "page": 451
+ },
+ {
+  "title": "Notification configuration",
+  "page": 453
+ },
+ {
+  "title": "Configuring system settings",
+  "page": 454
+ },
+ {
+  "title": "Options – Environment",
+  "page": 454
+ },
+ {
+  "title": "Options – Database",
+  "page": 455
+ },
+ {
+  "title": "Options – Nemo Cloud",
+  "page": 456
+ },
+ {
+  "title": "Options – Color",
+  "page": 457
+ },
+ {
+  "title": "Options – Scheduler",
+  "page": 457
+ },
+ {
+  "title": "Options – Statistics",
+  "page": 457
+ },
+ {
+  "title": "Options – IP Trace",
+  "page": 457
+ },
+ {
+  "title": "Options – Graph",
+  "page": 457
+ },
+ {
+  "title": "Nemo Analyze User Guide  11 Options – Map",
+  "page": 458
+ },
+ {
+  "title": "Options – BTS",
+  "page": 459
+ },
+ {
+  "title": "Importing custom settings",
+  "page": 460
+ },
+ {
+  "title": "Exporting custom settings",
+  "page": 460
+ },
+ {
+  "title": "Importing MapInfo polygons",
+  "page": 462
+ },
+ {
+  "title": "Viewing log on system performance and SQL functions",
+  "page": 464
+ },
+ {
+  "title": "13 User Interface",
+  "page": 465
+ },
+ {
+  "title": "Menus",
+  "page": 465
+ },
+ {
+  "title": "File menu",
+  "page": 465
+ },
+ {
+  "title": "View menu",
+  "page": 466
+ },
+ {
+  "title": "Tools menu",
+  "page": 466
+ },
+ {
+  "title": "Utilities menu",
+  "page": 467
+ },
+ {
+  "title": "Map Menu/Live Map Menu",
+  "page": 468
+ },
+ {
+  "title": "Layout menu",
+  "page": 469
+ },
+ {
+  "title": "Help menu",
+  "page": 469
+ },
+ {
+  "title": "14 Shortcut Keys",
+  "page": 471
+ },
+ {
+  "title": "15 Troubleshooting",
+  "page": 472
+ },
+ {
+  "title": "16 FAQ",
+  "page": 473
+ },
+ {
+  "title": "17 Technical support",
+  "page": 474
+ },
+ {
+  "title": "Nemo Support Portal",
+  "page": 474
+ },
+ {
+  "title": "Phone and email support",
+  "page": 474
+ },
+ {
+  "title": "Locations for Keysight Technologies",
+  "page": 474
+ },
+ {
+  "title": "18 Appendix 1 – Making MapInfo Maps",
+  "page": 475
+ },
+ {
+  "title": "Making MapInfo maps",
+  "page": 475
+ },
+ {
+  "title": "Registering a raster map",
+  "page": 475
+ },
+ {
+  "title": "19 Appendix 3 – Event-based Data Recording Principle of Nemo Tools",
+  "page": 477
+ },
+ {
+  "title": "20 Appendix 4 – Difference Between Nemo Call Events and ETSI Call Events",
+  "page": 478
+ },
+ {
+  "title": "21 Appendix 5 – Nemo Analyze Scalar Functions",
+  "page": 479
+ },
+ {
+  "title": "Freeze frame scalar function",
+  "page": 479
+ },
+ {
+  "title": "Time functions",
+  "page": 480
+ },
+ {
+  "title": "Binary Time functions",
+  "page": 480
+ },
+ {
+  "title": "Binary Time Interval Functions",
+  "page": 484
+ },
+ {
+  "title": "SQL Time Functions",
+  "page": 485
+ },
+ {
+  "title": "Translator functions",
+  "page": 487
+ },
+ {
+  "title": "Datatype functions",
+  "page": 488
+ },
+ {
+  "title": "Decoder functions",
+  "page": 490
+ },
+ {
+  "title": "Connection functions",
+  "page": 492
+ },
+ {
+  "title": "493 22 Appendix 6 – Nemo Analyze Stored Procedures",
+  "page": 495
+ },
+ {
+  "title": "Stored procedures",
+  "page": 495
+ },
+ {
+  "title": "Fixed procedures",
+  "page": 495
+ },
+ {
+  "title": "Nemo Analyze User Guide  12 QSR procedures",
+  "page": 495
+ },
+ {
+  "title": "GPS procedures",
+  "page": 497
+ },
+ {
+  "title": "BTS procedures",
+  "page": 499
+ },
+ {
+  "title": "Decoder procedures",
+  "page": 499
+ },
+ {
+  "title": "Dynamic procedures",
+  "page": 501
+ },
+ {
+  "title": "23 Appendix 7 - Configuration of System Settings",
+  "page": 503
+ },
+ {
+  "title": "Number of threads in parallel file loading",
+  "page": 503
+ }
+]

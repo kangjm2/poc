@@ -5,6 +5,45 @@
 
 > 저작권 고지는 [`NOTICE.md`](./NOTICE.md)를 참조하십시오.
 
+## 0-1. 2026-09-01 추가 — Nemo Analyze 10.2 User Guide
+
+사용자가 **Nemo Analyze User Guide**(부품번호 `NTN00000A-90013`, Edition 1, 2023-11-27,
+문서화 대상 SW 10.1.0) 505페이지 전체를 제공했습니다. 지금까지 우리가 가진 것은 전부
+마케팅용 Technical Overview였고, **메뉴 설명과 사용자 절차가 담긴 문서는 이것이 처음입니다.**
+
+| | |
+|---|---|
+| **원본 PDF** | **이 저장소에 두지 않습니다.** 라이선스 보유자 전용 배포물이며, 아래 재배포 금지 원칙이 그대로 적용됩니다 |
+| 추출한 그림 | `manual10.2_*` 14장 — 파일명 끝의 `_pNNN`이 원문 페이지 |
+| 텍스트 인용 | `docs/reference/nemo-analyze-10.2/`에 페이지 번호와 함께 |
+
+> 이 그림들에도 §0의 원칙이 그대로 적용됩니다: **재배포 금지 · 원본 유지 · 저장소 공개 시
+> 재검토.** 저장소를 공개하면 `docs/assets`는 제외하는 것이 기본값입니다.
+
+| 파일 | 원문 | 무엇 |
+|---|---|---|
+| `manual10.2_workspace-three-sections_p24.png` | p24 | Workspace 좌측 도크 — Folders / Measurements / Parameters 3단 |
+| `manual10.2_lee-criteria-distance-sampling_p55.png` | p55 | Lee's criteria 거리 표본화 대화상자 (**40λ**) |
+| `manual10.2_cell-footprint_p66.png` | p66 | 셀 푸트프린트 — **3위 안에 든 적 있는** 셀마다 별도 페이지 |
+| `manual10.2_drilldown-pie-with-coloured-side-tabs_p88.png` | p88 | 드릴다운 파이 + **좌측에 조각 색으로 쌓이는 세로 탭** |
+| `manual10.2_area-binning_p150.png` | p150 | 영역 비닝 |
+| `manual10.2_cell-beam-range-on-map_p162.png` | p162 | 지도 위 셀 빔 범위(섹터) |
+| `manual10.2_pilot-pollution-connections_p172.png` | p172 | 파일럿 오염 기반 기지국 연결선 |
+| `manual10.2_cell-locator-estimated-site_p174.png` | p174 | Cell locator — 측정만으로 기지국 위치·방위 역추정 |
+| `manual10.2_workbook-pages_p216.png` | p216 | 워크북 페이지 구성 |
+| `manual10.2_kpi-workbench-canvas_p346.png` | p346 | Parameters 트리에서 캔버스로 파라미터 드래그. 우측에 요소 분류(Parameters·Correlations·Joins·Operations·Aggregates·Sorting·Filters·Math·Time·Components), Properties의 `Execute per` |
+| `manual10.2_kpi-workbench-sockets_p349.png` | p349 | Correlation 실물 예 — `Call attempt failure`(primary) + `Ec/N0 active set` → `Previous Value` → `Output`. 미설정 노드가 빨강인 색 규약이 보임 |
+| `manual10.2_state-machine-states_p368.png` | p368 | State Machine 상태 정의 대화상자 |
+| `manual10.2_uc27-state-flow_p405.png` | p405 | UC27 상태 흐름도 (OK / Bad BLER / Missing handover) |
+| `manual10.2_uc27-full-graph_p408.png` | p408 | UC27 완성 그래프 |
+
+> **기존 `nemo-analyze_kpi-workbench.png`(774×717)의 정체가 밝혀졌습니다.** `p405`에서
+> 추출한 그림과 크기가 정확히 같습니다 — 우리가 웹에서 주워 스크린샷이라 불렀던 것은
+> 사실 **이 매뉴얼 UC27의 상태 흐름도**였습니다. 그걸 보고 노드 그래프를 설계한 것은
+> 결과적으로 옳았지만, 근거의 출처를 이제야 정확히 알게 됐습니다.
+
+---
+
 ## 0. 수집 원칙 — 2026-08-31 정리
 
 이 저장소는 **드라이브 테스트 사후 분석 UI**를 만듭니다. 그 목적에 기여하지 않는 자료는

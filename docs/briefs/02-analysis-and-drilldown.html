@@ -1,0 +1,397 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>② 분석과 드릴다운 — Nemo Analyze 10.2</title>
+<link rel="stylesheet" href="brief.css">
+</head>
+<body>
+<div class="wrap">
+
+<header class="top">
+  <h1>② 분석과 드릴다운</h1>
+  <div class="sub">문제를 모아 보고, 사례로 좁히고, 그 순간으로 가는 경로 · 그리고 지리 분석</div>
+</header>
+
+<nav class="crumbs"><a href="index.html">← 브리프 목록</a> ·
+  이전: <a href="01-workspace-and-views.html">① Workspace</a> ·
+  다음: <a href="03-kpi-workbench.html">③ KPI Workbench</a></nav>
+
+<p>
+드라이브 테스트 도구의 값어치는 "지도를 그린다"가 아니라 <strong>문제를 원인별로 모으고,
+한 사례로 좁히고, 그 순간의 다른 모든 값을 같이 보는</strong> 연쇄에 있습니다.
+레퍼런스는 이 연쇄를 <strong>Troubleshooting toolkit</strong>이라는 <em>선택 구성요소</em>로 팝니다.
+이 문서는 그 연쇄와, 그 옆의 지리 분석 도구들을 다룹니다.
+</p>
+
+<h2>1. Drilldown <span class="src">p87–88</span></h2>
+
+<blockquote>
+"The Troubleshooting toolkit with drilldown is an <strong>optional component</strong> of Nemo
+Analyze. When a query has been performed with one of the Troubleshooting parameters from the
+Parameters view, it is possible to drill down into further event detail from the data view
+created by the query." <span class="src">p87</span>
+</blockquote>
+
+<figure>
+  <img src="../assets/screenshots/manual10.2_drilldown-pie-with-coloured-side-tabs_p88.png"
+       alt="파이 차트 드릴다운과 좌측의 색상 탭들">
+  <figcaption>원인별 파이 차트와, 드릴다운마다 좌측에 쌓이는 <strong>조각 색과 같은 색의
+    탭</strong> · 원문 p88</figcaption>
+</figure>
+
+<h4>조작</h4>
+<ol class="steps">
+<li>파이 차트에서 <strong>조각을 더블클릭</strong>하거나, <strong>범례의 색/텍스트를 더블클릭</strong></li>
+<li>그 원인으로 발생한 <strong>문제 이벤트 전체</strong>가 담긴 그리드가 열림</li>
+<li>같은 차트에서 드릴다운할 때마다 <strong>같은 창에 새 탭</strong>이 생김</li>
+</ol>
+
+<blockquote>
+"Each drill-down from the same chart will open a <strong>new tab</strong> in the same window.
+These tabs are displayed on the <strong>left side of the window with the colors of the
+corresponding sectors</strong>." <span class="src">p88</span>
+</blockquote>
+
+<p>
+매뉴얼의 예: 파이의 초록 조각이 <code>RACH Failure, unknown reason</code>입니다. 조각이나 범례
+텍스트를 더블클릭하면 그 실패 이벤트만 모인 그리드가 열리고, <strong>그 그리드는 파이 차트
+뷰의 좌측에 초록 탭으로 남습니다.</strong>
+</p>
+
+<div class="warn">
+<h5>여기서 우리 판단이 틀렸습니다</h5>
+<p>
+우리 격차표는 이 좌측 탭을 <strong>"breadcrumb를 좌측 세로 탭 형태로 — 작음, 순수 스타일"</strong>로
+적어 놨습니다. 매뉴얼을 읽으면 <strong>스타일이 아닙니다.</strong> 여러 원인을
+<strong>동시에 열어 두고 오가는</strong> 기능입니다. RACH 실패와 핸드오버 실패를 나란히 놓고
+비교하는 것이 이 도구의 실제 사용법입니다.
+</p>
+<p>우리는 <code>Back to all categories</code> 한 단계뿐이라 <strong>한 번에 하나만</strong> 볼 수 있습니다.
+"작음/스타일"이 아니라 <strong>중간 규모의 기능 격차</strong>로 재분류합니다.</p>
+</div>
+
+<div class="ours">
+<h5>우리 구현에는 어떻게 반영됐나</h5>
+<p>
+<strong>연쇄 자체는 만들었습니다.</strong> <code>Problem Survey</code> 탭이
+<em>원인별 파이 → 사례 목록 → 그 순간</em>을 걷습니다. 검증도 이 연쇄를 통째로 확인합니다 —
+조각을 누르면 사례 목록이 <strong>그 원인 하나로만 좁혀지는지</strong>(<code>new Set(cats).size === 1</code>),
+사례를 누르면 <strong>공유 커서가 실제로 움직이는지</strong>까지.
+</p>
+<p>다른 점은 셋입니다.</p>
+<table>
+<tr><th style="width:150px">항목</th><th>레퍼런스</th><th>우리</th></tr>
+<tr><td>진입 조작</td><td><strong>더블클릭</strong> (조각 또는 범례)</td><td>한 번 클릭 (조각 또는 표 행)</td></tr>
+<tr><td>동시 유지</td><td><strong>드릴다운마다 좌측 탭</strong>, 색이 조각 색</td><td>한 번에 하나</td></tr>
+<tr><td>구성</td><td>유료 <strong>선택 구성요소</strong></td><td>기본 포함</td></tr>
+</table>
+<p>
+클릭 횟수 쪽은 우리가 낫다고 봅니다 — 한 번 클릭이 더 빠르고, 파이 조각의 더블클릭은
+발견하기 어려운 조작입니다. <strong>고쳐야 하는 것은 동시 유지 쪽입니다.</strong>
+</p>
+</div>
+
+<figure>
+  <img src="../poc-screenshots/27-problem-survey.png" alt="우리 Problem Survey 화면">
+  <figcaption>우리 <code>Problem Survey</code> — 원인별 파이, 사례 목록, 커서 연동.
+    좌측 탭 누적이 없어 한 번에 한 원인만 열립니다</figcaption>
+</figure>
+
+<h2>2. Correlate Parameters <span class="src">p83–86</span></h2>
+
+<p>
+드릴다운 옆에 있는, <strong>KPI Workbench보다 가벼운 상관 도구</strong>입니다.
+<code>Tools | Query manager | Add… | Correlate parameters</code>로 저장 가능한 KPI를 만들거나,
+Workspace의 장치를 우클릭 → <code>Correlate Parameters</code>로 한 번 쓰고 버립니다.
+</p>
+
+<p><strong>세 가지 모드가 있고, 이 셋의 구분이 중요합니다.</strong></p>
+
+<table>
+<tr><th style="width:290px">모드</th><th>출력 행이 생기는 조건</th><th>매뉴얼이 든 용도</th></tr>
+<tr>
+  <td><strong>Show values when first parameter changes</strong><br><span class="src">(left outer join)</span></td>
+  <td><strong>첫 파라미터</strong>가 바뀔 때마다. 나머지는 그 시점의 <strong>current / previous / next</strong> 값</td>
+  <td>"드롭콜 <strong>직전</strong>의 TX power · Ec/N0 · RSCP"</td>
+</tr>
+<tr>
+  <td><strong>Show values when any of the parameters changes</strong><br><span class="src">(outer join)</span></td>
+  <td>어느 파라미터든 바뀌면. 나머지 열은 <strong>빈 채로 남을 수 있음</strong></td>
+  <td>Excel 내보내기</td>
+</tr>
+<tr>
+  <td><strong>Show values when all parameters are valid</strong><br><span class="src">(inner join)</span></td>
+  <td>바뀌었고 <strong>전부 유효할 때</strong>만</td>
+  <td>산점도 입력, 커스텀 검색 기준 이벤트</td>
+</tr>
+</table>
+
+<p>
+매뉴얼의 inner join 예가 곧 커스텀 KPI입니다 —
+<em>"all rows where Ec/N0 &lt; -7, BLER DL, and RSCP &lt; -79"</em> <span class="src">p87</span>.
+</p>
+
+<div class="ours">
+<h5>우리 구현에는 어떻게 반영됐나 — 세 모드 중 하나를 이미 갖고 있습니다</h5>
+<p>
+우리 <code>COMBINE</code> 노드는 모든 입력의 표본을 합집합한 <strong>키 스파인</strong>에 각 입력을
+LEFT JOIN합니다. 이것은 정확히 <strong>outer join 모드</strong>입니다 — 어느 입력이든 값이 있으면
+행이 생기고 나머지는 NULL로 남습니다.
+</p>
+<table>
+<tr><th style="width:210px">레퍼런스 모드</th><th>우리</th></tr>
+<tr><td>outer join</td><td><span class="tag t-same">동등</span> <code>COMBINE</code>의 기본이자 유일한 동작</td></tr>
+<tr><td>inner join</td><td><span class="tag t-diff">우회 가능</span> 하류 <code>FILTER</code>로.
+    SQL에서 NULL과의 비교는 참이 아니므로 조건을 건 열이 비어 있는 행은 자동으로 떨어집니다</td></tr>
+<tr><td>left outer join<br>(primary 게이팅)</td><td><span class="tag t-none">표현 불가</span>
+    "어느 입력이 primary인가"라는 개념이 우리 그래프에 없습니다</td></tr>
+</table>
+<p>
+그리고 <strong>previous / current / next</strong>는 우리에게 아예 없습니다. 매뉴얼이 든 대표 용도가
+바로 <em>"드롭 직전의 값"</em>인데, 이것이 근본 원인 분석의 핵심 질문입니다.
+<strong>"이 순간의 값"은 우리도 되고, "이 직전의 값"은 안 됩니다.</strong>
+</p>
+</div>
+
+<h2>3. 지리 분석</h2>
+
+<h3>3.1 Area binning — UC15 <span class="src">p150</span></h3>
+
+<figure>
+  <img src="../assets/screenshots/manual10.2_area-binning_p150.png" alt="영역 비닝 다이얼로그">
+  <figcaption>Tools 패널의 Area Binning으로 지도에서 영역을 선택 · 원문 p150</figcaption>
+</figure>
+
+<ol class="steps">
+<li>Tools 패널의 <strong>Area Binning</strong> 아이콘 → 지도에서 영역 선택</li>
+<li><code>Select Measurement</code> 다이얼로그에서 대상 측정 파일 추가
+    (선택 영역에 걸친 경로는 <strong>기본으로 포함</strong>)</li>
+<li><code>Measurement parameters</code>에서 집계할 파라미터 선택</li>
+</ol>
+
+<div class="ours">
+<h5>우리 구현</h5>
+<p>
+<strong>있습니다.</strong> 우리 영역 비닝은 지도 위에 격자를 만들고 빈마다 집계합니다.
+차이는 <strong>진입</strong>입니다 — 레퍼런스는 지도에서 <em>영역을 그려서</em> 시작하고,
+우리는 <strong>빈 크기를 골라 드라이브 전체를 격자화</strong>합니다.
+"이 사거리만" 같은 임의 영역 선택이 우리에겐 없습니다.
+</p>
+</div>
+
+<figure>
+  <img src="../poc-screenshots/09-area-bins.png" alt="우리 영역 비닝">
+  <figcaption>우리 영역 비닝 — 크기를 고르면 드라이브 전체가 격자화됩니다</figcaption>
+</figure>
+
+<h3>3.2 Lee's criteria 거리 표본화 <span class="src">p55</span></h3>
+
+<figure>
+  <img src="../assets/screenshots/manual10.2_lee-criteria-distance-sampling_p55.png"
+       alt="Lee's criteria 거리 설정">
+  <figcaption>거리 기반 집계 설정 · 원문 p55</figcaption>
+</figure>
+
+<blockquote>
+"Define the distance in meters … Note that distance <strong>40λ</strong> should be used when
+running a query for the band. The formula for wave length = v/f … The average of the selected
+parameter is calculated for each aggregated distance bin. Each bin receives a time stamp and
+location based on the <strong>first event's</strong> time stamp and latitude/longitude of the bin."
+</blockquote>
+
+<p>대상은 스캐너의 Ec/N0 · RSCP · RX level(RSSI) · RSRP · RSRQ이며 <strong>별도 라이선스 옵션</strong>입니다.
+40λ를 실제로 계산하면:</p>
+
+<table>
+<tr><th style="width:180px">대역</th><th style="width:120px">λ</th><th>40λ</th></tr>
+<tr><td>n78 (3.5 GHz)</td><td>8.6 cm</td><td><strong>3.4 m</strong></td></tr>
+<tr><td>LTE 1800</td><td>16.6 cm</td><td><strong>6.7 m</strong></td></tr>
+<tr><td>LTE 800</td><td>37.5 cm</td><td><strong>15 m</strong></td></tr>
+</table>
+
+<div class="warn">
+<h5>우리는 이 이름을 근거로 댔지만 구현하지 않았습니다</h5>
+<p>
+우리 거리 빈은 <strong>50 / 100 / 250 m</strong>입니다. 40λ보다 <strong>두 자릿수 큽니다.</strong>
+거리 비닝 자체는 유효하고 <em>정차가 평균을 끌어당기는 문제</em>를 없앤 것도 사실이지만,
+<strong>"Lee's criteria"라는 이름을 붙일 자격은 없습니다.</strong>
+</p>
+<p>
+붙이려면 <strong>캐리어 주파수에서 40λ를 계산해 빈 크기로 제안</strong>하면 됩니다 —
+변환 함수는 이미 있습니다(<code>FieldToLabService.centreFreqMhz</code>, TS 38.104 래스터).
+빈의 좌표도 다릅니다: 레퍼런스는 <strong>첫 이벤트</strong>의 위경도, 우리는 빈 내 평균입니다.
+</p>
+</div>
+
+<h3>3.3 Cell footprints — UC1 <span class="src">p66</span></h3>
+
+<figure>
+  <img src="../assets/screenshots/manual10.2_cell-footprint_p66.png" alt="셀 푸트프린트">
+  <figcaption>셀 하나의 푸트프린트가 한 페이지 · 원문 p66</figcaption>
+</figure>
+
+<blockquote>
+"Cell/RSCP/LTE footprint is displayed for <strong>every cell whose signal has been among the
+three strongest</strong> at some point during the measurement session. The footprint of each cell
+is displayed on map <strong>on a separate page</strong>, allowing you to browse from footprint to
+another."
+</blockquote>
+
+<p>
+진입은 <strong>측정 파일 우클릭 → <code>Analyses | RSRP Cell Footprints (mobile)</code></strong> 식입니다
+(Ec/N0 · RSCP · RSRP · RSRQ × mobile/scanner 조합). Scrambling code 필터와 channel number 필터 중
+하나를 고르고, 범례와 전체 경로를 표시할지 선택합니다.
+매뉴얼은 <em>"Analysis will not work properly if there will be hundreds of pages"</em> —
+필터로 결과를 줄이라고 경고합니다.
+</p>
+
+<div class="ours">
+<h5>우리 구현</h5>
+<p>
+<strong>푸트프린트는 만들었습니다</strong> — 측정된 서빙 표본의 볼록 껍질(Andrew's monotone chain)로
+셀별 폴리곤을 그립니다. 두 가지가 다릅니다.
+</p>
+<table>
+<tr><th style="width:170px">항목</th><th>레퍼런스</th><th>우리</th></tr>
+<tr><td>포함 기준</td><td><strong>3강 안에 든 적이 있는</strong> 모든 셀</td><td><strong>서빙이었던</strong> 셀</td></tr>
+<tr><td>표시</td><td>셀마다 <strong>별도 페이지</strong>, 탭으로 이동</td><td>지도에 <strong>전부 겹쳐서</strong>, 토글 하나</td></tr>
+</table>
+<p>
+포함 기준 쪽은 이제 <strong>바꿀 수 있습니다</strong> — V7의 <code>sample_neighbour</code>가 순위별
+이웃을 갖고 있으므로 "3강 안에 든 적 있는 셀"을 그대로 질의할 수 있습니다.
+푸트프린트가 서빙 기준일 때보다 <strong>넓어지고</strong>, 그것이 오버슛 판단의 실제 근거입니다.
+</p>
+<p>
+표시 쪽은 우리 방식이 낫다고 봅니다 — 겹쳐 보여야 <strong>중첩</strong>이 보이고, 중첩이 곧
+파일럿 오염이니까요. 다만 셀이 수십 개가 되면 우리 화면도 읽을 수 없게 됩니다.
+</p>
+</div>
+
+<figure>
+  <img src="../poc-screenshots/28-footprints.png" alt="우리 셀 푸트프린트">
+  <figcaption>우리 푸트프린트 — 볼록 껍질 폴리곤을 지도에 겹쳐 그립니다</figcaption>
+</figure>
+
+<h3>3.4 Pilot pollution — UC20 <span class="src">p172</span></h3>
+
+<figure>
+  <img src="../assets/screenshots/manual10.2_pilot-pollution-connections_p172.png"
+       alt="파일럿 오염 기반 기지국 연결선">
+  <figcaption>측정 지점에서 보이는 셀들로 그은 연결선 · 원문 p172</figcaption>
+</figure>
+
+<ol class="steps">
+<li>Parameters 뷰에서 <strong><code>Pilot pollution</code>을 우클릭 → <code>Open In | Map</code></strong></li>
+<li>carrier number를 묻습니다 — <strong>BTS 파일의 값과 일치해야 합니다</strong></li>
+<li>Base stations 탭에서 <strong>BTS 파일을 지도로 드래그</strong> → "경로를 BTS와 연결할까요?" → Yes</li>
+<li>같은 channel number를 입력하면 <strong>측정된 파일럿들이 선으로 그려집니다</strong></li>
+</ol>
+
+<div class="ours">
+<h5>우리 구현</h5>
+<p>
+<strong>선까지 있습니다.</strong> Mobility 탭에서 단말 위치에서 <em>보이는</em> 셀들로 점선을 긋고,
+<code>Monitored set</code> 패널이 파일럿 오염 구간을 표로 냅니다.
+</p>
+<p>
+그리고 <strong>레퍼런스에 없는 판정 기준을 하나 넣었습니다</strong>:
+<code>POLLUTION_MIN_BEST_DBM = -110</code>. 이게 없으면 <strong>커버리지 홀이 파일럿 오염으로
+오탐</strong>됩니다 — 모든 셀이 똑같이 약하면 "여러 셀이 비슷하게 강함" 조건이 참이 되니까요.
+검증이 이것을 매번 확인합니다(보고된 모든 구간의 best RSRP ≥ −110).
+</p>
+<p>
+조작 절차는 훨씬 짧습니다 — 레퍼런스는 carrier number를 두 번 입력하고 BTS 파일을 드래그해야
+하지만, 우리는 셀 정보가 DB에 있어 탭 하나로 끝납니다.
+</p>
+</div>
+
+<figure>
+  <img src="../poc-screenshots/26-monitored-set.png" alt="우리 Monitored set 패널">
+  <figcaption>우리 <code>Monitored set</code> — 커서 시점의 셀 목록, 드라이브 전체 검출표,
+    파일럿 오염 구간</figcaption>
+</figure>
+
+<h3>3.5 Cell locator — UC21 <span class="src">p174</span></h3>
+
+<figure>
+  <img src="../assets/screenshots/manual10.2_cell-locator-estimated-site_p174.png"
+       alt="실제 위치(초록)와 추정 위치(보라)">
+  <figcaption>실제 셀 위치(초록)와 드라이브 데이터에서 추정한 위치(보라) · 원문 p174</figcaption>
+</figure>
+
+<blockquote>
+"Cell locator is an algorithm that <strong>estimates the site locations and antenna directions</strong>
+of individual cells based on measured signal strength per cell … a <strong>confidence number
+(1—10)</strong> is reported per estimated cell location, with accuracy of &lt;100 meters when data is
+collected from <strong>opposite sides of the BTS</strong>."
+</blockquote>
+
+<p>실행 시 묻는 입력이 셋입니다:</p>
+<table>
+<tr><th style="width:190px">입력</th><th>의미</th></tr>
+<tr><td><strong>Minimum accuracy</strong></td><td>6 이상이면 &lt;100 m급만. 9–10은 데이터가 조밀하지 않으면 결과가 전부 걸러질 수 있음</td></tr>
+<tr><td><strong>Carrier number</strong></td><td>채널 번호 단위로 분석</td></tr>
+<tr><td><strong>Minimum received power</strong></td><td>임계 미만 제거. 매우 낮은 전력에서 단말·스캐너가 <strong>유령 셀</strong>을 보고하므로 정확도가 올라감 (LTE −120 dBm, UMTS −100 dBm)</td></tr>
+</table>
+
+<div class="ours">
+<h5>우리 구현 — 없습니다. 그런데 우리가 더 유리한 위치에 있습니다</h5>
+<p>
+Cell locator는 <strong>우리에게 없습니다.</strong> 그런데 이 기능은
+<em>"측정에서 추정한 위치"와 "실제 위치"의 오차</em>가 전부인 알고리즘이고,
+<strong>우리는 실제 위치를 알고 있습니다</strong> — <code>cell_ref</code>에 사이트 좌표와 방위각이
+들어 있으니까요.
+</p>
+<p>
+즉 레퍼런스가 <strong>보여줄 수만</strong> 있는 초록-보라 그림을, 우리는
+<strong>오차를 수치로 검증</strong>하면서 만들 수 있습니다. 추정기가 실제로 얼마나 맞는지를
+매 실행마다 단언하는 검사를 붙일 수 있다는 뜻입니다. 우리 데이터가 합성이라는 점이
+여기서는 <strong>약점이 아니라 장점</strong>이 됩니다.
+</p>
+<p>
+푸트프린트 볼록 껍질과 <code>sample_neighbour</code>가 이미 있으므로 입력은 갖춰져 있습니다.
+</p>
+</div>
+
+<h3>3.6 그 밖의 지도 분석</h3>
+
+<table>
+<tr><th style="width:230px">기능</th><th style="width:70px">원문</th><th>우리</th></tr>
+<tr><td>UC14 — BTS 커버리지로 경로 채색</td><td class="src">p148</td><td><span class="tag t-diff">서빙 셀 채색은 있음</span></td></tr>
+<tr><td>UC17 — <strong>기지국 빔 범위</strong> 지도 표시</td><td class="src">p162</td><td><span class="tag t-none">없음</span></td></tr>
+<tr><td>UC18 — BTS 오버레이와 그리드 행 <strong>동기화</strong></td><td class="src">p168</td><td><span class="tag t-same">커서 동기화로 대응</span></td></tr>
+<tr><td>UC22 — 5G 빔 시각화</td><td class="src">p177</td><td><span class="tag t-none">없음</span></td></tr>
+<tr><td>UC23 — Google Earth로 서빙 셀 선 내보내기</td><td class="src">p177</td><td><span class="tag t-diff">GeoJSON 내보내기</span></td></tr>
+<tr><td>UC13 — 맵 레이어 추가·저장</td><td class="src">p150</td><td><span class="tag t-same">Layers 도크</span></td></tr>
+</table>
+
+<figure>
+  <img src="../assets/screenshots/manual10.2_cell-beam-range-on-map_p162.png"
+       alt="지도 위의 기지국 빔 범위">
+  <figcaption>UC17 — 기지국 셀 빔 범위 표시 · 원문 p162. 우리 <code>cell_ref</code>에
+    방위각과 빔폭이 있으므로 데이터는 이미 있습니다</figcaption>
+</figure>
+
+<h2>4. 이 문서에서 남은 일로 확인된 것</h2>
+
+<table>
+<tr><th style="width:230px">항목</th><th style="width:70px">규모</th><th>왜</th></tr>
+<tr><td><strong>드릴다운 다중 탭</strong> (조각 색 유지)</td><td>중간</td><td>스타일이 아니라 여러 원인 동시 비교. 재분류됨</td></tr>
+<tr><td><strong>Previous / Current / Next</strong> 상관</td><td>중간</td><td>"드롭 직전의 값" — 근본 원인 분석의 핵심 질문</td></tr>
+<tr><td>푸트프린트 포함 기준을 <strong>3강 안</strong>으로</td><td>작음</td><td>V7 데이터로 바로 가능. 오버슛 판단의 실제 근거</td></tr>
+<tr><td>거리 빈에 <strong>40λ 옵션</strong></td><td>작음</td><td>이름값을 하려면. 변환 함수는 이미 있음</td></tr>
+<tr><td><strong>Cell locator</strong></td><td>중간</td><td>우리는 정답을 알고 있어 <strong>검증 가능한</strong> 형태로 만들 수 있음</td></tr>
+<tr><td>지도에서 <strong>임의 영역 선택</strong> 비닝</td><td>중간</td><td>"이 사거리만" 질의</td></tr>
+</table>
+
+<footer>
+출처: Nemo Analyze User Guide · <code>NTN00000A-90013</code> · Edition 1, 2023-11-27.
+그림은 <code>docs/assets/screenshots/manual10.2_*</code>이며 <strong>재배포하지 않습니다</strong>
+(<code>docs/assets/NOTICE.md</code>).
+</footer>
+
+</div>
+</body>
+</html>

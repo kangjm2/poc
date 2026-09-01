@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>기존 툴 분석 브리프 — Nemo Analyze 10.2</title>
+<link rel="stylesheet" href="brief.css">
+</head>
+<body>
+<div class="wrap">
+
+<header class="top">
+  <h1>기존 툴 분석 브리프</h1>
+  <div class="sub">Nemo Analyze 10.2 User Guide 기반 · 2026-09-01</div>
+</header>
+
+<p>
+지금까지 우리 UI 설계 근거는 <strong>스크린샷 판독과 마케팅용 Technical Overview</strong>였습니다.
+메뉴 설명도, 사용자 절차도 없는 자료였습니다. 이번에 <strong>사용자 가이드 505페이지 전체</strong>가
+들어오면서 처음으로 <em>각 메뉴가 무엇을 하는지</em>와 <em>사용자가 어떤 순서로 조작하는지</em>를
+1차 자료로 확인할 수 있게 됐습니다.
+</p>
+
+<p>
+이 브리프는 그 결과입니다. 각 문서는 세 부분으로 구성됩니다 —
+<strong>메뉴 설명</strong>(원문 근거와 그림), <strong>유저 시나리오</strong>(매뉴얼의 Use Case),
+그리고 <strong>우리 구현에는 어떻게 반영됐는가</strong>.
+</p>
+
+<h2>브리프</h2>
+
+<table>
+<tr><th style="width:210px">문서</th><th>다루는 것</th></tr>
+<tr>
+  <td><a href="01-workspace-and-views.html">① Workspace와 데이터 뷰</a></td>
+  <td>좌측 도크 3단 구조, 파라미터에서 나오는 질의 진입점들, 뷰 종류 전체.
+      우리 화면의 직접 대응물</td>
+</tr>
+<tr>
+  <td><a href="02-analysis-and-drilldown.html">② 분석과 드릴다운</a></td>
+  <td>문제 조사 파이 → 사례 그리드 → 그 순간. 영역·거리 비닝, 셀 푸트프린트,
+      파일럿 오염, Cell locator</td>
+</tr>
+<tr>
+  <td><a href="03-kpi-workbench.html">③ KPI Workbench</a></td>
+  <td>노드 그래프 KPI 빌더의 요소 전체 명세와 UC27 실전 예제.
+      <strong>우리와 가장 크게 어긋난 곳</strong></td>
+</tr>
+<tr>
+  <td><a href="04-workbooks-and-reports.html">④ 워크북과 리포트</a></td>
+  <td>워크북·페이지·데이터뷰 3층 구조, 리포트 템플릿 3종</td>
+</tr>
+<tr>
+  <td><a href="05-findings.html">⑤ 판정 요약</a></td>
+  <td>매뉴얼이 우리 기존 판단을 <strong>확인한 것과 뒤집은 것</strong>, 그리고 다음 우선순위</td>
+</tr>
+</table>
+
+<h2>한 장 요약</h2>
+
+<p>매뉴얼을 읽고 바뀐 것은 크게 넷입니다.</p>
+
+<table>
+<tr><th style="width:150px">항목</th><th>기존 판단</th><th>매뉴얼 확인 후</th></tr>
+<tr>
+  <td><strong>State Machine</strong></td>
+  <td>"래칭이 없어 이름이 과하다"</td>
+  <td><span class="tag t-diff">더 큼</span> 기억뿐 아니라 <strong>출력 모양</strong>이 다름.
+      레퍼런스는 상태 점유마다 한 행 + <code>time_interval</code>. 우리 것은 분류기</td>
+</tr>
+<tr>
+  <td><strong>Missing neighbour</strong></td>
+  <td>"설정된 이웃 목록이 없어 원천 불가"</td>
+  <td><span class="tag t-none">틀림</span> 레퍼런스는 <strong>측정값만</strong>으로 판정.
+      막고 있던 건 스키마가 아니라 <strong>핸드오버 지연을 모델링하지 않는 생성기</strong></td>
+</tr>
+<tr>
+  <td><strong>Lee's criteria</strong></td>
+  <td>"거리 비닝으로 해소"</td>
+  <td><span class="tag t-diff">이름값 미달</span> 실제 기준은 <strong>40λ</strong> —
+      n78에서 3.4 m. 우리 최소 빈은 50 m</td>
+</tr>
+<tr>
+  <td><strong>드릴다운 좌측 탭</strong></td>
+  <td>"작음 · 순수 스타일"</td>
+  <td><span class="tag t-diff">재분류</span> 여러 원인을 <strong>동시에 열어 두는</strong> 기능.
+      중간 규모</td>
+</tr>
+</table>
+
+<p>반대로 <strong>확인된 것</strong>도 있습니다. 노드 그래프의 구조 판독은 정확했고,
+정렬 노드를 넣지 않은 판단은 매뉴얼이 그 이유까지 확인해 줬습니다
+(<a href="05-findings.html">⑤</a>).</p>
+
+<h2>출처와 취급</h2>
+
+<table>
+<tr><th style="width:150px">문서</th><td>Nemo Analyze User Guide · <code>NTN00000A-90013</code> ·
+    Edition 1, 2023-11-27 · 문서화 대상 SW 10.1.0 · 505페이지</td></tr>
+<tr><th>인용 방식</th><td>페이지 번호를 붙인 발췌. 원본 PDF는 <strong>저장소에 두지 않습니다</strong></td></tr>
+<tr><th>그림</th><td><code>docs/assets/screenshots/manual10.2_*</code> 14장.
+    파일명 끝 <code>_pNNN</code>이 원문 페이지</td></tr>
+<tr><th>재배포</th><td><strong>금지.</strong> <code>docs/assets/NOTICE.md</code>의 원칙이
+    그대로 적용됩니다 — 저장소 공개 시 <code>docs/assets</code> 제외가 기본값</td></tr>
+</table>
+
+<footer>
+구현 작업용 정리는 <code>docs/reference/nemo-analyze-10.2/</code>에 있습니다 —
+목차·Use Case 인덱스(기계 판독용), 노드 요소 명세, 화면 인벤토리, 정정 목록.
+</footer>
+
+</div>
+</body>
+</html>
