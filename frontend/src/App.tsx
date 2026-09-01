@@ -932,7 +932,8 @@ export function App() {
         </div></div>
       ) : mode === 'import' ? (
         <div className="body"><div className="center">
-          <ImportView onImported={() => {
+          <ImportView eventTypes={[...eventTypes.values()]} sessionId={sessionId}
+                      onImported={() => {
             api.sessions().then(setSessions).catch(fail)
             // An import can define KPIs, so the catalogue is reloaded too - otherwise
             // the parameter tree keeps showing the set that existed at page load and

@@ -10,7 +10,9 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -73,6 +75,58 @@ public class KpiGraphService {
         } catch (RuntimeException e) {
             return new Validation(false, e.getMessage(), List.of(), false, null, null);
         }
+    }
+
+    /**
+     * What ONE node of a graph produces, without publishing anything.
+     *
+     * The workaround this removes was: invent a KPI name, publish, which writes rows for
+     * every session and adds an entry to the catalogue that everyone sees, look at it on
+     * another screen, come back and delete it. That was done on every guess - so the
+     * person with the least experience was mutating shared state on each attempt. It is
+     * not an inconvenience, it is a multi-user integrity problem.
+     *
+     * The whole graph is compiled, so the preview is of the node as the compiler sees it
+     * rather than of a re-implementation of that node in a second code path. Only the
+     * final SELECT is redirected, which is also why a preview cannot show a node the
+     * graph does not actually contain.
+     */
+    public record PreviewRow(long sessionId, int seq, String ts, Map<String, Object> values) {}
+
+    public record NodePreview(int nodeId, List<String> columns, long rowCount,
+                              List<PreviewRow> rows) {}
+
+    public NodePreview previewNode(KpiGraph.Spec spec, int nodeId, Long sessionId,
+                                   String excludingKpi, int limit) {
+        KpiGraph.Compiled c = KpiGraph.compile(spec, knownNames(excludingKpi));
+        List<String> cols = c.columnsByNode().get(nodeId);
+        if (cols == null) {
+            throw new IllegalArgumentException("No node " + nodeId + " in this graph");
+        }
+        int n = Math.max(1, Math.min(limit, 200));
+
+        String select = cols.stream().map(KpiGraph::quoteColumn)
+                .reduce((a, b) -> a + ", " + b).orElse("*");
+        String from = c.sql().substring(0, c.sql().indexOf("\nSELECT session_id, seq, ts,"));
+        String where = sessionId == null ? "" : " WHERE session_id = " + sessionId.longValue();
+
+        // The count is over the whole node, not over the page: "3 rows" and "the first 3
+        // of 41 000 rows" are different answers to "did my join do what I meant", and the
+        // page alone cannot tell them apart.
+        Long total = jdbc.queryForObject(
+                from + "\nSELECT count(*) FROM n_" + nodeId + where, Long.class);
+
+        List<PreviewRow> rows = jdbc.query(
+                from + "\nSELECT session_id, seq, ts, " + select
+                + " FROM n_" + nodeId + where + " ORDER BY session_id, seq LIMIT " + n,
+                (rs, i) -> {
+                    Map<String, Object> vals = new LinkedHashMap<>();
+                    for (String col : cols) vals.put(col, rs.getObject(col));
+                    return new PreviewRow(rs.getLong("session_id"), rs.getInt("seq"),
+                            String.valueOf(rs.getObject("ts")), vals);
+                });
+
+        return new NodePreview(nodeId, cols, total == null ? 0 : total, rows);
     }
 
     /**

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { api } from '../api/client'
-import type { ImportResult, KpiDefinition } from '../api/types'
+import type { EventType, ImportResult, KpiDefinition } from '../api/types'
 import { DerivedKpiPanel } from './DerivedKpiPanel'
 import { KpiWorkbench } from './KpiWorkbench'
 
@@ -12,7 +12,13 @@ import { KpiWorkbench } from './KpiWorkbench'
  * looks like it worked but produced nothing useful. The catalogue is no longer fixed,
  * so the same screen can define the missing KPIs instead of only naming them.
  */
-export function ImportView({ onImported }: { onImported: () => void }) {
+export function ImportView({ onImported, eventTypes = [], sessionId = null }: {
+  onImported: () => void
+  /** Passed through to the workbench so its event source names types the shared way. */
+  eventTypes?: EventType[]
+  /** Which measurement a node preview reads. */
+  sessionId?: number | null
+}) {
   const fileRef = useRef<HTMLInputElement>(null)
   const [name, setName] = useState('')
   const [device, setDevice] = useState('')
@@ -134,7 +140,7 @@ export function ImportView({ onImported }: { onImported: () => void }) {
           scales: one is arithmetic per sample, the other is a dataflow. Splitting them
           across screens would make an author choose between them before understanding
           the difference. */}
-      <KpiWorkbench defs={defs}
+      <KpiWorkbench defs={defs} eventTypes={eventTypes} sessionId={sessionId}
                     onChanged={() => {
                       api.kpiDefinitions().then(setDefs).catch(() => {})
                       onImported()

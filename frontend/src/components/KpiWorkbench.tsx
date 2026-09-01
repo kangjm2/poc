@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { api } from '../api/client'
 import type {
-  GraphEdge, GraphNode, GraphNodeKind, GraphSpec, GraphValidation, KpiDefinition,
-  StoredGraph,
+  EventType, GraphEdge, GraphNode, GraphNodeKind, GraphNodePreview, GraphSpec,
+  GraphValidation, KpiDefinition, StoredGraph,
 } from '../api/types'
+import { SAMPLE_FIELDS } from '../api/types'
 
 /**
  * The KPI Workbench: a KPI built by wiring nodes rather than by typing one formula.
@@ -39,6 +40,18 @@ const KIND_INFO: Record<GraphNodeKind, { label: string; hint: string; inputs: st
     label: 'Neighbour source',
     hint: 'Reads the Nth strongest cell in the monitored set — the equivalent of the '
         + 'reference tool’s “1. best” sources.',
+    inputs: 'no inputs',
+  },
+  SOURCE_SAMPLE: {
+    label: 'Sample source',
+    hint: 'Reads a field recorded on the sample itself — speed, position, serving cell. '
+        + 'These are not KPIs, so they were previously unreachable from the canvas.',
+    inputs: 'no inputs',
+  },
+  SOURCE_EVENT: {
+    label: 'Event source',
+    hint: 'Marks the samples where an event was reported. 1 at that sample and nothing '
+        + 'elsewhere, so a filter on it selects the moments the event happened.',
     inputs: 'no inputs',
   },
   COMBINE: {
@@ -95,7 +108,7 @@ function detailOf(n: GraphNode): string {
  * output, which made the connecting edge double back on itself and the graph unreadable.
  */
 const TIER: Record<GraphNodeKind, number> = {
-  SOURCE_KPI: 0, SOURCE_NEIGHBOUR: 0, COMBINE: 1,
+  SOURCE_KPI: 0, SOURCE_NEIGHBOUR: 0, SOURCE_SAMPLE: 0, SOURCE_EVENT: 0, COMBINE: 1,
   EXPRESSION: 2, FILTER: 2, STATE_MACHINE: 3, OUTPUT: 4,
 }
 
@@ -121,9 +134,13 @@ const freshId = (nodes: GraphNode[]) => {
   return nextId
 }
 
-export function KpiWorkbench({ defs, onChanged }: {
+export function KpiWorkbench({ defs, onChanged, eventTypes = [], sessionId = null }: {
   defs: KpiDefinition[]
   onChanged: () => void
+  /** The event registry, so the canvas names an event the way every other screen does. */
+  eventTypes?: EventType[]
+  /** Which measurement a preview reads. Null previews across every session. */
+  sessionId?: number | null
 }) {
   const [nodes, setNodes] = useState<GraphNode[]>([])
   const [edges, setEdges] = useState<GraphEdge[]>([])
@@ -132,6 +149,9 @@ export function KpiWorkbench({ defs, onChanged }: {
   const [pointer, setPointer] = useState<{ x: number; y: number } | null>(null)
   const [validation, setValidation] = useState<GraphValidation | null>(null)
   const [stored, setStored] = useState<StoredGraph[]>([])
+  const [preview, setPreview] = useState<GraphNodePreview | null>(null)
+  const [previewError, setPreviewError] = useState<string | null>(null)
+  const [previewing, setPreviewing] = useState(false)
   const [busy, setBusy] = useState(false)
   const [saveError, setSaveError] = useState<string | null>(null)
   const [result, setResult] = useState<string | null>(null)
@@ -177,6 +197,8 @@ export function KpiWorkbench({ defs, onChanged }: {
       y: 24 + tier * (NODE_H + 56),
       kpiName: kind === 'SOURCE_KPI' ? (defs[0]?.name ?? null) : null,
       rank: kind === 'SOURCE_NEIGHBOUR' ? 1 : null,
+      field: kind === 'SOURCE_SAMPLE' ? 'SPEED_KMH' : null,
+      eventType: kind === 'SOURCE_EVENT' ? 'HANDOVER' : null,
       metric: kind === 'SOURCE_NEIGHBOUR' ? 'RSRP' : null,
       excludeServing: kind === 'SOURCE_NEIGHBOUR' ? true : null,
       expression: null, as: null, states: kind === 'STATE_MACHINE' ? [] : null,
@@ -268,7 +290,7 @@ export function KpiWorkbench({ defs, onChanged }: {
         <header>
           <span className="title">KPI Workbench</span>
           <span className="meta">{nodes.length} nodes · {edges.length} edges</span>
-          <span style={{ marginLeft: 'auto', display: 'flex', gap: 6 }}>
+          <span className="wb-palette" style={{ marginLeft: 'auto', display: 'flex', gap: 6 }}>
             {(Object.keys(KIND_INFO) as GraphNodeKind[]).map((k) => (
               <button key={k} onClick={() => addNode(k)} title={KIND_INFO[k].hint}>
                 + {KIND_INFO[k].label}
@@ -325,7 +347,7 @@ export function KpiWorkbench({ defs, onChanged }: {
             })()}
 
             {nodes.map((n) => (
-              <g key={n.id} transform={`translate(${n.x} ${n.y})`}>
+              <g key={n.id} className="wb-node" transform={`translate(${n.x} ${n.y})`}>
                 <rect width={NODE_W} height={NODE_H} rx={2}
                       fill={n.id === selected ? '#eef7ee' : '#f6f6f4'}
                       stroke="#1f7a1f" strokeWidth={n.id === selected ? 2 : 1.5}
@@ -428,6 +450,29 @@ export function KpiWorkbench({ defs, onChanged }: {
                 </div>
               )}
 
+              {sel.kind === 'SOURCE_SAMPLE' && (
+                <label>Field<br />
+                  <select value={sel.field ?? 'SPEED_KMH'}
+                          onChange={(e) => patch(sel.id, { field: e.target.value })}
+                          style={{ width: '100%' }}>
+                    {SAMPLE_FIELDS.map((f) => <option key={f} value={f}>{f}</option>)}
+                  </select></label>
+              )}
+
+              {sel.kind === 'SOURCE_EVENT' && (
+                <label>Event type<br />
+                  {/* From the registry, so the canvas and the map cannot disagree about
+                      what an event type is called. Blank means any type. */}
+                  <select value={sel.eventType ?? ''}
+                          onChange={(e) => patch(sel.id, { eventType: e.target.value || null })}
+                          style={{ width: '100%' }}>
+                    <option value="">(any event)</option>
+                    {eventTypes.map((t) => (
+                      <option key={t.name} value={t.name}>{t.displayName}</option>
+                    ))}
+                  </select></label>
+              )}
+
               {(sel.kind === 'EXPRESSION' || sel.kind === 'FILTER') && (
                 <label>{sel.kind === 'FILTER' ? 'Condition' : 'Formula'}<br />
                   <input value={sel.expression ?? ''}
@@ -438,13 +483,72 @@ export function KpiWorkbench({ defs, onChanged }: {
               )}
 
               {(sel.kind === 'EXPRESSION' || sel.kind === 'SOURCE_KPI'
-                || sel.kind === 'SOURCE_NEIGHBOUR' || sel.kind === 'STATE_MACHINE') && (
+                || sel.kind === 'SOURCE_NEIGHBOUR' || sel.kind === 'SOURCE_SAMPLE'
+                || sel.kind === 'SOURCE_EVENT' || sel.kind === 'STATE_MACHINE') && (
                 <label>Output column name (AS)<br />
                   <input value={sel.as ?? ''}
                          onChange={(e) => patch(sel.id, { as: e.target.value.toUpperCase() })}
                          placeholder="defaults from the node"
                          style={{ width: '100%', fontFamily: 'monospace' }} /></label>
               )}
+
+              {/* Look at what this node produces, publishing nothing.
+                  The alternative was: invent a KPI name, publish it - which writes rows
+                  for every session and adds an entry everyone sees to the shared
+                  catalogue - look at it on another screen, come back, delete it. Done on
+                  every guess, by whoever was least sure. */}
+              <div className="node-preview">
+                <button disabled={previewing} onClick={async () => {
+                  setPreviewing(true); setPreviewError(null); setPreview(null)
+                  try {
+                    setPreview(await api.previewGraphNode({
+                      name: displayName || kpiName,
+                      output: {
+                        name: kpiName, displayName: displayName || kpiName, unit,
+                        category: 'Workbench', technology: '5G NR',
+                        direction: 'HIGHER_IS_BETTER', source: 'UE', decimals: 2,
+                        description: null, expression: null,
+                      },
+                      spec: { nodes, edges },
+                    }, sel.id, sessionId))
+                  } catch (e) {
+                    setPreviewError(e instanceof Error ? e.message : String(e))
+                  } finally { setPreviewing(false) }
+                }}>{previewing ? 'Running…' : 'Preview this node'}</button>
+                {previewError && <div className="error">{previewError}</div>}
+                {preview && preview.nodeId === sel.id && (
+                  <>
+                    {/* The count is over the whole node. "3 rows" and "the first 3 of
+                        41 000" are different answers to "did my join do what I meant",
+                        and the page alone cannot tell them apart. */}
+                    <div className="preview-count">
+                      <b>{preview.rowCount.toLocaleString()}</b> rows
+                      {sessionId != null && ' in this measurement'}
+                      {preview.rowCount === 0 && ' — this node produces nothing'}
+                    </div>
+                    {preview.rows.length > 0 && (
+                      <table className="grid">
+                        <thead>
+                          <tr><th className="num">seq</th>
+                            {preview.columns.map((c) => <th key={c} className="num">{c}</th>)}</tr>
+                        </thead>
+                        <tbody>
+                          {preview.rows.map((r) => (
+                            <tr key={`${r.sessionId}-${r.seq}`}>
+                              <td className="num">{r.seq}</td>
+                              {preview.columns.map((c) => (
+                                <td key={c} className="num">
+                                  {r.values[c] == null ? '—' : String(r.values[c])}
+                                </td>
+                              ))}
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    )}
+                  </>
+                )}
+              </div>
 
               {sel.kind === 'STATE_MACHINE' && (
                 <div style={{ display: 'grid', gap: 6 }}>

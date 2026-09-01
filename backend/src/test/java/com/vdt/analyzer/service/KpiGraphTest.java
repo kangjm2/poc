@@ -31,27 +31,37 @@ class KpiGraphTest {
 
     private static KpiGraph.Node source(int id, String kpi) {
         return new KpiGraph.Node(id, KpiGraph.Kind.SOURCE_KPI, "src", kpi,
-                null, null, null, null, null, null, null, null);
+                null, null, null, null, null, null, null, null, null, null);
     }
 
     private static KpiGraph.Node expr(int id, String formula, String as) {
         return new KpiGraph.Node(id, KpiGraph.Kind.EXPRESSION, "expr", null,
-                null, null, null, formula, as, null, null, null);
+                null, null, null, null, null, formula, as, null, null, null);
     }
 
     private static KpiGraph.Node combine(int id) {
         return new KpiGraph.Node(id, KpiGraph.Kind.COMBINE, "combine", null,
-                null, null, null, null, null, null, null, null);
+                null, null, null, null, null, null, null, null, null, null);
     }
 
     private static KpiGraph.Node output(int id, String column) {
         return new KpiGraph.Node(id, KpiGraph.Kind.OUTPUT, "out", null,
-                null, null, null, null, null, null, null, column);
+                null, null, null, null, null, null, null, null, null, column);
+    }
+
+    private static KpiGraph.Node sample(int id, String field, String as) {
+        return new KpiGraph.Node(id, KpiGraph.Kind.SOURCE_SAMPLE, "smp", null,
+                null, null, null, field, null, null, as, null, null, null);
+    }
+
+    private static KpiGraph.Node event(int id, String type, String as) {
+        return new KpiGraph.Node(id, KpiGraph.Kind.SOURCE_EVENT, "evt", null,
+                null, null, null, null, type, null, as, null, null, null);
     }
 
     private static KpiGraph.Node neighbour(int id, int rank, String metric, String as) {
         return new KpiGraph.Node(id, KpiGraph.Kind.SOURCE_NEIGHBOUR, "nbr", null,
-                rank, metric, true, null, as, null, null, null);
+                rank, metric, true, null, null, null, as, null, null, null);
     }
 
     // ----------------------------------------------------------------- happy paths
@@ -145,7 +155,7 @@ class KpiGraphTest {
         var states = List.of(new KpiGraph.StateRule("BAD_BLER", "DL_BLER > 10"),
                              new KpiGraph.StateRule("OK", "DL_BLER <= 10"));
         var sm = new KpiGraph.Node(2, KpiGraph.Kind.STATE_MACHINE, "sm", null,
-                null, null, null, null, "STATE", states, "UNKNOWN", null);
+                null, null, null, null, null, null, "STATE", states, "UNKNOWN", null);
         var spec = new KpiGraph.Spec(
                 List.of(source(1, "DL_BLER"), sm, output(3, "STATE")),
                 List.of(new KpiGraph.Edge(1, 2), new KpiGraph.Edge(2, 3)));
@@ -263,7 +273,7 @@ class KpiGraphTest {
                                   "1=1 OR pg_sleep(5) > 0",
                                   "RSRP")) {
             var filter = new KpiGraph.Node(2, KpiGraph.Kind.FILTER, "f", null,
-                    null, null, null, bad, null, null, null, null);
+                    null, null, null, null, null, bad, null, null, null, null);
             var spec = new KpiGraph.Spec(
                     List.of(source(1, "RSRP"), filter, output(3, "RSRP")),
                     List.of(new KpiGraph.Edge(1, 2), new KpiGraph.Edge(2, 3)));
@@ -275,7 +285,7 @@ class KpiGraphTest {
     @Test
     void acceptsTheConditionsItIsSupposedTo() {
         var filter = new KpiGraph.Node(2, KpiGraph.Kind.FILTER, "f", null,
-                null, null, null, "RSRP >= -110 AND RSRP < -80", null, null, null, null);
+                null, null, null, null, null, "RSRP >= -110 AND RSRP < -80", null, null, null, null);
         var spec = new KpiGraph.Spec(
                 List.of(source(1, "RSRP"), filter, output(3, "RSRP")),
                 List.of(new KpiGraph.Edge(1, 2), new KpiGraph.Edge(2, 3)));
@@ -341,5 +351,70 @@ class KpiGraphTest {
                         new KpiGraph.Edge(3, 4)));
 
         assertEquals("ORBIT", KpiGraph.compile(spec, KNOWN).outputColumn());
+    }
+
+    // ------------------------------------------------- per-sample and event sources
+
+    @Test
+    void readsAFieldThatLivesOnTheSampleRatherThanInSampleKpi() {
+        var spec = new KpiGraph.Spec(
+                List.of(sample(1, "SPEED_KMH", "SPEED"), output(2, "SPEED")),
+                List.of(new KpiGraph.Edge(1, 2)));
+        var c = KpiGraph.compile(spec, KNOWN);
+        assertTrue(c.sql().contains("speed_kmh"), c.sql());
+        assertTrue(c.sql().contains("FROM sample)"), c.sql());
+        // A sample source reads no KPI, so it must not claim to depend on one - the
+        // dependency list is what decides recompute order.
+        assertTrue(c.referencedKpis().isEmpty(), String.valueOf(c.referencedKpis()));
+    }
+
+    @Test
+    void refusesASampleFieldThatIsNotOnTheAllowList() {
+        for (String bad : List.of("id", "session_id", "password", "latitude; DROP TABLE sample")) {
+            var spec = new KpiGraph.Spec(
+                    List.of(sample(1, bad, "X"), output(2, "X")),
+                    List.of(new KpiGraph.Edge(1, 2)));
+            assertThrows(IllegalArgumentException.class, () -> KpiGraph.compile(spec, KNOWN),
+                    "should have refused sample field: " + bad);
+        }
+    }
+
+    @Test
+    void placesAnEventOnItsNearestSampleAndMarksOnlyThatSample() {
+        var spec = new KpiGraph.Spec(
+                List.of(event(1, "RADIO_LINK_FAILURE", "RLF"), output(2, "RLF")),
+                List.of(new KpiGraph.Edge(1, 2)));
+        var c = KpiGraph.compile(spec, KNOWN);
+        assertTrue(c.sql().contains("network_event"), c.sql());
+        assertTrue(c.sql().contains("RADIO_LINK_FAILURE"), c.sql());
+        // Nearest-sample resolution, so the node keys on seq like every other node.
+        assertTrue(c.sql().contains("ORDER BY abs(extract(epoch"), c.sql());
+        // 1 where the event landed and NULL elsewhere, never 0: a zero would make every
+        // other sample a positive measurement of "no event", which the log never asserts.
+        assertTrue(c.sql().contains("max(1)"), c.sql());
+        assertFalse(c.sql().contains("ELSE 0"), c.sql());
+    }
+
+    @Test
+    void refusesAnEventTypeThatIsNotAName() {
+        for (String bad : List.of("A'; DROP TABLE network_event; --", "type name", "x".repeat(41))) {
+            var spec = new KpiGraph.Spec(
+                    List.of(event(1, bad, "E"), output(2, "E")),
+                    List.of(new KpiGraph.Edge(1, 2)));
+            assertThrows(IllegalArgumentException.class, () -> KpiGraph.compile(spec, KNOWN),
+                    "should have refused event type: " + bad);
+        }
+    }
+
+    @Test
+    void aSampleSourceCombinesWithAKpiSourceOnSeq() {
+        var spec = new KpiGraph.Spec(
+                List.of(sample(1, "SERVING_PCI", "PCI"), source(2, "DL_BLER"),
+                        combine(3), output(4, "DL_BLER")),
+                List.of(new KpiGraph.Edge(1, 3), new KpiGraph.Edge(2, 3),
+                        new KpiGraph.Edge(3, 4)));
+        var c = KpiGraph.compile(spec, KNOWN);
+        assertTrue(c.columnsByNode().get(3).contains("PCI"), String.valueOf(c.columnsByNode()));
+        assertTrue(c.columnsByNode().get(3).contains("DL_BLER"), String.valueOf(c.columnsByNode()));
     }
 }

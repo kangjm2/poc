@@ -63,6 +63,23 @@ public class KpiController {
                 body.output() == null ? null : body.output().name());
     }
 
+    /**
+     * What one node of a graph produces, computed and thrown away.
+     *
+     * Deliberately a POST that writes nothing. The alternative the editor had was to
+     * publish a throwaway KPI to see a node's output, which wrote rows for every session
+     * and put an entry everyone can see in the shared catalogue - on every guess.
+     */
+    @PostMapping("/graphs/preview")
+    public com.vdt.analyzer.service.KpiGraphService.NodePreview previewNode(
+            @RequestBody GraphRequest body,
+            @RequestParam int nodeId,
+            @RequestParam(required = false) Long sessionId,
+            @RequestParam(defaultValue = "8") int limit) {
+        return graphs.previewNode(body.spec(), nodeId, sessionId,
+                body.output() == null ? null : body.output().name(), limit);
+    }
+
     /** Creates or replaces the graph that defines one KPI, and materialises its values. */
     @PostMapping("/graphs")
     @Transactional

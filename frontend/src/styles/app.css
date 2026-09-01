@@ -494,3 +494,9 @@ kbd {
   border: 1px dashed var(--text-dim);
 }
 .toolbar .group button.on { background: #dce8f6; border-color: #7fa5cd; }
+
+/* Looking at one node's output without publishing a KPI to see it. */
+.node-preview { border-top: 1px solid var(--border); padding-top: 8px; margin-top: 4px; }
+.node-preview .preview-count { margin: 6px 0 4px; font-size: 12px; }
+.node-preview table.grid { font-size: 11px; }
+.node-preview table.grid th { position: static; }
