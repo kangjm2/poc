@@ -1,0 +1,552 @@
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { api } from '../api/client'
+import type {
+  GraphEdge, GraphNode, GraphNodeKind, GraphSpec, GraphValidation, KpiDefinition,
+  StoredGraph,
+} from '../api/types'
+
+/**
+ * The KPI Workbench: a KPI built by wiring nodes rather than by typing one formula.
+ *
+ * Drawn to match the reference tool's own workbench, which was read off a screenshot of it
+ * rather than inferred from a manual. That screen is a top-down graph of bordered boxes,
+ * each with a bold title and an optional detail line under it, joined by ORTHOGONAL
+ * right-angle edges - down, across, down - with a small arrowhead entering the top of the
+ * target. Sources sit at the top and the output at the bottom. All of that is reproduced
+ * here, because an engineer who has used that screen should recognise this one.
+ *
+ * What is NOT reproduced is anything that identifies the product: no logo, no wordmark, no
+ * brand colour. Mirroring a layout idiom is how you avoid making an existing user relearn
+ * their tool; copying an identity is a different thing entirely.
+ *
+ * There is no library. The whole editor is SVG and pointer events, which is the same
+ * standing constraint the charts are built under - and the reason the charts are all
+ * hand-written too.
+ */
+
+const NODE_W = 190
+const NODE_H = 46
+const PORT_R = 4
+
+/** What each node kind is for, and what it needs, shown in the inspector. */
+const KIND_INFO: Record<GraphNodeKind, { label: string; hint: string; inputs: string }> = {
+  SOURCE_KPI: {
+    label: 'KPI source',
+    hint: 'Reads one measured or derived KPI as a column.',
+    inputs: 'no inputs',
+  },
+  SOURCE_NEIGHBOUR: {
+    label: 'Neighbour source',
+    hint: 'Reads the Nth strongest cell in the monitored set — the equivalent of the '
+        + 'reference tool’s “1. best” sources.',
+    inputs: 'no inputs',
+  },
+  COMBINE: {
+    label: 'Combine',
+    hint: 'Aligns several inputs onto the same samples, keeping a sample when only some '
+        + 'of them have a value.',
+    inputs: '1–8 inputs',
+  },
+  EXPRESSION: {
+    label: 'Expression',
+    hint: 'Arithmetic over the columns reaching it, named by the alias.',
+    inputs: '1 input',
+  },
+  FILTER: {
+    label: 'Filter',
+    hint: 'Keeps only the samples where the condition holds.',
+    inputs: '1 input',
+  },
+  STATE_MACHINE: {
+    label: 'State machine',
+    hint: 'Labels each sample with the first state whose condition holds. States are '
+        + 'numbered in order, because the result becomes a KPI value.',
+    inputs: '1 input',
+  },
+  OUTPUT: {
+    label: 'Output',
+    hint: 'The column that becomes the KPI.',
+    inputs: '1 input',
+  },
+}
+
+/** The detail line under a node's title, mirroring the reference's second line. */
+function detailOf(n: GraphNode): string {
+  switch (n.kind) {
+    case 'SOURCE_KPI': return n.kpiName ?? '(pick a KPI)'
+    case 'SOURCE_NEIGHBOUR':
+      return `${n.metric ?? 'RSRP'} ${n.rank ?? 1}. best`
+    case 'EXPRESSION': return n.expression ? `${n.expression} AS ${n.as ?? 'VALUE'}` : '(formula)'
+    case 'FILTER': return n.expression ?? '(condition)'
+    case 'STATE_MACHINE':
+      return (n.states ?? []).map((s) => s.state).join(', ') || '(no states)'
+    case 'OUTPUT': return n.column ? `Column: ${n.column}` : 'Column: last'
+    case 'COMBINE': return 'All values within time range'
+    default: return ''
+  }
+}
+
+/**
+ * Which row a kind belongs on, so a new node lands where the reference would put it.
+ *
+ * The reference's graphs read strictly top-down - sources along the top, the output at the
+ * bottom - and that is not decoration: it is how you see at a glance which way the data
+ * flows. Placing new nodes in the order they were added instead put a source beside its own
+ * output, which made the connecting edge double back on itself and the graph unreadable.
+ */
+const TIER: Record<GraphNodeKind, number> = {
+  SOURCE_KPI: 0, SOURCE_NEIGHBOUR: 0, COMBINE: 1,
+  EXPRESSION: 2, FILTER: 2, STATE_MACHINE: 3, OUTPUT: 4,
+}
+
+/**
+ * An orthogonal edge: down out of the source, across, then down into the target.
+ *
+ * When the target is NOT below the source - which a user can always arrange by dragging -
+ * the path drops into a lane below both boxes and comes up into the target, rather than
+ * cutting straight through whatever sits between them.
+ */
+function edgePath(a: { x: number; y: number }, b: { x: number; y: number }): string {
+  const x1 = a.x + NODE_W / 2, y1 = a.y + NODE_H
+  const x2 = b.x + NODE_W / 2, y2 = b.y
+  const lane = y2 > y1 + 24
+    ? y1 + (y2 - y1) / 2
+    : Math.max(y1, b.y + NODE_H) + 22
+  return `M ${x1} ${y1} L ${x1} ${lane} L ${x2} ${lane} L ${x2} ${y2}`
+}
+
+let nextId = 1
+const freshId = (nodes: GraphNode[]) => {
+  nextId = Math.max(nextId, ...nodes.map((n) => n.id), 0) + 1
+  return nextId
+}
+
+export function KpiWorkbench({ defs, onChanged }: {
+  defs: KpiDefinition[]
+  onChanged: () => void
+}) {
+  const [nodes, setNodes] = useState<GraphNode[]>([])
+  const [edges, setEdges] = useState<GraphEdge[]>([])
+  const [selected, setSelected] = useState<number | null>(null)
+  const [wiringFrom, setWiringFrom] = useState<number | null>(null)
+  const [pointer, setPointer] = useState<{ x: number; y: number } | null>(null)
+  const [validation, setValidation] = useState<GraphValidation | null>(null)
+  const [stored, setStored] = useState<StoredGraph[]>([])
+  const [busy, setBusy] = useState(false)
+  const [saveError, setSaveError] = useState<string | null>(null)
+  const [result, setResult] = useState<string | null>(null)
+
+  const [kpiName, setKpiName] = useState('')
+  const [displayName, setDisplayName] = useState('')
+  const [unit, setUnit] = useState('')
+
+  const svgRef = useRef<SVGSVGElement>(null)
+  const drag = useRef<{ id: number; dx: number; dy: number } | null>(null)
+
+  const spec: GraphSpec = useMemo(() => ({ nodes, edges }), [nodes, edges])
+
+  const reloadStored = useCallback(() => {
+    api.kpiGraphs().then(setStored).catch(() => setStored([]))
+  }, [])
+  useEffect(reloadStored, [reloadStored])
+
+  // Validated on every change, so the editor reports a cycle or a missing input while the
+  // graph is being drawn rather than when the author finally tries to save it. The backend
+  // answers a failed compile with the reason rather than an error status, because during
+  // editing an invalid graph is the normal state.
+  useEffect(() => {
+    if (nodes.length === 0) { setValidation(null); return }
+    let live = true
+    const t = setTimeout(() => {
+      api.validateKpiGraph({ name: kpiName, output: null, spec })
+        .then((v) => { if (live) setValidation(v) })
+        .catch(() => { if (live) setValidation(null) })
+    }, 200)
+    return () => { live = false; clearTimeout(t) }
+  }, [spec, nodes.length, kpiName])
+
+  const addNode = (kind: GraphNodeKind) => {
+    const id = freshId(nodes)
+    // Placed on its kind's row, beside whatever is already there, so a graph assembled by
+    // clicking the palette in any order still comes out reading top-down.
+    const tier = TIER[kind]
+    const onTier = nodes.filter((n) => TIER[n.kind] === tier).length
+    setNodes((ns) => [...ns, {
+      id, kind, label: KIND_INFO[kind].label,
+      x: 40 + onTier * (NODE_W + 40),
+      y: 24 + tier * (NODE_H + 56),
+      kpiName: kind === 'SOURCE_KPI' ? (defs[0]?.name ?? null) : null,
+      rank: kind === 'SOURCE_NEIGHBOUR' ? 1 : null,
+      metric: kind === 'SOURCE_NEIGHBOUR' ? 'RSRP' : null,
+      excludeServing: kind === 'SOURCE_NEIGHBOUR' ? true : null,
+      expression: null, as: null, states: kind === 'STATE_MACHINE' ? [] : null,
+      defaultState: null, column: null,
+    }])
+    setSelected(id)
+  }
+
+  const patch = (id: number, p: Partial<GraphNode>) =>
+    setNodes((ns) => ns.map((n) => (n.id === id ? { ...n, ...p } : n)))
+
+  const removeNode = (id: number) => {
+    setNodes((ns) => ns.filter((n) => n.id !== id))
+    setEdges((es) => es.filter((e) => e.from !== id && e.to !== id))
+    setSelected((s) => (s === id ? null : s))
+  }
+
+  const toLocal = (e: React.PointerEvent) => {
+    const r = svgRef.current!.getBoundingClientRect()
+    return { x: e.clientX - r.left, y: e.clientY - r.top }
+  }
+
+  const onPointerMove = (e: React.PointerEvent) => {
+    const p = toLocal(e)
+    if (wiringFrom != null) setPointer(p)
+    if (drag.current) {
+      const { id, dx, dy } = drag.current
+      patch(id, { x: Math.max(0, p.x - dx), y: Math.max(0, p.y - dy) })
+    }
+  }
+
+  const startWire = (from: number) => { setWiringFrom(from); setSelected(from) }
+
+  const finishWire = (to: number) => {
+    if (wiringFrom == null || wiringFrom === to) { setWiringFrom(null); return }
+    setEdges((es) => (es.some((e) => e.from === wiringFrom && e.to === to)
+      ? es : [...es, { from: wiringFrom, to }]))
+    setWiringFrom(null)
+    setPointer(null)
+  }
+
+  const save = async () => {
+    setBusy(true); setSaveError(null); setResult(null)
+    try {
+      const g = await api.saveKpiGraph({
+        name: displayName || kpiName,
+        output: {
+          name: kpiName, displayName: displayName || kpiName, unit,
+          category: 'Workbench', technology: '5G NR',
+          // NEUTRAL because a graph's direction is the author's to state, and guessing it
+          // would make the tool assert good and bad about a quantity it cannot judge.
+          direction: 'NEUTRAL', source: 'UE', decimals: 2,
+          description: `KPI Workbench graph: ${nodes.length} nodes`,
+          // Null on purpose: a graph KPI is defined by its document, not by a formula.
+          // Filling both would leave two definitions of one KPI that could disagree.
+          expression: null,
+        },
+        spec,
+      })
+      setResult(`${g.outputKpiName}: ${g.valuesComputed} values computed`)
+      reloadStored(); onChanged()
+    } catch (e) {
+      setSaveError(e instanceof Error ? e.message : String(e))
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const load = (g: StoredGraph) => {
+    setNodes(g.spec.nodes); setEdges(g.spec.edges ?? [])
+    setKpiName(g.outputKpiName); setDisplayName(g.name); setSelected(null)
+    setResult(null); setSaveError(null)
+  }
+
+  const remove = async (g: StoredGraph) => {
+    setBusy(true)
+    try { await api.deleteKpiGraph(g.id); reloadStored(); onChanged() }
+    catch (e) { setSaveError(e instanceof Error ? e.message : String(e)) }
+    finally { setBusy(false) }
+  }
+
+  const sel = nodes.find((n) => n.id === selected) ?? null
+  const canvasH = Math.max(360, ...nodes.map((n) => n.y + NODE_H + 60))
+  const canvasW = Math.max(760, ...nodes.map((n) => n.x + NODE_W + 40))
+
+  return (
+    <>
+      <div className="panel">
+        <header>
+          <span className="title">KPI Workbench</span>
+          <span className="meta">{nodes.length} nodes · {edges.length} edges</span>
+          <span style={{ marginLeft: 'auto', display: 'flex', gap: 6 }}>
+            {(Object.keys(KIND_INFO) as GraphNodeKind[]).map((k) => (
+              <button key={k} onClick={() => addNode(k)} title={KIND_INFO[k].hint}>
+                + {KIND_INFO[k].label}
+              </button>
+            ))}
+          </span>
+        </header>
+
+        <div style={{ padding: '8px 10px', color: '#666', whiteSpace: 'normal' }}>
+          A KPI built by wiring nodes: sources feed a combine, arithmetic and a state
+          machine, and one output column becomes the KPI. Drag a node to move it; drag from
+          the dot on its <b>bottom</b> edge to the dot on another node&rsquo;s <b>top</b>{' '}
+          edge to wire them. Rows are ordered by sample throughout, so there is no sort
+          node &mdash; a control that did nothing would be worse than its absence.
+        </div>
+
+        <div style={{ overflow: 'auto', background: '#fff', borderTop: '1px solid #e0e0e6' }}>
+          <svg ref={svgRef} width={canvasW} height={canvasH}
+               style={{ userSelect: 'none' }}
+               role="application" aria-label="KPI graph canvas"
+               onPointerMove={onPointerMove}
+               onPointerUp={() => { drag.current = null }}
+               onPointerLeave={() => { drag.current = null }}
+               onClick={(e) => { if (e.target === svgRef.current) { setSelected(null); setWiringFrom(null) } }}>
+            <defs>
+              <marker id="wb-arrow" viewBox="0 0 8 8" refX="7" refY="4"
+                      markerWidth="7" markerHeight="7" orient="auto">
+                <path d="M 0 0 L 8 4 L 0 8 z" fill="#1f7a1f" />
+              </marker>
+            </defs>
+
+            {edges.map((e) => {
+              const a = nodes.find((n) => n.id === e.from)
+              const b = nodes.find((n) => n.id === e.to)
+              if (!a || !b) return null
+              return (
+                <path key={`${e.from}-${e.to}`} d={edgePath(a, b)}
+                      fill="none" stroke="#1f7a1f" strokeWidth={1.5}
+                      markerEnd="url(#wb-arrow)"
+                      style={{ cursor: 'pointer' }}
+                      onClick={() => setEdges((es) =>
+                        es.filter((x) => !(x.from === e.from && x.to === e.to)))}>
+                  <title>Click to remove this connection</title>
+                </path>
+              )
+            })}
+
+            {wiringFrom != null && pointer && (() => {
+              const a = nodes.find((n) => n.id === wiringFrom)
+              if (!a) return null
+              return <line x1={a.x + NODE_W / 2} y1={a.y + NODE_H}
+                           x2={pointer.x} y2={pointer.y}
+                           stroke="#1f7a1f" strokeWidth={1.5} strokeDasharray="4 3" />
+            })()}
+
+            {nodes.map((n) => (
+              <g key={n.id} transform={`translate(${n.x} ${n.y})`}>
+                <rect width={NODE_W} height={NODE_H} rx={2}
+                      fill={n.id === selected ? '#eef7ee' : '#f6f6f4'}
+                      stroke="#1f7a1f" strokeWidth={n.id === selected ? 2 : 1.5}
+                      style={{ cursor: 'move' }}
+                      onPointerDown={(e) => {
+                        const p = toLocal(e)
+                        drag.current = { id: n.id, dx: p.x - n.x, dy: p.y - n.y }
+                        setSelected(n.id)
+                      }} />
+                <text x={7} y={17} fontSize="11" fontWeight={600}
+                      style={{ pointerEvents: 'none' }}>
+                  {KIND_INFO[n.kind].label}
+                </text>
+                <text x={7} y={32} fontSize="10" fill="#555"
+                      style={{ pointerEvents: 'none' }}>
+                  {detailOf(n).slice(0, 30)}
+                </text>
+
+                {/* Input port on the top edge, output on the bottom - the reference's
+                    layout, and the reason its graphs read top-down. */}
+                {n.kind !== 'SOURCE_KPI' && n.kind !== 'SOURCE_NEIGHBOUR' && (
+                  <circle cx={NODE_W / 2} cy={0} r={PORT_R} fill="#1f7a1f"
+                          style={{ cursor: 'crosshair' }}
+                          onPointerUp={() => finishWire(n.id)}>
+                    <title>Input — drop a connection here</title>
+                  </circle>
+                )}
+                {n.kind !== 'OUTPUT' && (
+                  <circle cx={NODE_W / 2} cy={NODE_H} r={PORT_R} fill="#1f7a1f"
+                          style={{ cursor: 'crosshair' }}
+                          onPointerDown={(e) => { e.stopPropagation(); startWire(n.id) }}>
+                    <title>Output — drag from here to wire</title>
+                  </circle>
+                )}
+              </g>
+            ))}
+          </svg>
+        </div>
+
+        {/* The validation report is always visible rather than appearing only on failure:
+            a graph that is silently invalid until save is a graph the author debugs by
+            guessing. */}
+        <div style={{
+          padding: '6px 10px', borderTop: '1px solid #e0e0e6',
+          background: validation?.ok ? '#f2f8f2' : '#fdf4f4', whiteSpace: 'normal',
+        }}>
+          {validation == null ? <span style={{ color: '#666' }}>Add a node to begin.</span>
+            : validation.ok ? (
+              <span style={{ color: '#147a14' }}>
+                Valid. Output column <b>{validation.outputColumn}</b>
+                {validation.referencedKpis.length > 0
+                  && ` · reads ${validation.referencedKpis.join(', ')}`}
+                {validation.readsNeighbours && ' · reads the monitored set'}
+              </span>
+            ) : <span style={{ color: '#b00020' }}>{validation.error}</span>}
+        </div>
+      </div>
+
+      <div className="panels">
+        <div className="panel">
+          <header><span className="title">Node</span></header>
+          {!sel ? (
+            <div style={{ padding: 10, color: '#666' }}>Select a node to edit it.</div>
+          ) : (
+            <div style={{ padding: 10, display: 'grid', gap: 8 }}>
+              <div style={{ color: '#666', whiteSpace: 'normal' }}>
+                <b>{KIND_INFO[sel.kind].label}</b> — {KIND_INFO[sel.kind].hint}{' '}
+                <span style={{ color: '#999' }}>({KIND_INFO[sel.kind].inputs})</span>
+              </div>
+
+              {sel.kind === 'SOURCE_KPI' && (
+                <label>KPI<br />
+                  <select value={sel.kpiName ?? ''}
+                          onChange={(e) => patch(sel.id, { kpiName: e.target.value })}
+                          style={{ width: '100%' }}>
+                    <option value="">(pick one)</option>
+                    {defs.map((d) => (
+                      <option key={d.name} value={d.name}>{d.displayName}</option>
+                    ))}
+                  </select></label>
+              )}
+
+              {sel.kind === 'SOURCE_NEIGHBOUR' && (
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <label style={{ flex: 1 }}>Quantity<br />
+                    <select value={sel.metric ?? 'RSRP'}
+                            onChange={(e) => patch(sel.id, { metric: e.target.value })}
+                            style={{ width: '100%' }}>
+                      <option value="RSRP">RSRP</option>
+                      <option value="RSRQ">RSRQ</option>
+                    </select></label>
+                  <label style={{ width: 90 }}>Rank<br />
+                    <input type="number" min={1} max={8} value={sel.rank ?? 1}
+                           onChange={(e) => patch(sel.id, { rank: Number(e.target.value) })}
+                           style={{ width: '100%' }} /></label>
+                  <label style={{ flex: 1, alignSelf: 'end' }}>
+                    <input type="checkbox" checked={sel.excludeServing ?? true}
+                           onChange={(e) => patch(sel.id, { excludeServing: e.target.checked })} />
+                    {' '}exclude serving</label>
+                </div>
+              )}
+
+              {(sel.kind === 'EXPRESSION' || sel.kind === 'FILTER') && (
+                <label>{sel.kind === 'FILTER' ? 'Condition' : 'Formula'}<br />
+                  <input value={sel.expression ?? ''}
+                         onChange={(e) => patch(sel.id, { expression: e.target.value })}
+                         placeholder={sel.kind === 'FILTER'
+                           ? 'RSRP >= -110 AND SINR > 0' : 'RSRP - SINR'}
+                         style={{ width: '100%', fontFamily: 'monospace' }} /></label>
+              )}
+
+              {(sel.kind === 'EXPRESSION' || sel.kind === 'SOURCE_KPI'
+                || sel.kind === 'SOURCE_NEIGHBOUR' || sel.kind === 'STATE_MACHINE') && (
+                <label>Output column name (AS)<br />
+                  <input value={sel.as ?? ''}
+                         onChange={(e) => patch(sel.id, { as: e.target.value.toUpperCase() })}
+                         placeholder="defaults from the node"
+                         style={{ width: '100%', fontFamily: 'monospace' }} /></label>
+              )}
+
+              {sel.kind === 'STATE_MACHINE' && (
+                <div style={{ display: 'grid', gap: 6 }}>
+                  <div style={{ color: '#666', whiteSpace: 'normal' }}>
+                    The first state whose condition holds wins. States become the numbers
+                    1, 2, 3&hellip; in this order, because a KPI value is a number; the
+                    names stay in the graph so the legend can show them.
+                  </div>
+                  {(sel.states ?? []).map((st, i) => (
+                    <div key={i} style={{ display: 'flex', gap: 6 }}>
+                      <input value={st.state} placeholder="STATE_NAME"
+                             onChange={(e) => patch(sel.id, {
+                               states: (sel.states ?? []).map((x, j) =>
+                                 j === i ? { ...x, state: e.target.value.toUpperCase() } : x),
+                             })}
+                             style={{ width: 150, fontFamily: 'monospace' }} />
+                      <input value={st.condition} placeholder="DL_BLER > 10"
+                             onChange={(e) => patch(sel.id, {
+                               states: (sel.states ?? []).map((x, j) =>
+                                 j === i ? { ...x, condition: e.target.value } : x),
+                             })}
+                             style={{ flex: 1, fontFamily: 'monospace' }} />
+                      <button onClick={() => patch(sel.id, {
+                        states: (sel.states ?? []).filter((_, j) => j !== i),
+                      })}>&times;</button>
+                    </div>
+                  ))}
+                  <div>
+                    <button onClick={() => patch(sel.id, {
+                      states: [...(sel.states ?? []), { state: '', condition: '' }],
+                    })}>+ state</button>
+                  </div>
+                </div>
+              )}
+
+              {sel.kind === 'OUTPUT' && (
+                <label>Column to publish<br />
+                  <input value={sel.column ?? ''}
+                         onChange={(e) => patch(sel.id, { column: e.target.value.toUpperCase() })}
+                         placeholder="defaults to the last column"
+                         style={{ width: '100%', fontFamily: 'monospace' }} /></label>
+              )}
+
+              <div><button onClick={() => removeNode(sel.id)}>Delete node</button></div>
+            </div>
+          )}
+        </div>
+
+        <div className="panel">
+          <header><span className="title">Publish as a KPI</span></header>
+          <div style={{ padding: 10, display: 'grid', gap: 8 }}>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <label style={{ flex: 1 }}>KPI name<br />
+                <input value={kpiName}
+                       onChange={(e) => setKpiName(e.target.value.toUpperCase())}
+                       placeholder="RSRP_MARGIN" style={{ width: '100%' }} /></label>
+              <label style={{ flex: 1 }}>Display name<br />
+                <input value={displayName} onChange={(e) => setDisplayName(e.target.value)}
+                       placeholder="defaults to the name" style={{ width: '100%' }} /></label>
+              <label style={{ width: 90 }}>Unit<br />
+                <input value={unit} onChange={(e) => setUnit(e.target.value)}
+                       placeholder="dB" style={{ width: '100%' }} /></label>
+            </div>
+            <div style={{ color: '#666', whiteSpace: 'normal' }}>
+              Values are computed now and again on import, not on every read, so a graph
+              KPI behaves like every other KPI everywhere else in the tool &mdash; coloured,
+              binned, exported and reported by the same code.
+            </div>
+            <div>
+              <button onClick={save}
+                      disabled={busy || !kpiName || !validation?.ok}>
+                {busy ? 'Computing…' : 'Save and compute'}
+              </button>
+            </div>
+            {saveError && <div className="error">{saveError}</div>}
+            {result && <div style={{ color: '#147a14' }}>{result}</div>}
+          </div>
+
+          {stored.length > 0 && (
+            <table className="grid">
+              <thead>
+                <tr><th>Graph</th><th>KPI</th><th className="num">Nodes</th>
+                  <th className="num">Values</th><th /></tr>
+              </thead>
+              <tbody>
+                {stored.map((g) => (
+                  <tr key={g.id}>
+                    <td>{g.name}</td>
+                    <td style={{ fontFamily: 'monospace' }}>{g.outputKpiName}</td>
+                    <td className="num">{g.spec.nodes.length}</td>
+                    <td className="num">{g.valuesComputed}</td>
+                    <td>
+                      <button disabled={busy} onClick={() => load(g)}>Open</button>{' '}
+                      <button disabled={busy} onClick={() => remove(g)}>Delete</button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+      </div>
+    </>
+  )
+}

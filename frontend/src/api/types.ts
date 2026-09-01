@@ -279,3 +279,105 @@ export interface FieldToLab {
   existingChannelModelId: number | null
   existingChannelModelName: string | null
 }
+
+/**
+ * One cell in the monitored set, as the reference's `RSCP monitored set` dock lists it:
+ * channel, cell identity, and the two measured quantities. `deltaDb` is the level relative
+ * to the strongest cell at that instant, which is what tells an engineer at a glance
+ * whether the terminal had a clear choice or a crowded one.
+ */
+export interface MonitoredCell {
+  arfcn: number; pci: number; rsrp: number; rsrq: number
+  serving: boolean; rank: number; deltaDb: number | null
+}
+
+export interface MonitoredSet {
+  seq: number; ts: string | null; servingPci: number | null
+  cells: MonitoredCell[]
+  /** Present only when the set needs explaining - e.g. a fade left one cell detectable. */
+  note: string | null
+}
+
+export interface NeighbourBar {
+  arfcn: number; pci: number; band: string | null
+  samplesSeen: number; samplesServing: number; seenPct: number
+  meanRsrp: number; p95Rsrp: number; samplesStrong: number
+}
+
+export interface NeighbourBreakdown {
+  totalSamples: number; strongWithinDb: number; bars: NeighbourBar[]
+}
+
+/** A stretch where several cells compete and none dominates. */
+export interface PollutionSpan {
+  fromSeq: number; toSeq: number; fromTs: string; toTs: string
+  maxCells: number; meanBestRsrp: number; pcis: number[]
+}
+
+// ------------------------------------------------------------------ KPI Workbench
+
+export type GraphNodeKind =
+  | 'SOURCE_KPI' | 'SOURCE_NEIGHBOUR' | 'COMBINE' | 'EXPRESSION'
+  | 'FILTER' | 'STATE_MACHINE' | 'OUTPUT'
+
+export interface GraphStateRule { state: string; condition: string }
+
+/**
+ * One node. x/y are editor-only: the backend ignores them, but they are stored with the
+ * graph so reopening it gives back the layout the author arranged rather than a re-flow.
+ */
+export interface GraphNode {
+  id: number
+  kind: GraphNodeKind
+  label?: string | null
+  x: number
+  y: number
+  kpiName?: string | null
+  rank?: number | null
+  metric?: string | null
+  excludeServing?: boolean | null
+  expression?: string | null
+  as?: string | null
+  states?: GraphStateRule[] | null
+  defaultState?: string | null
+  column?: string | null
+}
+
+export interface GraphEdge { from: number; to: number }
+
+export interface GraphSpec { nodes: GraphNode[]; edges: GraphEdge[] }
+
+export interface GraphValidation {
+  ok: boolean
+  error: string | null
+  referencedKpis: string[]
+  readsNeighbours: boolean
+  outputColumn: string | null
+  sql: string | null
+}
+
+export interface StoredGraph {
+  id: number; name: string; outputKpiName: string
+  spec: GraphSpec; valuesComputed: number
+}
+
+/**
+ * What the workbench sends when publishing a graph.
+ *
+ * Deliberately its own type rather than KpiDefinition: that one is the RESPONSE shape and
+ * carries fields the server owns (`seeded`, the resolved thresholds), so reusing it here
+ * would mean either sending values the server ignores or widening the response type with
+ * request-only fields. `output` is null on a validate call, which checks the graph alone.
+ */
+export interface KpiOutputRequest {
+  name: string; displayName: string; unit: string; category: string
+  technology: string; direction: string; source: string; decimals: number
+  description: string | null
+  expression: string | null
+}
+
+export interface GraphRequest {
+  name: string
+  output: KpiOutputRequest | null
+  spec: GraphSpec
+}

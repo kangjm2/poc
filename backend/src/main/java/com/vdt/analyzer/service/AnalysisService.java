@@ -60,7 +60,13 @@ public class AnalysisService {
         if (!sessions.existsById(id)) {
             throw new NoSuchElementException("No session " + id);
         }
+        // Both of these are partitioned and carry no foreign key to the session, so neither
+        // is removed by the cascade - they have to be deleted by hand. sample_neighbour was
+        // added later than this method and inherited the same shape, so it needs the same
+        // line; without it every deleted session left its monitored set behind, and those
+        // rows would then be attributed to whatever session id got reused.
         jdbc.update("DELETE FROM sample_kpi WHERE session_id = ?", id);
+        jdbc.update("DELETE FROM sample_neighbour WHERE session_id = ?", id);
         sessions.deleteById(id);
     }
 

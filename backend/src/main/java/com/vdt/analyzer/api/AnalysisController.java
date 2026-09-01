@@ -9,6 +9,7 @@ import com.vdt.analyzer.repo.EventRepo;
 import com.vdt.analyzer.repo.MessageRepo;
 import com.vdt.analyzer.service.AnalysisService;
 import com.vdt.analyzer.service.FieldToLabService;
+import com.vdt.analyzer.service.MonitoredSetService;
 import com.vdt.analyzer.service.ProblemSurvey;
 import org.springframework.web.bind.annotation.*;
 
@@ -25,16 +26,19 @@ public class AnalysisController {
     private final MessageRepo messages;
     private final ProblemSurvey problems;
     private final FieldToLabService fieldToLab;
+    private final MonitoredSetService monitored;
 
     public AnalysisController(AnalysisService analysis, CellRefRepo cells,
                               EventRepo events, MessageRepo messages,
-                              ProblemSurvey problems, FieldToLabService fieldToLab) {
+                              ProblemSurvey problems, FieldToLabService fieldToLab,
+                              MonitoredSetService monitored) {
         this.analysis = analysis;
         this.cells = cells;
         this.events = events;
         this.messages = messages;
         this.problems = problems;
         this.fieldToLab = fieldToLab;
+        this.monitored = monitored;
     }
 
     @GetMapping("/sessions")
@@ -141,6 +145,39 @@ public class AnalysisController {
     @GetMapping("/sessions/{id}/cells")
     public List<CellRef> cells(@PathVariable long id) {
         return cells.findBySessionIdOrderByPciAsc(id);
+    }
+
+    /**
+     * The monitored set at one instant - the reference tool's permanently-docked
+     * `RSCP monitored set` / `Ec/N0 monitored set` tables, in 5G NR terms.
+     */
+    @GetMapping("/sessions/{id}/monitored-set")
+    public MonitoredSetService.MonitoredSet monitoredSet(@PathVariable long id,
+                                                         @RequestParam int seq) {
+        return monitored.at(id, seq);
+    }
+
+    /**
+     * Every cell the drive DETECTED, which is a different question from the existing
+     * cell breakdown: that one groups samples by the cell that served them, so a strong
+     * cell that never served is invisible to it.
+     */
+    @GetMapping("/sessions/{id}/neighbour-breakdown")
+    public MonitoredSetService.NeighbourBreakdown neighbourBreakdown(
+            @PathVariable long id,
+            @RequestParam(required = false) Integer fromSeq,
+            @RequestParam(required = false) Integer toSeq,
+            @RequestParam(required = false) Double windowDb) {
+        return monitored.breakdown(id, fromSeq, toSeq, windowDb);
+    }
+
+    /** Stretches where several cells compete and none dominates. */
+    @GetMapping("/sessions/{id}/pilot-pollution")
+    public List<MonitoredSetService.PollutionSpan> pilotPollution(
+            @PathVariable long id,
+            @RequestParam(required = false) Double windowDb,
+            @RequestParam(required = false) Integer minCells) {
+        return monitored.pollution(id, windowDb, minCells);
     }
 
     @GetMapping("/compare")

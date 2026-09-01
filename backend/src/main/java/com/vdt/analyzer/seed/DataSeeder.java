@@ -201,6 +201,7 @@ public class DataSeeder implements SmartInitializingSingleton {
                 + " speed_kmh, serving_pci) VALUES (?,?,?,?,?,?,?)", sampleRows);
         jdbc.batchUpdate("INSERT INTO sample_kpi (session_id, seq, ts, kpi_name, value)"
                 + " VALUES (?,?,?,?,?)", kpiRows);
+        seedMonitoredSet(sid, start, points);
 
         seedEventsAndMessages(sid, start, points);
     }
@@ -287,6 +288,7 @@ public class DataSeeder implements SmartInitializingSingleton {
                 + " speed_kmh, serving_pci) VALUES (?,?,?,?,?,?,?)", sampleRows);
         jdbc.batchUpdate("INSERT INTO sample_kpi (session_id, seq, ts, kpi_name, value)"
                 + " VALUES (?,?,?,?,?)", kpiRows);
+        seedMonitoredSet(sid, start, points);
 
         for (Site site : CITY_SITES) {
             CellRef c = new CellRef();
@@ -313,6 +315,26 @@ public class DataSeeder implements SmartInitializingSingleton {
     private static void addKpi(List<Object[]> rows, long sessionId, int seq,
                                java.sql.Timestamp ts, String kpi, double value) {
         rows.add(new Object[]{sessionId, seq, ts, kpi, value});
+    }
+
+    /**
+     * Writes the monitored set the generator produced alongside each sample.
+     *
+     * Shared by both seeded routes rather than duplicated, because the one thing that must
+     * never differ between them is the relationship between a sample and the cells it could
+     * see. The row count varies per sample by design - a cell below the detection floor
+     * produces nothing - so this cannot be sized from the sample count.
+     */
+    private void seedMonitoredSet(long sid, Instant start, List<Point> points) {
+        List<Object[]> rows = new ArrayList<>(points.size() * 5);
+        for (Point p : points) {
+            java.sql.Timestamp ts = java.sql.Timestamp.from(start.plusSeconds(p.seq()));
+            for (DriveTestGenerator.Neighbour n : p.monitoredSet()) {
+                rows.add(new Object[]{sid, p.seq(), ts, n.arfcn(), n.pci(), n.rsrp(), n.rsrq()});
+            }
+        }
+        jdbc.batchUpdate("INSERT INTO sample_neighbour (session_id, seq, ts, arfcn, pci,"
+                + " rsrp, rsrq) VALUES (?,?,?,?,?,?,?)", rows);
     }
 
     /** Derives events from the generated series so they line up with the measurements. */

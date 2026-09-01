@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { api } from '../api/client'
 import type { ImportResult, KpiDefinition } from '../api/types'
 import { DerivedKpiPanel } from './DerivedKpiPanel'
+import { KpiWorkbench } from './KpiWorkbench'
 
 /**
  * CSV import.
@@ -119,6 +120,16 @@ export function ImportView({ onImported }: { onImported: () => void }) {
                          api.kpiDefinitions().then(setDefs).catch(() => {})
                          onImported()
                        }} />
+
+      {/* The workbench sits beside the formula panel because they are the same job at two
+          scales: one is arithmetic per sample, the other is a dataflow. Splitting them
+          across screens would make an author choose between them before understanding
+          the difference. */}
+      <KpiWorkbench defs={defs}
+                    onChanged={() => {
+                      api.kpiDefinitions().then(setDefs).catch(() => {})
+                      onImported()
+                    }} />
 
       {error && <div className="error">{error}</div>}
 
