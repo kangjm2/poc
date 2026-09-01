@@ -1,6 +1,6 @@
 import { Fragment, useEffect, useRef, useState } from 'react'
 import type {
-  Degradation, Distribution, KpiDefinition, NetworkEvent, SignalingMessage, Snapshot,
+  Degradation, Distribution, EventType, KpiDefinition, NetworkEvent, SignalingMessage, Snapshot,
 } from '../api/types'
 
 /** Parameter grid: every KPI at the cursor, grouped by category. */
@@ -97,20 +97,35 @@ export function LegendPanel({ dist, onEdit }: {
 }
 
 export function EventList({
-  events, onPick,
-}: { events: NetworkEvent[]; onPick: (ts: string) => void }) {
+  events, types, onPick,
+}: {
+  events: NetworkEvent[]
+  types: Map<string, EventType>
+  onPick: (seq: number) => void
+}) {
   return (
     <table className="grid">
       <thead><tr><th>Time</th><th>Event</th><th>Detail</th></tr></thead>
       <tbody>
-        {events.map((e) => (
-          <tr key={e.id} className="deg-row" onClick={() => onPick(e.ts)}>
-            <td>{new Date(e.ts).toISOString().slice(11, 19)}</td>
-            <td className={e.severity === 'CRITICAL' ? 'sev-CRITICAL'
-              : e.severity === 'WARNING' ? 'sev-WARNING' : ''}>{e.eventType}</td>
-            <td style={{ whiteSpace: 'normal' }}>{e.detail}</td>
-          </tr>
-        ))}
+        {events.map((e) => {
+          // Same glyph and same words as the map marker, the chart tick and the pie
+          // slice. This row used to print the raw column, so one failure read as
+          // RADIO_LINK_FAILURE here and "Radio link failure" two panels away.
+          const t = types.get(e.eventType)
+          return (
+            <tr key={e.id} className="deg-row" onClick={() => onPick(e.seq)}>
+              <td>{new Date(e.ts).toISOString().slice(11, 19)}</td>
+              <td className={e.severity === 'CRITICAL' ? 'sev-CRITICAL'
+                : e.severity === 'WARNING' ? 'sev-WARNING' : ''}>
+                <span className="ev-symbol" style={{ color: t?.color }}>
+                  {t?.symbol ?? '?'}
+                </span>
+                {t?.displayName ?? e.eventType}
+              </td>
+              <td style={{ whiteSpace: 'normal' }}>{e.detail}</td>
+            </tr>
+          )
+        })}
       </tbody>
     </table>
   )

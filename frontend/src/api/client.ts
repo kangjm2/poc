@@ -6,7 +6,7 @@ import type {
   Threshold, TrackPoint, UeProfile,
   MonitoredSet, NeighbourBreakdown, PollutionSpan,
   GraphRequest, GraphValidation, StoredGraph,
-  DistanceBin, CellFootprint, Workbook, WorkbookRequest,
+  DistanceBin, CellFootprint, Workbook, WorkbookRequest, EventType,
 } from './types'
 
 const BASE = '/api'
@@ -168,6 +168,9 @@ export const api = {
     }
     return res.json() as Promise<ImportResult>
   },
+
+  /** Session-independent, so callers fetch it once rather than per drive. */
+  eventTypes: () => get<EventType[]>('/event-types'),
 
   importJobs: () => get<Array<Record<string, unknown>>>('/import/jobs'),
 

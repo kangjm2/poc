@@ -103,6 +103,7 @@ GET /api/sessions/{id}/track?kpi=RSRP&maxPoints=4000
 | `cell_ref` | 세션에 등장한 셀 | PCI·ARFCN·밴드·GSCN·방위각 |
 | `sample_neighbour` | **모니터드 셋** — 표본별 검출된 이웃 셀 | **HASH(session_id) 8-파티션**, `(session_id, seq, arfcn, pci)` PK |
 | `network_event` | 핸드오버·RACH·결함 등 | 심각도 포함 |
+| `event_type` | 이벤트 타입 **레지스트리** — 표시명·색·심볼·`kind`(LOGGED/DERIVED)·정렬 순서 | 지도 마커 · 차트 눈금 · Events 독 · 문제 파이가 **모두 여기서** 읽습니다 |
 | `signaling_message` | L3/RRC·M-plane 메시지 | 방향·프로토콜·본문 |
 
 `sample_neighbour`에는 **`is_serving` 열이 없습니다.** 어느 셀이 서빙이었는지는 이미
@@ -364,7 +365,7 @@ API는 호출자가 보낸 라벨도 그대로 저장하므로, 경계와 라벨
 |---|---|
 | 백엔드 | `:8080`, 실행 가능 JAR |
 | 프론트엔드 | `:4173`, **빌드 산출물**을 서빙 |
-| DB 마이그레이션 | Flyway, 기동 시 자동 (`V1` 스키마 → `V2` 파티셔닝·랩 도메인 → `V3` 미사용 테이블 제거) |
+| DB 마이그레이션 | Flyway, 기동 시 자동 (`V1` 스키마 → `V2` 파티셔닝·랩 도메인 → `V3` 미사용 테이블 제거 → … → `V10` 이벤트 타입 레지스트리) |
 | 시드 | 빈 DB에서만 실행. 4개 세션(도심 2빌드·고속도로·프론트홀 주입)과 랩 캠페인 |
 | 압축 | 응답 gzip |
 

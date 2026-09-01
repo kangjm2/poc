@@ -1,7 +1,9 @@
 import { useEffect, useRef, useState } from 'react'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
-import type { AreaBin, CellFootprint, CellRef, MonitoredCell, TrackPoint } from '../api/types'
+import type {
+  AreaBin, CellFootprint, CellRef, EventType, MonitoredCell, NetworkEvent, TrackPoint,
+} from '../api/types'
 
 interface Props {
   track: TrackPoint[]
@@ -24,6 +26,15 @@ interface Props {
    * samples one at a time.
    */
   footprints?: CellFootprint[] | null
+  /**
+   * Events the network reported, each already placed on a sample by the server. Drawn as
+   * per-type symbols on the route: "were all six link failures on the same street" is a
+   * question about geography, and until now the only way to ask it was to click six table
+   * rows in turn and remember where the cursor dot landed each time.
+   */
+  events?: NetworkEvent[]
+  /** Name -> display identity, so a marker carries the same glyph the table does. */
+  eventTypes?: Map<string, EventType>
 }
 
 /**
@@ -33,11 +44,12 @@ interface Props {
  */
 export function RouteMap({
   track, cells, cursorSeq, onCursorChange, kpiName, bins, showServingLine = true,
-  monitored = null, footprints = null,
+  monitored = null, footprints = null, events = [], eventTypes,
 }: Props) {
   const hostRef = useRef<HTMLDivElement>(null)
   const mapRef = useRef<L.Map | null>(null)
   const routeLayer = useRef<L.LayerGroup | null>(null)
+  const eventLayer = useRef<L.LayerGroup | null>(null)
   const cellLayer = useRef<L.LayerGroup | null>(null)
   const binLayer = useRef<L.LayerGroup | null>(null)
   const servingLine = useRef<L.Polyline | null>(null)
@@ -61,6 +73,9 @@ export function RouteMap({
     routeLayer.current = L.layerGroup().addTo(map)
     binLayer.current = L.layerGroup().addTo(map)
     cellLayer.current = L.layerGroup().addTo(map)
+    // Last, so event symbols sit above the route and the cell markers rather than under
+    // a 6px coloured line.
+    eventLayer.current = L.layerGroup().addTo(map)
     mapRef.current = map
     return () => { map.remove(); mapRef.current = null }
   }, [])
@@ -163,7 +178,7 @@ export function RouteMap({
           color: gap ? '#8a8a95' : '#b00020',
           weight: 2,
           opacity: 0.85,
-          dashArray: gap ? '5 7' : '2 4',
+          dashArray: gap ? '5 7' : '3 5',
         },
       )
         .bindTooltip(
@@ -179,6 +194,49 @@ export function RouteMap({
 
     map.fitBounds(L.latLngBounds(frame), { padding: [18, 18] })
   }, [track, kpiName, onCursorChange, bins])
+
+  // Events, as per-type symbols anchored on the route.
+  //
+  // These are L.marker with a divIcon rather than circleMarker or polyline on purpose:
+  // a divIcon renders into the marker pane as a <div>, so it cannot be caught by any of
+  // the path selectors the checkers use to count route runs, neighbour lines, area bins
+  // or footprints. Adding a shape to the overlay pane would have quietly changed four
+  // existing counts.
+  useEffect(() => {
+    const layer = eventLayer.current
+    if (!layer) return
+    layer.clearLayers()
+    for (const e of events) {
+      // An event without a fix cannot be placed. Falling back to the route position at
+      // its seq would put a marker somewhere plausible and wrong, so it is left off the
+      // map and stays in the table, where it is still readable.
+      if (e.latitude == null || e.longitude == null) continue
+      const t = eventTypes?.get(e.eventType)
+      const colour = t?.color ?? '#8a8a95'
+      const glyph = t?.symbol ?? '?'
+      L.marker([e.latitude, e.longitude], {
+        icon: L.divIcon({
+          className: 'event-marker',
+          // Colour alone does not survive a photocopy or a reader with colour-vision
+          // deficiency, and the route underneath is already dense with colour - so the
+          // glyph carries the identity and the colour reinforces it.
+          html: `<span class="ev-dot" style="border-color:${colour};color:${colour}">`
+              + `${glyph}</span>`,
+          iconSize: [16, 16],
+          iconAnchor: [8, 8],
+        }),
+        // Below the cursor marker, above the route.
+        zIndexOffset: 100,
+      })
+        .on('click', () => onCursorChange(e.seq))
+        .bindTooltip(
+          `${new Date(e.ts).toISOString().slice(11, 19)} · `
+          + `${t?.displayName ?? e.eventType}<br/>${e.detail ?? ''}`,
+          { direction: 'top' },
+        )
+        .addTo(layer)
+    }
+  }, [events, eventTypes, onCursorChange])
 
   useEffect(() => {
     const layer = cellLayer.current
@@ -280,6 +338,11 @@ export function RouteMap({
         L.polyline(
           [[p.latitude, p.longitude], [cell.latitude, cell.longitude]],
           {
+            // Named, not merely styled: the check that counts these used to select on
+            // dashArray '2 4', which the rejected-fix break also carried - so it was
+            // counting two unrelated things and would have passed with no neighbour
+            // lines at all.
+            className: 'neighbour-line',
             color: competing ? '#d4783c' : '#9aa0a6',
             weight: competing ? 2 : 1,
             dashArray: '2 4',

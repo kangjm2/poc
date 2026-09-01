@@ -2,12 +2,11 @@ package com.vdt.analyzer.api;
 
 import com.vdt.analyzer.api.Dtos.*;
 import com.vdt.analyzer.domain.CellRef;
-import com.vdt.analyzer.domain.NetworkEvent;
 import com.vdt.analyzer.domain.SignalingMessage;
 import com.vdt.analyzer.repo.CellRefRepo;
-import com.vdt.analyzer.repo.EventRepo;
 import com.vdt.analyzer.repo.MessageRepo;
 import com.vdt.analyzer.service.AnalysisService;
+import com.vdt.analyzer.service.EventTypeCatalog;
 import com.vdt.analyzer.service.FieldToLabService;
 import com.vdt.analyzer.service.MonitoredSetService;
 import com.vdt.analyzer.service.ProblemSurvey;
@@ -22,23 +21,23 @@ public class AnalysisController {
 
     private final AnalysisService analysis;
     private final CellRefRepo cells;
-    private final EventRepo events;
     private final MessageRepo messages;
     private final ProblemSurvey problems;
     private final FieldToLabService fieldToLab;
     private final MonitoredSetService monitored;
+    private final EventTypeCatalog eventTypes;
 
     public AnalysisController(AnalysisService analysis, CellRefRepo cells,
-                              EventRepo events, MessageRepo messages,
+                              MessageRepo messages,
                               ProblemSurvey problems, FieldToLabService fieldToLab,
-                              MonitoredSetService monitored) {
+                              MonitoredSetService monitored, EventTypeCatalog eventTypes) {
         this.analysis = analysis;
         this.cells = cells;
-        this.events = events;
         this.messages = messages;
         this.problems = problems;
         this.fieldToLab = fieldToLab;
         this.monitored = monitored;
+        this.eventTypes = eventTypes;
     }
 
     @GetMapping("/sessions")
@@ -133,8 +132,20 @@ public class AnalysisController {
     }
 
     @GetMapping("/sessions/{id}/events")
-    public List<NetworkEvent> events(@PathVariable long id) {
-        return events.findBySessionIdOrderByTsAsc(id);
+    public List<EventDto> events(@PathVariable long id) {
+        return analysis.events(id);
+    }
+
+    /**
+     * The display vocabulary: what each event type is called, its colour and its glyph.
+     * Session-independent, so the client fetches it once rather than per drive.
+     */
+    @GetMapping("/event-types")
+    public List<EventTypeDto> eventTypes() {
+        return eventTypes.all().stream()
+                .map(t -> new EventTypeDto(t.name(), t.displayName(), t.color(), t.symbol(),
+                        t.kind()))
+                .toList();
     }
 
     @GetMapping("/sessions/{id}/messages")

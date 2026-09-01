@@ -1,6 +1,9 @@
 import { useEffect, useState } from 'react'
 import { api } from '../api/client'
-import type { ProblemInstance, ProblemSurvey } from '../api/types'
+import type {
+  EventType, NetworkEvent, ProblemInstance, ProblemSurvey, Series,
+} from '../api/types'
+import { TimeSeriesChart } from './TimeSeriesChart'
 
 /**
  * Problems classified by cause, as a pie you can drill through.
@@ -37,19 +40,34 @@ function slicePath(from: number, to: number) {
   return `M ${CX} ${CY} L ${x0} ${y0} A ${R} ${R} 0 ${large} 1 ${x1} ${y1} Z`
 }
 
-export function ProblemSurveyPanel({ sessionId, onPick }: {
+/** Samples either side of a case that the context view shows. 1 Hz, so 30 s each way. */
+const CONTEXT_PAD = 30
+
+export function ProblemSurveyPanel({ sessionId, onPick, events = [], eventTypes }: {
   sessionId: number | null
   onPick: (seq: number) => void
+  events?: NetworkEvent[]
+  eventTypes?: Map<string, EventType>
 }) {
   const [data, setData] = useState<ProblemSurvey | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [drill, setDrill] = useState<string | null>(null)
+  // Which case the context view is showing. Clicking a case used to only move a cursor
+  // that nothing on this page displays - the pie and the case list were all the user
+  // could see, so "what was RSRP doing in the ten seconds before it" meant leaving the
+  // page, finding a thin red stretch on another tab, and coming back.
+  const [selected, setSelected] = useState<ProblemInstance | null>(null)
+  const [context, setContext] = useState<Series | null>(null)
 
   useEffect(() => {
     if (sessionId == null) return
-    setError(null); setDrill(null)
+    setError(null); setDrill(null); setSelected(null)
     api.problemSurvey(sessionId).then(setData)
       .catch((e) => setError(e instanceof Error ? e.message : String(e)))
+    // One fetch per session, not per case: the window is applied to the x domain, so
+    // clicking through cases costs nothing.
+    api.series(sessionId, ['RSRP']).then((all) => setContext(all[0] ?? null))
+      .catch(() => setContext(null))
   }, [sessionId])
 
   if (error) return <div className="error">{error}</div>
@@ -135,7 +153,7 @@ export function ProblemSurveyPanel({ sessionId, onPick }: {
             <tbody>
               {shown.map((i, n) => (
                 <tr key={`${i.category}-${i.startSeq}-${n}`} className="deg-row"
-                    onClick={() => onPick(i.startSeq)}
+                    onClick={() => { setSelected(i); onPick(i.startSeq) }}
                     title="Move the cursor to this problem">
                   <td>{i.categoryLabel}</td>
                   <td className={`sev-${i.severity}`}>{i.severity}</td>
@@ -149,6 +167,47 @@ export function ProblemSurveyPanel({ sessionId, onPick }: {
           </table>
         </div>
       </div>
+
+      {selected && (
+        <div className="panel case-context">
+          <header>
+            <span className="title">Around this problem</span>
+            <span className="meta" style={{ marginLeft: 'auto' }}>
+              {selected.categoryLabel}
+            </span>
+            <button style={{ marginLeft: 8 }} onClick={() => setSelected(null)}>
+              Close
+            </button>
+          </header>
+          <div style={{ padding: '6px 10px 0' }}>
+            <div className="ctx-span">
+              {selected.startSeq === selected.endSeq
+                ? `seq ${selected.startSeq}`
+                : `seq ${selected.startSeq}–${selected.endSeq} `
+                  + `(${selected.endSeq - selected.startSeq + 1} samples)`}
+              {' · showing '}
+              {Math.max(0, selected.startSeq - CONTEXT_PAD)}–
+              {selected.endSeq + CONTEXT_PAD}
+            </div>
+          </div>
+          {context ? (
+            // The same chart component the analysis pages use, windowed. A second
+            // implementation would be a second place for the seq-to-x mapping to drift.
+            <TimeSeriesChart
+              series={context}
+              cursorSeq={selected.startSeq}
+              onCursorChange={onPick}
+              events={events}
+              eventTypes={eventTypes}
+              fromSeq={Math.max(0, selected.startSeq - CONTEXT_PAD)}
+              toSeq={selected.endSeq + CONTEXT_PAD}
+              height={130}
+            />
+          ) : (
+            <div className="loading">No RSRP trace for this session.</div>
+          )}
+        </div>
+      )}
     </>
   )
 }

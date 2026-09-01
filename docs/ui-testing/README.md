@@ -168,6 +168,42 @@ check('색상 범례에 건수·비율 포함', legendRows >= 5 && legendStats.l
 > 교훈: **단언이 실제로 실패하는지 확인하지 않은 단언은 통과하는지도 모르는 단언입니다.**
 > 결함 주입은 테스트 자체를 테스트하는 유일한 방법입니다. 30개 중 최소 1개가 무의미했습니다.
 
+### 1.5.1 같은 실수의 두 번째 얼굴 — 파생값을 재고 원본을 안 재기 (2026-09-01)
+
+§1.5는 **엉뚱한 것을 재는** 단언이었습니다. 이건 다릅니다. 겨냥은 정확한데 **원본이 아니라
+그 원본과 무관하게 계산되는 파생값**을 읽습니다. 겉보기에는 훨씬 그럴듯해서 더 오래 삽니다.
+
+문제 드릴다운의 "맥락 창" 검사가 이랬습니다.
+
+```js
+const ctxSpan = await page.locator('.case-context .ctx-span').innerText()  // "showing 0–111"
+const windowWidth = Number(shown[2]) - Number(shown[1])
+step('the context view is a window, not the whole drive', windowWidth < total / 2)
+```
+
+캡션은 `CONTEXT_PAD` **산술**입니다. 차트에 창을 넘겼든 안 넘겼든 같은 문장을 인쇄합니다.
+창 prop을 `null`로 만들자 차트는 주행 전체를 그렸고, 검사는 `111 samples of 1174`로
+**통과**했습니다. 캡션이 차트를 대신해서 옳은 말을 해 준 것입니다.
+
+수정은 차트가 **실제로 그린 것**을 재는 것입니다. x축 눈금 라벨은 그려진 점에서 뽑은
+시각이므로 차트가 무시하는 캡션과 일치할 수 없습니다.
+
+```js
+// textContent, not innerText: innerText는 SVG <text>에서 undefined입니다
+const clocks = (await page.locator('.case-context svg text').allTextContents())
+  .filter((t) => /^\d\d:\d\d:\d\d$/.test(t))
+  .map((t) => t.split(':').reduce((a, n) => a * 60 + Number(n), 0))
+const drawnSpan = Math.max(...clocks) - Math.min(...clocks)
+```
+
+주입 시 `chart spans 1199s of a 1174-sample drive`로 **실패**합니다.
+
+> 교훈: **무엇을 재는지보다 그 값이 어디서 오는지를 물으십시오.** 검사 대상과 같은 입력에서
+> 독립적으로 계산되는 값은 대상이 고장 나도 옳은 답을 계속 인쇄합니다.
+> 같은 세션의 다른 사례: 세 화면이 거리 규칙을 공유하자 **규칙이 틀렸는데도 서로 동의**해서
+> "화면 간 일치" 검사가 통과했습니다. 잡은 것은 독립 불변식(같은 경로 두 세션은 같은 길이)뿐이었습니다.
+> 두 사례 모두 **단언끼리 서로를 통과시켜 준** 경우입니다.
+
 ### 1.6 API 표면 커버리지 — "뷰 없는 로직"을 정면으로 겨냥
 
 타입 체크가 못 보는(타입은 정상) 그리고 E2E가 못 보는(없는 화면의 테스트를 아무도 안 씀) 영역입니다.

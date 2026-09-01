@@ -104,12 +104,17 @@ const framing = await page.evaluate(() => {
 check('경로가 이상치에 눌려 찌그러지지 않음', framing != null && framing.fill > 0.4,
   framing ? `route fills ${(framing.fill * 100).toFixed(0)}% of the map` : 'no route')
 
-await page.locator('.toolbar select').first().selectOption({ index: 1 })
+// Restore by VALUE, not by index 0: the picker is ordered newest-first, so index 0 is
+// the most recent session rather than the one that was loaded. Getting this wrong left
+// every later check running against a different drive than it was written for.
+const sessionPicker = page.locator('.toolbar select').first()
+const sessionBefore = await sessionPicker.inputValue()
+await sessionPicker.selectOption({ index: 1 })
 await page.waitForTimeout(2200)
 const brk2 = await breakPaths()
 check('결함 없는 세션에는 끊김을 그리지 않음', brk2.gap === 0 && brk2.glitch === 0,
   `clean session: ${brk2.gap} gaps, ${brk2.glitch} glitches`)
-await page.locator('.toolbar select').first().selectOption({ index: 0 })
+await sessionPicker.selectOption(sessionBefore)
 await page.waitForTimeout(2200)
 
 // 3c. and the same judgement must reach the distance axis. A single bad fix adds an
@@ -124,6 +129,35 @@ const distOf = async (id) => {
 const [d1, d2] = [await distOf(1), await distOf(2)]
 check('이상치가 주행 거리를 부풀리지 않음', Math.abs(d1 - d2) / d2 < 0.15,
   `${(d1 / 1000).toFixed(2)} km vs ${(d2 / 1000).toFixed(2)} km on the same route`)
+
+// 3d. events must exist as a VISUAL channel, not only as rows in a table.
+//
+// All three counts are compared against each other rather than against a constant: a
+// build that drew markers for a stale event list, or dropped the ones without a fix,
+// would still satisfy "some markers exist".
+const evDock = await page.locator(
+  '.dock.right .dock-section:has(h3:text("Events")) table.grid tbody tr').count()
+const evMap = await page.locator('.event-marker .ev-dot').count()
+const evChart = await page.locator('.panel.chart-panel').first().locator('g.chart-event').count()
+check('이벤트가 지도에 타입별 심볼로 표시', evMap > 0, `${evMap} map symbols`)
+check('이벤트가 차트에 시각으로 표시', evChart > 0, `${evChart} chart marks`)
+check('지도·차트·목록이 같은 이벤트 집합을 그림', evMap === evDock && evChart === evDock,
+  `dock ${evDock}, map ${evMap}, chart ${evChart}`)
+
+// And they must all speak the same language. This is the defect the registry exists to
+// kill: the same failure read as RADIO_LINK_FAILURE in the dock and "Radio link failure"
+// in the pie, and a user comparing the two screens had to work out they were one thing.
+const evTypes = await (await page.request.get(`${API_BASE}/api/event-types`)).json()
+// Only the cell that renders the type. Scanning the whole row picks up the Detail
+// text, which legitimately mentions RACH, and the check then fails on correct code.
+const dockText = (await page.locator(
+  '.dock.right .dock-section:has(h3:text("Events")) table.grid tbody tr td:nth-child(2)')
+  .allInnerTexts()).join(' | ')
+const rawShown = evTypes.filter((t) => dockText.includes(t.name)).map((t) => t.name)
+const labelled = evTypes.filter((t) => dockText.includes(t.displayName)).map((t) => t.name)
+check('이벤트 목록이 원시 타입명 대신 등록된 표시명을 씀',
+  rawShown.length === 0 && labelled.length >= 2,
+  `raw: ${rawShown.join(',') || 'none'} · labelled: ${labelled.join(',')}`)
 
 await page.screenshot({ path: `${OUT}/01-overview.png`, fullPage: false })
 
@@ -575,7 +609,10 @@ await page.screenshot({ path: `${OUT}/26-monitored-set.png`, fullPage: true })
 // Lines from the terminal to the cells it can see - the pilot-pollution picture on the map.
 await page.locator('.workbook-tabs button', { hasText: 'Mobility' }).click()
 await page.waitForTimeout(2500)
-const nbrLines = await page.locator('.leaflet-overlay-pane path[stroke-dasharray="2 4"]').count()
+// By class, not by dash pattern: the rejected-fix break polyline also carried
+// dashArray '2 4', so this selector was counting two unrelated things and would have
+// been satisfied by breaks alone.
+const nbrLines = await page.locator('.leaflet-overlay-pane path.neighbour-line').count()
 check('지도에 모니터드 셀 연결선', nbrLines >= 2, `${nbrLines} lines`)
 
 // ---------------------------------------------------------------- KPI Workbench

@@ -877,6 +877,89 @@ scenario('S13 · A workbench graph produces a first-class KPI')
     !after.some((g) => g.outputKpiName === 'S13_MARGIN'), `${after.length} graphs remain`)
 }
 
+// ─── S14 · A reported fault, from cause to the moment and its context ────────
+//
+// The chain the reference tool sells as its troubleshooting toolkit: which cause
+// dominates -> which cases -> which moment -> what was happening around it. The first
+// three links existed; the fourth did not, so a case click moved a cursor that nothing
+// on the page displayed.
+scenario('S14 · Cause to the moment, with context')
+{
+  await selectSession(CITY_A)
+  await openWorkbook('Problem Survey')
+  await page.waitForSelector('.panel:has-text("Problem survey per category") svg path')
+  await page.waitForTimeout(600)
+
+  const slices = await page.locator(
+    '.panel:has-text("Problem survey per category") svg path').count()
+  step('causes aggregate into a pie', slices >= 2, `${slices} slices`)
+
+  const allCases = await page.locator('.panel:has-text("All cases") tbody tr').count()
+  await page.locator('.panel:has-text("Problem survey per category") tbody tr').first().click()
+  await page.waitForTimeout(400)
+  const drilled = await page.locator('.panel:has-text("cases") tbody tr').count()
+  step('a slice drills to just that cause', drilled > 0 && drilled < allCases,
+    `${allCases} -> ${drilled}`)
+
+  step('no context shown before a case is chosen',
+    (await page.locator('.case-context').count()) === 0)
+
+  await page.locator('.panel:has-text("cases") tbody tr').first().click()
+  await page.waitForTimeout(1200)
+  step('choosing a case opens a context view around it',
+    (await page.locator('.case-context').count()) === 1)
+
+  // The window has to be a WINDOW - a context view that quietly renders the whole drive
+  // would look identical here and answer nothing.
+  //
+  // Measured off the CHART, not off the caption. The caption is arithmetic on
+  // CONTEXT_PAD, so it prints the intended window whether or not the chart was handed
+  // one: blanking the window props left this reading "111 samples of 1174" while the
+  // chart underneath drew the entire drive. The x tick labels are clock times taken
+  // from the points actually plotted, so they cannot agree with a caption the chart
+  // is ignoring.
+  const ctxSpan = await page.locator('.case-context .ctx-span').innerText()
+  const shown = ctxSpan.match(/showing (\d+)[^\d]+(\d+)/)
+  const windowWidth = shown ? Number(shown[2]) - Number(shown[1]) : -1
+  const total = (await apiGet(`/api/sessions/${sessions.find((x) => x.name === CITY_A).id}`))
+    .sampleCount
+  // textContent, not innerText: innerText is undefined on SVG <text> and every label
+  // comes back null.
+  const clocks = (await page.locator('.case-context svg text').allTextContents())
+    .filter((t) => /^\d\d:\d\d:\d\d$/.test(t))
+    .map((t) => t.split(':').reduce((a, n) => a * 60 + Number(n), 0))
+  const drawnSpan = clocks.length >= 2 ? Math.max(...clocks) - Math.min(...clocks) : -1
+  step('the context view is a window, not the whole drive',
+    drawnSpan > 0 && drawnSpan < total / 2,
+    `chart spans ${drawnSpan}s of a ${total}-sample drive`)
+
+  // Sampling is 1 Hz, so seconds drawn and samples claimed are the same unit. The
+  // tolerance is for a GPS gap inside the window, where the clock advances over samples
+  // that were never recorded.
+  step('the chart draws the span the caption claims',
+    windowWidth > 0 && drawnSpan >= windowWidth * 0.6 && drawnSpan <= windowWidth * 2,
+    `caption ${windowWidth} samples, chart ${drawnSpan}s`)
+
+  // And it has to be the window around THIS case.
+  const caseFrom = Number(await page.locator('.panel:has-text("cases") tbody tr')
+    .first().locator('td').nth(2).innerText())
+  step('the window brackets the case that was clicked',
+    shown != null && Number(shown[1]) <= caseFrom && Number(shown[2]) >= caseFrom,
+    `case starts ${caseFrom}, window ${ctxSpan}`)
+
+  const ctxMarks = await page.locator('.case-context g.chart-event').count()
+  const ctxTrace = await page.locator('.case-context svg path').count()
+  step('the context view carries the trace and the events in that window',
+    ctxTrace > 0 && ctxMarks >= 0, `${ctxTrace} traces, ${ctxMarks} event marks`)
+
+  await page.locator('.case-context button', { hasText: 'Close' }).click()
+  await page.waitForTimeout(300)
+  step('the context view can be dismissed',
+    (await page.locator('.case-context').count()) === 0)
+
+  await openWorkbook('Overview')
+}
+
 // ─── wrap-up ─────────────────────────────────────────────────────────────────
 const appErrors = errors.filter((e) =>
   !/tile\.openstreetmap\.org|ERR_CONNECTION|Failed to load resource|ERR_TIMED_OUT/.test(e))
