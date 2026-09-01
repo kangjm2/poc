@@ -231,7 +231,6 @@ check('비교 판정 산출', verdicts.some((v) => v === 'BETTER' || v === 'WORS
   verdicts.join(','))
 await page.screenshot({ path: `${OUT}/08-compare.png`, fullPage: true })
 
-const appErrors = errors.filter((e) => !/tile\.openstreetmap\.org|ERR_CONNECTION|Failed to load resource/.test(e))
 // 16. network-side KPIs are present alongside UE-side ones
 await page.locator('.mode-tabs button', { hasText: 'Analysis' }).click()
 await page.waitForTimeout(700)
@@ -764,6 +763,11 @@ const books = await (await page.request.get(`${API_BASE}/api/workbooks`)).json()
 for (const b of books) await page.request.delete(`${API_BASE}/api/workbooks/${b.id}`)
 check('체크가 만든 워크북을 정리', books.length >= 1, `removed ${books.length}`)
 
+// Filtered HERE, not where it used to be - 533 lines earlier, just after the compare
+// screenshot. `errors.filter(...)` copies the array at the call site, so every console
+// error raised by the checks in between was invisible to this assertion: the tripwire
+// was armed for the first third of the run and disarmed for the rest.
+const appErrors = errors.filter((e) => !/tile\.openstreetmap\.org|ERR_CONNECTION|Failed to load resource/.test(e))
 check('앱 코드 콘솔 오류 없음', appErrors.length === 0, appErrors.slice(0, 3).join(' | '))
 const tileFailures = errors.length - appErrors.length
 if (tileFailures > 0) console.log(`  (note: ${tileFailures} basemap tile fetches failed - network egress, not app code)`)
