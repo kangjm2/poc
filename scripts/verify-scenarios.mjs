@@ -960,6 +960,122 @@ scenario('S14 · Cause to the moment, with context')
   await openWorkbook('Overview')
 }
 
+// ─── S15 · Handing the evidence to somebody else ─────────────────────────────
+//
+// The journey the whole URL feature exists for, and the one that decides whether it is
+// worth having: compose a view, copy the address, and have a colleague open exactly that.
+// Every step here is measured against a value fetched independently from the API rather
+// than against something the page printed - a page that agrees with itself proves
+// nothing, which is the lesson §1.5.1 of docs/ui-testing/README.md was written from.
+scenario('S15 · A view handed to somebody else')
+{
+  await selectSession(CITY_B)
+  await openWorkbook('Radio Quality')
+  await page.locator('.toolbar select').nth(1).selectOption('SINR')
+  await page.waitForTimeout(1200)
+  await page.keyboard.press('Home')
+  for (let i = 0; i < 7; i++) await page.keyboard.press('ArrowRight')
+  await page.waitForTimeout(900)
+
+  const sent = await page.evaluate(() => location.search)
+  const q = new URLSearchParams(sent)
+  step('the composed view is in the address', q.get('kpi') === 'SINR' && q.get('seq') === '7'
+    && q.get('tab') === 'radio' && q.get('s') != null, sent)
+
+  // Playback state is deliberately absent: a link is evidence, not a performance.
+  await page.keyboard.press(' ')
+  await page.waitForTimeout(600)
+  await page.keyboard.press(' ')
+  step('playback is not part of the address',
+    !/[?&](playing|rate|rev)=/.test(await page.evaluate(() => location.search)))
+
+  // A genuinely cold context. page.reload() keeps the same page's memory, so it cannot
+  // tell "the URL carried it" from "the app still had it".
+  const other = await browser.newPage({ viewport: { width: 1680, height: 1000 } })
+  await other.goto(BASE + sent, { waitUntil: 'domcontentloaded' })
+  await other.waitForTimeout(3200)
+
+  const sid = Number(q.get('s'))
+  const truth = await apiGet(`/api/sessions/${sid}/snapshot?seq=7`)
+  const clock = await other.locator('.statusbar b').nth(2).innerText()
+  step('the recipient lands on the same moment of the same drive',
+    clock === new Date(truth.ts).toISOString().slice(11, 19),
+    `recipient reads ${clock}, server says ${new Date(truth.ts).toISOString().slice(11, 19)}`)
+  step('and on the same parameter and tab',
+    (await other.locator('.toolbar select').nth(1).inputValue()) === 'SINR'
+    && (await other.locator('.workbook-tabs button.active, .workbook-tabs button[aria-current]')
+      .first().innerText()).includes('Radio'),
+    await other.locator('.toolbar select').nth(1).inputValue())
+  step('nothing was repaired, so no notice is raised',
+    (await other.locator('.view-notice').count()) === 0)
+  await other.close()
+
+  // A link to a measurement that is gone. The dangerous answer is not an error - it is
+  // opening a DIFFERENT drive at the sender's sample index and saying nothing, because
+  // every panel then agrees with every other panel about a moment nobody chose.
+  const dead = await browser.newPage({ viewport: { width: 1680, height: 1000 } })
+  await dead.goto(`${BASE}?s=99999&seq=612&r=300-800`, { waitUntil: 'domcontentloaded' })
+  await dead.waitForTimeout(3200)
+  // Not "a notice exists" - what it SAYS. Dropping the sender's seq is also done by the
+  // session-change reset, so the app behaves correctly even with the reporting removed;
+  // the notice naming each dropped parameter is reconcile's own contribution and the only
+  // thing that tells the recipient their view is not the one they were sent.
+  const deadNotice = await dead.locator('.view-notice').innerText().catch(() => '')
+  step('a link to a deleted measurement says so, and names what it dropped',
+    (await dead.locator('.view-notice').count()) === 1
+    && /s=99999/.test(deadNotice) && /seq=612/.test(deadNotice) && /r=300-800/.test(deadNotice),
+    deadNotice.replace(/\n/g, ' / ').slice(0, 150) || 'no notice')
+
+  // The notice is the app's own words, so it is not the evidence. The evidence is that
+  // the sender's sample index was DROPPED rather than applied to the substitute drive.
+  const fallbackId = Math.min(...(await apiGet('/api/sessions')).map((x) => x.id))
+  const atZero = await apiGet(`/api/sessions/${fallbackId}/snapshot?seq=0`)
+  step("the sender's sample index was dropped, not carried over",
+    (await dead.locator('.statusbar b').nth(2).innerText())
+      === new Date(atZero.ts).toISOString().slice(11, 19)
+    && (await dead.locator('.filter-chip').count()) === 0,
+    `clock ${await dead.locator('.statusbar b').nth(2).innerText()}, `
+    + `${await dead.locator('.filter-chip').count()} filter chips`)
+  await dead.close()
+
+  // A seq past the end of the drive that DID load. Compared against the drive's own last
+  // sample from the API, not against endedAt: a drive with a GPS outage ends after its
+  // last sample, so the two are not the same instant.
+  const far = await browser.newPage({ viewport: { width: 1680, height: 1000 } })
+  const cityA = sessions.find((x) => x.name === CITY_A)
+  await far.goto(`${BASE}?s=${cityA.id}&seq=999999`, { waitUntil: 'domcontentloaded' })
+  await far.waitForTimeout(3200)
+  const last = await apiGet(`/api/sessions/${cityA.id}/snapshot?seq=${cityA.sampleCount - 1}`)
+  step('a seq past the end is pulled back to the last sample, and said so',
+    (await far.locator('.view-notice').count()) === 1
+    && (await far.locator('.statusbar b').nth(2).innerText())
+       === new Date(last.ts).toISOString().slice(11, 19),
+    `clock ${await far.locator('.statusbar b').nth(2).innerText()}`)
+  await far.close()
+
+  // Continuous state must not fill the history. history.length is useless as a witness -
+  // Chromium caps it at 50 - so the writes themselves are counted.
+  const hist = await browser.newPage({ viewport: { width: 1680, height: 1000 } })
+  await hist.addInitScript(() => {
+    window.__pushes = 0
+    const real = history.pushState.bind(history)
+    history.pushState = (...a) => { window.__pushes++; return real(...a) }
+  })
+  await hist.goto(BASE, { waitUntil: 'domcontentloaded' })
+  await hist.waitForTimeout(3000)
+  for (let i = 0; i < 12; i++) await hist.keyboard.press('ArrowRight')
+  await hist.waitForTimeout(800)
+  step('moving the cursor does not fill the browser history',
+    (await hist.evaluate(() => window.__pushes)) === 0
+    && /seq=12/.test(await hist.evaluate(() => location.search)),
+    `${await hist.evaluate(() => window.__pushes)} pushState calls, `
+    + `url ${await hist.evaluate(() => location.search)}`)
+  await hist.close()
+
+  await page.goto(BASE, { waitUntil: 'domcontentloaded' })
+  await page.waitForTimeout(2500)
+}
+
 // ─── wrap-up ─────────────────────────────────────────────────────────────────
 const appErrors = errors.filter((e) =>
   !/tile\.openstreetmap\.org|ERR_CONNECTION|Failed to load resource|ERR_TIMED_OUT/.test(e))
