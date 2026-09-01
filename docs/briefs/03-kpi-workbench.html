@@ -1,0 +1,553 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>③ KPI Workbench — Nemo Analyze 10.2</title>
+<link rel="stylesheet" href="brief.css">
+</head>
+<body>
+<div class="wrap">
+
+<header class="top">
+  <h1>③ KPI Workbench</h1>
+  <div class="sub">노드 그래프 KPI 빌더 · User Guide p332–p410 · <strong>우리와 가장 크게 어긋난 곳</strong></div>
+</header>
+
+<nav class="crumbs"><a href="index.html">← 브리프 목록</a> ·
+  이전: <a href="02-analysis-and-drilldown.html">② 분석과 드릴다운</a> ·
+  다음: <a href="04-workbooks-and-reports.html">④ 워크북과 리포트</a></nav>
+
+<div class="warn">
+<h5>먼저 밝혀 둘 것 — 우리가 보고 만든 "스크린샷"의 정체</h5>
+<p>
+우리는 웹에서 주운 <code>nemo-analyze_kpi-workbench.png</code>(774×717)를 보고 노드 그래프를
+설계했습니다. 이번에 매뉴얼 <strong>p405</strong>에서 추출한 그림과 <strong>크기가 정확히
+일치</strong>합니다. 우리가 "스크린샷"이라 부른 것은 사실 <strong>이 매뉴얼 UC27의 상태
+흐름도</strong>였습니다.
+</p>
+<p>
+구조를 읽어낸 것은 결과적으로 옳았지만 — 노드 배치, 연결 방향, 상태 이름
+(<code>OK</code> / <code>Bad BLER</code> / <code>Missing handover</code>)까지 맞았습니다 —
+<strong>우리는 그림 한 장에서 의미까지 추측했고, 그 추측이 여러 곳에서 틀렸습니다.</strong>
+아래가 그 목록입니다.
+</p>
+</div>
+
+<h2>1. 이 도구가 존재하는 이유 <span class="src">p332</span></h2>
+
+<p>매뉴얼은 "SQL vs. KPI workbench" 절에서 존재 이유를 직접 밝힙니다. 워크벤치는 SQL로
+<strong>불가능한</strong> 두 가지를 위해 있습니다.</p>
+
+<ol class="steps">
+<li><strong>셋 이상 테이블의 시간 상관.</strong> 두 테이블은 시간 기반 조인이 되지만
+    <em>"with three or more tables the task becomes impossible"</em> — BLER · Ec/N0 · TX power가
+    각각 별도 테이블이고 <strong>테이블 간 관계가 정의돼 있지 않기</strong> 때문입니다.</li>
+<li><strong>이벤트 시퀀스 추적</strong> — 파라미터 변화의 <em>순서</em>를 좇는 질의.</li>
+</ol>
+
+<div class="ours">
+<h5>1번은 우리 문제가 아닙니다 — 스키마가 이미 풀었습니다</h5>
+<p>
+우리 <code>sample_kpi</code>는 <code>(session_id, seq, kpi_name, value)</code> <strong>세로형 단일
+테이블</strong>입니다. N개 KPI의 상관은 <strong>같은 키의 조인</strong>일 뿐이고, 3개든 10개든
+난이도가 같습니다.
+</p>
+<p>
+<strong>그들이 도구로 우회한 문제를 우리는 스키마로 이미 풀어 놨다</strong>는 뜻입니다.
+그래서 우리 <code>COMBINE</code> 노드가 쉬웠던 것은 우연이 아니고,
+<strong>동시에 우리 Combine의 값어치가 그들만큼 크지 않다</strong>는 뜻이기도 합니다.
+</p>
+<p>
+<strong>2번은 우리에게도 여전히 문제입니다.</strong> 그리고 그것이 State Machine입니다 —
+아래 §4에서 우리가 만든 것이 그 문제를 풀지 <em>못한다</em>는 것을 보입니다.
+</p>
+</div>
+
+<h2>2. 캔버스와 조작 <span class="src">p344–p351 · p391–p396</span></h2>
+
+<figure>
+  <img src="../assets/screenshots/manual10.2_kpi-workbench-canvas_p346.png"
+       alt="Parameters 트리에서 캔버스로 파라미터를 드래그하는 모습">
+  <figcaption>
+    Workspace의 Parameters 트리에서 <code>Ec/N0 best active set</code>을 캔버스로
+    <strong>드래그</strong>. 캔버스에는 <code>Output</code> 노드만 놓여 있고
+    <em>Column count: 0</em>입니다. 요소 목록은 <strong>캔버스 오른쪽</strong>에 있습니다 · p346
+  </figcaption>
+</figure>
+
+<p>이 그림에 <strong>요소 분류가 그대로 보입니다</strong> — 이것이 사실상 이 도구의 메뉴 구조입니다.</p>
+
+<table>
+<tr><th style="width:170px">분류</th><th>담긴 요소</th><th style="width:110px">우리</th></tr>
+<tr><td><strong>Parameters</strong></td><td>측정 파라미터 소스</td><td><span class="tag t-same">SOURCE</span></td></tr>
+<tr><td><strong>Correlations</strong></td><td>Previous / Current / Next Value, All Values Within Time Range</td><td><span class="tag t-none">없음</span></td></tr>
+<tr><td><strong>Joins</strong></td><td>Inner / Left Outer / Union / Cartesian</td><td><span class="tag t-diff">COMBINE 하나</span></td></tr>
+<tr><td><strong>Operations</strong></td><td>Case, Moving Average, Conversion, <strong>State Machine</strong>, Group By</td><td><span class="tag t-diff">STATE_MACHINE만</span></td></tr>
+<tr><td><strong>Aggregates</strong></td><td>Min · Max · Average · Std dev · Variance · Sum · Count · Mode · Median · Percentile · First · Last</td><td><span class="tag t-none">없음</span></td></tr>
+<tr><td>Sorting</td><td>Sort</td><td><span class="tag t-out">불필요</span></td></tr>
+<tr><td><strong>Filters</strong></td><td>Filter, Top-N/Bottom-N, Nth Best/Worst, Discard Worst</td><td><span class="tag t-diff">FILTER만</span></td></tr>
+<tr><td><strong>Math</strong></td><td>사칙연산, Root, Round 등</td><td><span class="tag t-diff">사칙연산</span></td></tr>
+<tr><td>Time</td><td>Resample, Time Shift</td><td><span class="tag t-out">불필요/없음</span></td></tr>
+<tr><td><strong>Components</strong></td><td>저장해 둔 <strong>부분 그래프</strong></td><td><span class="tag t-none">없음</span></td></tr>
+</table>
+
+<p>
+Properties 패널의 <code>Execute per</code>도 보입니다 — <em>measurement</em> 또는 <em>file</em>.
+매뉴얼의 <strong>KPI execution method</strong>가 이것이고 <span class="src">p395</span>,
+그 아래 <code>Constants</code>가 value constants입니다.
+<strong>우리는 항상 세션 단위</strong>라 대응 컨트롤이 없습니다.
+</p>
+
+<figure>
+  <img src="../assets/screenshots/manual10.2_kpi-workbench-sockets_p349.png"
+       alt="Call attempt failure와 Ec/N0 active set을 Previous Value로 결합한 그래프">
+  <figcaption>
+    <strong>Correlation 요소의 실물 예</strong> — <code>Call attempt failure</code>(왼쪽 = primary)와
+    <code>Ec/N0 active set</code>이 <code>Previous Value</code>의 두 입력 소켓으로 들어갑니다.
+    즉 <em>"통화 시도 실패 직전의 Ec/N0"</em>입니다.
+    <code>Output</code>이 미설정이라 <strong>빨강</strong>, 나머지는 <strong>초록</strong> —
+    색 규약이 이 한 장에 그대로 보입니다 · p349
+  </figcaption>
+</figure>
+
+<p>
+이 그림이 <strong>§3.2의 격차를 한 장으로 요약</strong>합니다. 그래프 전체가 노드 셋인데,
+그중 가운데 하나가 우리에게 없는 <code>Previous Value</code>입니다.
+<strong>레퍼런스에서 가장 단순한 축에 드는 KPI를 우리는 만들 수 없습니다.</strong>
+</p>
+
+<table>
+<tr><th style="width:150px">항목</th><th>레퍼런스</th><th>우리</th></tr>
+<tr><td>실행</td><td>캔버스 우클릭 → <strong>Run Script</strong>. 실행 전 Output에 연결돼야 함</td><td><span class="tag t-same">Run</span></td></tr>
+<tr><td><strong>색 규약</strong></td><td><strong>빨강 = 설정 미완, 초록 = 동작 가능.</strong> 연결하면 초록으로 바뀜</td><td><span class="tag t-same">구현됨</span> + 검증 리포트가 이유를 말함</td></tr>
+<tr><td>저장</td><td>우클릭 → Save</td><td><span class="tag t-same">저장 시 즉시 계산</span></td></tr>
+<tr><td><strong>컴포넌트 저장</strong></td><td>부분 그래프를 컴포넌트로 저장해 <strong>재사용</strong> <span class="src">p392</span></td><td><span class="tag t-none">없음</span></td></tr>
+<tr><td><strong>value constants</strong></td><td>스크립트에서 참조하는 상수 정의 <span class="src">p395</span></td><td><span class="tag t-none">없음</span></td></tr>
+<tr><td>실행 대상</td><td>여러 측정 파일을 골라 실행</td><td><span class="tag t-diff">항상 전 세션</span></td></tr>
+<tr><td>초기화</td><td>우클릭 → New Script</td><td><span class="tag t-same">있음</span></td></tr>
+</table>
+
+<h2>3. 요소 전체 명세</h2>
+
+<h3>3.1 입력 — Parameter <span class="src">p347</span></h3>
+
+<p>파라미터는 <strong>표 형태의 데이터셋</strong>입니다. 값 열 하나에 보통 time · coordinates ·
+system 열이 딸려 옵니다.</p>
+
+<table>
+<tr><th style="width:170px">항목</th><th>동작</th></tr>
+<tr><td>넣는 법</td><td>Workspace에서 측정 파일을 고르고 Parameters 뷰에서 캔버스로 <strong>드래그 앤 드롭</strong></td></tr>
+<tr><td>폴더를 고르면</td><td>원시 샘플이 아니라 <strong>사전 계산된 통계</strong>로 제한된 데이터셋이 들어옴</td></tr>
+<tr><td>열 줄이기</td><td>더블클릭 → Result Columns에서 체크 해제. <strong>후속 노드에 연결되기 전에만</strong> 가능</td></tr>
+<tr><td>커스텀</td><td>빈 Parameter 요소를 놓고 Query Manager로 직접 정의</td></tr>
+</table>
+
+<div class="ours">
+<h5>우리 구현</h5>
+<p>
+<code>SOURCE_KPI</code>는 KPI 하나를 <strong>열 하나</strong>로 읽습니다. 열 선택이 없는 것은
+우리 소스가 애초에 열이 하나이기 때문이라 격차가 아닙니다.
+<code>SOURCE_NEIGHBOUR</code>는 그들의 <code>Ec/N0 Nth best</code>에 대응하고,
+UC27이 <strong>Value 필드에 1을 넣어 1st best를 고르는</strong> 방식을 쓰는데
+이것이 우리 <code>rank</code> 필드와 정확히 같은 개념입니다.
+</p>
+</div>
+
+<h3>3.2 결합 — 두 계열, 기준이 다릅니다 <span class="src">p348–p362</span></h3>
+
+<blockquote>
+"A major difference between All Values Within Time Range and the other join elements (namely
+Inner Join, Left Outer Join, and Union) is that All Values Within Time Range combines the data
+based on <strong>time</strong>, whereas these other join elements do this based on
+<strong>matching values</strong>." <span class="src">p354</span>
+</blockquote>
+
+<h4>Correlation 계열 — 시간 기준</h4>
+
+<p>모두 <strong>가장 왼쪽 입력이 primary</strong>이고, primary가 시점을 결정합니다.</p>
+
+<table>
+<tr><th style="width:250px">요소</th><th>동작</th></tr>
+<tr><td><strong>Previous Value</strong></td><td>primary 이벤트 <strong>시작 직전</strong>의 secondary 값 하나</td></tr>
+<tr><td><strong>Current Value</strong></td><td>primary 이벤트 <strong>진행 중</strong>의 secondary 값 하나</td></tr>
+<tr><td><strong>Next Value</strong></td><td>primary 이벤트 <strong>직후</strong>의 secondary 값 하나</td></tr>
+<tr><td>Previous or Current</td><td>직전 값, 없으면 진행 중 값</td></tr>
+<tr><td>Next or Current</td><td>직후 값, 없으면 진행 중 값</td></tr>
+<tr><td><strong>All Values Within Time Range</strong></td><td>primary의 시간 범위 안 secondary 값 <strong>전부</strong></td></tr>
+</table>
+
+<blockquote>
+"the output will be written only when there are valid values in the <strong>primary</strong>
+dataset." <span class="src">p354</span>
+</blockquote>
+
+<p>
+매뉴얼의 예가 이 규칙의 실전 의미를 보여줍니다 — <strong>RX qual을 primary로 잡으면 통화 중일
+때만</strong> 결과가 나오고, <strong>RX level을 잡으면 idle 구간까지</strong> 포함됩니다.
+즉 primary 선택이 곧 "언제의 데이터를 볼 것인가"의 선택입니다.
+</p>
+
+<h4>Join 계열 — 값 기준</h4>
+
+<table>
+<tr><th style="width:180px">요소</th><th>동작</th></tr>
+<tr><td><strong>Inner Join</strong></td><td>지정한 join 값(scrambling code, channel number 등)이 <strong>일치하는 행만</strong>. null 제외</td></tr>
+<tr><td><strong>Left Outer Join</strong></td><td>왼쪽 전부 + 일치하는 오른쪽</td></tr>
+<tr><td><strong>Union</strong></td><td>행을 <strong>중복 제거 없이</strong> 합침. <strong>같은 이름·같은 타입 열은 한 열로</strong>, 아니면 각자 새 열</td></tr>
+<tr><td><strong>Cartesian Product</strong></td><td>모든 조합. 실제 용도는 <strong>한 행짜리 집계 결과 여러 개를 옆으로 붙이기</strong></td></tr>
+</table>
+
+<div class="ours">
+<h5>우리 구현 — 게이팅이 다릅니다</h5>
+<p>
+우리 <code>COMBINE</code>은 모든 입력의 표본을 합집합한 <strong>키 스파인</strong>
+(<code>UNION ALL</code> → <code>GROUP BY session_id, seq</code>)에 각 입력을 LEFT JOIN합니다.
+<strong>primary라는 개념이 없고</strong>, 어느 입력이든 값이 있으면 그 표본이 살아남습니다.
+</p>
+<p>
+<a href="02-analysis-and-drilldown.html">②에서 본 Correlate Parameters의 세 모드</a>에 대보면
+우리 것은 정확히 <strong>outer join 모드</strong>입니다. inner join은 하류 <code>FILTER</code>로
+우회할 수 있고(NULL 비교가 행을 떨굽니다), <strong>primary 게이팅만 표현할 수 없습니다.</strong>
+</p>
+<p>
+우리 쪽이 정보를 덜 버립니다. 하지만 <strong>레퍼런스 사용자가 기대하는 게이팅이 없습니다</strong> —
+"통화 중일 때만 보고 싶다"를 노드로 말할 방법이 없다는 뜻입니다.
+이건 버그가 아니라 <strong>다른 선택</strong>이고, primary 개념을 도입할지는 결정 사항입니다.
+</p>
+<p class="src">
+참고: 우리가 처음 만든 FULL JOIN 체인은 입력이 3개 이상일 때 행을 잃었고
+(Filter를 하나 거치면 3300개여야 할 값이 594개가 됐습니다) 그건 그냥 버그였습니다.
+커밋 <code>94ff566</code>에서 키 스파인으로 교체했습니다.
+</p>
+</div>
+
+<div class="warn">
+<h5>Previous / Current / Next는 우리에게 아예 없습니다</h5>
+<p>
+"이 드롭 <strong>직전</strong>에 무슨 일이 있었나"가 근본 원인 분석의 핵심 질문인데,
+우리는 그것을 노드로 표현할 수 없습니다. <strong>워크벤치의 실제 가치 중 절반이 여기</strong>
+있습니다(나머지 절반은 State Machine).
+</p>
+</div>
+
+<h3>3.3 연산 <span class="src">p362–p378</span></h3>
+
+<table>
+<tr><th style="width:190px">요소</th><th>동작</th><th style="width:150px">우리</th></tr>
+<tr><td><strong>Case</strong></td><td>조건별 분기</td><td><span class="tag t-diff">STATE_MACHINE이 겸함</span></td></tr>
+<tr><td><strong>Moving Average</strong></td><td>앞선 N개의 이동평균. <em>"removes anomalies … making it more stable"</em></td><td><span class="tag t-none">없음</span></td></tr>
+<tr><td>Conversion</td><td>값 변환</td><td><span class="tag t-none">없음</span></td></tr>
+<tr><td><strong>State Machine</strong></td><td>§4</td><td><span class="tag t-diff">이름만 같음</span></td></tr>
+<tr><td><strong>Group By / Binning</strong></td><td>여러 파라미터로 그룹핑 + 집계를 동시에</td><td><span class="tag t-none">없음</span></td></tr>
+</table>
+
+<p>
+<strong>집계 함수</strong> <span class="src">p376</span>: Minimum, Maximum, Average, Standard
+Deviation, Variance, Sum, Count, Mode, Median, Percentile, First, Last.
+각 집계마다 <strong><code>Weight by</code></strong>가 있습니다 — <strong>시간</strong> 또는
+<strong>거리</strong>(GPS 좌표 기반).
+</p>
+
+<div class="ours">
+<h5><code>Weight by</code>가 없는 것은 격차가 아닙니다</h5>
+<p>
+매뉴얼이 세 곳에서 이유를 반복합니다 <span class="src">p353 · p375 · p378</span>:
+</p>
+<blockquote>
+"the Nemo measurement file format is <strong>time-based as opposed to sample-based</strong>
+(that is, a 'sample' is created on a timeline <strong>only when changes occur</strong> in the
+monitored parameters)"
+</blockquote>
+<p>
+값이 바뀔 때만 샘플이 생기니 표본마다 <strong>대표하는 시간 길이가 다릅니다.</strong>
+그래서 Average와 Count는 <em>"should be weighted by time in order to obtain accurate results"</em>.
+</p>
+<p>
+<strong>우리는 1 Hz 균일 샘플입니다.</strong> 모든 표본이 정확히 1초를 대표하므로
+<strong>가중 없는 평균이 맞고</strong>, <code>Weight by</code> 컨트롤은 우리 데이터에서 의미가
+없습니다. <strong>격차표에 올리면 안 되는 항목입니다.</strong>
+</p>
+<p>
+다만 <code>Weight by <strong>distance</strong></code>는 다릅니다 — 그건 시간 축이 아니라
+<em>정차가 평균을 끌어당기는</em> 문제이고, 우리 거리 비닝과 같은 문제의식입니다.
+</p>
+</div>
+
+<h3>3.4 필터 · 수학 · 시간 <span class="src">p378–p390</span></h3>
+
+<table>
+<tr><th style="width:190px">요소</th><th>동작</th><th style="width:170px">우리</th></tr>
+<tr><td>Sort</td><td>지정 열로 정렬</td><td><span class="tag t-same">불필요 — §5</span></td></tr>
+<tr><td><strong>Filter</strong></td><td>조건 불충족 값 제거</td><td><span class="tag t-same"><code>FILTER</code></span></td></tr>
+<tr><td><strong>Top-N / Bottom-N</strong></td><td>상위·하위 N개. <strong><code>Group by</code> 지원</strong> — 예: scrambling code별 Ec/N0 상위 2개</td><td><span class="tag t-none">없음</span></td></tr>
+<tr><td>Nth Best / Nth Worst</td><td>N번째 값</td><td><span class="tag t-diff">이웃 셀 한정 <code>rank</code></span></td></tr>
+<tr><td>Discard Worst</td><td>최악값 버리기</td><td><span class="tag t-none">없음</span></td></tr>
+<tr><td>Mathematical functions</td><td>사칙연산 + <strong>Root(N제곱근)</strong>, <strong>Round</strong> 등</td><td><span class="tag t-diff">사칙연산만</span></td></tr>
+<tr><td>Time: Resample</td><td>지정 간격(ms/s)으로 재표본화</td><td><span class="tag t-out">불필요 — 이미 1 Hz 균일</span></td></tr>
+<tr><td>Time: Time Shift</td><td>시간축 이동</td><td><span class="tag t-none">없음</span></td></tr>
+</table>
+
+<h4>Filter의 이진 트리 — UC26 <span class="src">p396</span></h4>
+
+<p>
+매뉴얼의 필터 예제가 중요한 제약 하나를 드러냅니다. scrambling code를 12–21, 29–30, 74–88
+세 범위로 거르려면:
+</p>
+
+<p><code>(scr&lt;=21 AND scr&gt;11) OR (scr&lt;=30 AND scr&gt;=29) OR (scr&lt;=88 AND scr&gt;=74)</code></p>
+
+<blockquote>
+"The logic of the filter element follows that of a <strong>binary tree</strong>, and thus one node
+can always have <strong>only two child nodes</strong>."
+</blockquote>
+
+<p>
+즉 조건을 하나씩 <code>Add</code>하며 <strong>다이얼로그로 트리를 조립</strong>해야 하고, 세 번째
+범위를 넣으려면 남은 자리가 어디인지 세어 가며 넣어야 합니다.
+</p>
+
+<div class="ours">
+<h5>우리 구현 — 여기는 우리가 낫습니다</h5>
+<p>
+우리 <code>FILTER</code>는 <strong>조건식을 텍스트로 씁니다.</strong> 위 필터는 그대로 한 줄입니다.
+파서(<code>ColumnCondition</code>)가 <code>AND</code>/<code>OR</code>/괄호를 지원하므로 중첩 깊이 제한이
+없습니다.
+</p>
+<p>
+안전성은 파싱 방식으로 보장합니다 — 연산자는 <strong>하드코딩된 목록과 대조해 매칭된
+상수를 출력</strong>하고, 열 이름은 알려진 집합과 대조하며, <strong>사용자 입력의 어떤 조각도
+SQL로 복사되지 않습니다.</strong>
+</p>
+</div>
+
+<h2>4. State Machine — 가장 큰 격차 <span class="src">p367–p372</span></h2>
+
+<figure>
+  <img src="../assets/screenshots/manual10.2_state-machine-states_p368.png" alt="상태 정의 대화상자">
+  <figcaption>상태 목록과 Initial State 지정 · p368</figcaption>
+</figure>
+
+<h4>정의</h4>
+<ul>
+<li><strong>이름 붙은 상태들</strong>과 <strong>Initial State</strong> 하나</li>
+<li>상태 간 <strong>전이</strong>. 전이마다 조건이 붙고
+    (<code>Left Column</code> / 연산자 / <code>Value</code> 또는 <code>Right Column</code>),
+    <strong>AND/OR로 결합</strong></li>
+<li><strong>Time trigger</strong>: 정해진 시간(ms) 안에 조건이 충족되지 <strong>않으면</strong> 발동하는 전이</li>
+<li><strong>Output</strong>: 전이에 붙이는 제목. <strong>비워 두면 그 전이에서는 출력이 생기지 않음</strong>
+    (idle 상태에는 비워 두라고 명시)</li>
+<li>규칙: <em>"there is always a returning transition from each state"</em> — 각 상태마다 돌아오는
+    전이가 있어야 정확한 결과가 나옵니다</li>
+</ul>
+
+<h4>출력 모양이 핵심입니다 <span class="src">p370</span></h4>
+
+<p>상태 x → y 전이가 일어나면 출력에 기록되는 것은:</p>
+
+<table>
+<tr><th style="width:180px">열</th><th>뜻</th></tr>
+<tr><td><code>start_time</code></td><td>x → y 전이가 일어난 시각</td></tr>
+<tr><td>(다음 전이 시각)</td><td>y → 다음 상태로 전이한 시각</td></tr>
+<tr><td><strong><code>time_interval</code></strong></td><td><strong>상태 y에 머문 시간 (ms)</strong></td></tr>
+</table>
+
+<p>
+즉 <strong>표본마다 한 값이 아니라, 상태 점유마다 한 행</strong>입니다.
+매뉴얼이 든 두 용도가 이를 분명히 합니다 — <strong>커스텀 이벤트 생성</strong>
+(<code>start_time</code>이 이벤트 발생 시각), 그리고 <strong>절차 지연 측정</strong>:
+radio bearer 확립 시작에 진입하고 확립되면 빠져나오는 상태를 만들면
+<em>"time_interval output column directly indicates the delay of radio bearer establishment in
+milliseconds"</em>.
+</p>
+
+<div class="warn">
+<h5>우리 것은 State Machine이 아니라 분류기(Classifier)입니다</h5>
+<p>
+우리 <code>STATE_MACHINE</code>은 <strong>표본별 <code>CASE</code> 문</strong>입니다.
+조건이 맞는 첫 상태의 <em>번호</em>를 그 표본의 값으로 냅니다.
+</p>
+<table>
+<tr><th style="width:130px"></th><th>레퍼런스</th><th>우리</th></tr>
+<tr><td>상태 정의</td><td>이름 + 초기 상태 + <strong>전이 그래프</strong></td><td>조건 목록 (순서대로 평가)</td></tr>
+<tr><td><strong>기억</strong></td><td><strong>있음</strong> — 현재 상태가 다음 전이를 좌우</td><td><strong>없음</strong> — 표본마다 독립 판정</td></tr>
+<tr><td>시간 조건</td><td><strong>Time trigger</strong> (N ms 안에 미충족 시 전이)</td><td>없음</td></tr>
+<tr><td><strong>출력</strong></td><td><strong>상태 점유마다 한 행</strong> + <code>time_interval</code></td><td><strong>표본마다 한 값</strong></td></tr>
+<tr><td>대표 용도</td><td>커스텀 이벤트 생성, <strong>절차 지연 측정</strong></td><td>값 분류</td></tr>
+</table>
+<p>
+우리 기존 문서는 이것을 <em>"래칭이 없어 이름이 과하다"</em>고 적었습니다.
+맞지만 <strong>부족합니다.</strong> 래칭만 붙인다고 레퍼런스가 되지 않습니다 —
+<strong>출력 모양이 다르기 때문입니다.</strong> <code>time_interval</code>이 나와야
+"이 절차가 몇 ms 걸렸나"라는 질문이 비로소 열립니다.
+</p>
+<p>
+정직한 이름은 <strong>Classifier</strong>이고, <strong>진짜 State Machine은 별도로 만들어야
+합니다.</strong>
+</p>
+</div>
+
+<h2>5. 정렬 노드를 넣지 않은 판단 — 근거까지 맞았습니다</h2>
+
+<p>
+우리 설계 노트는 <em>"정렬 노드는 없습니다. 우리 행 집합은 <code>seq</code> 키라 정렬할 것이
+없고, 아무 일도 하지 않는 버튼은 없느니만 못합니다"</em>라고 적었습니다.
+</p>
+
+<blockquote>
+"the rows and columns in the resulting data set are in <strong>no particular order</strong>, it is
+often necessary to [sort]" <span class="src">p359, Union 설명</span>
+</blockquote>
+
+<p>
+<strong>정렬이 필요한 이유가 Union이 순서를 파괴하기 때문</strong>입니다. 우리는 Union이 없고
+행이 <code>(session_id, seq)</code> 키를 갖고 있어 순서가 무너지지 않습니다.
+<span class="tag t-same">확인됨</span> — 판단만이 아니라 <strong>판단 근거까지</strong> 맞았습니다.
+</p>
+
+<h2>6. UC27 — 레퍼런스의 대표 KPI <span class="src">p403–p410</span></h2>
+
+<div class="two">
+<figure>
+  <img src="../assets/screenshots/manual10.2_uc27-state-flow_p405.png" alt="UC27 상태 흐름도">
+  <figcaption>상태 흐름: OK / Bad BLER / Missing handover · p405</figcaption>
+</figure>
+<figure>
+  <img src="../assets/screenshots/manual10.2_uc27-full-graph_p408.png" alt="UC27 완성 그래프">
+  <figcaption>완성된 노드 그래프 · p408</figcaption>
+</figure>
+</div>
+
+<h4>문제</h4>
+<p>
+<strong>핸드오버가 누락돼 발생한 드롭콜을 찾아내기.</strong> 도심에서 건물 모서리가 서빙 셀을
+순간 차단하면 핸드오버를 알릴 시간이 없습니다.
+</p>
+
+<h4>지표 선택 <span class="src">p404</span></h4>
+<p>누락 핸드오버 때 두 파라미터가 거의 동시에 움직입니다 — BLER이 오르고, active set의 Ec/N0가
+monitored set의 것보다 낮아집니다.</p>
+
+<blockquote>
+"if Ec/N0 <strong>1. best</strong> is better than Ec/N0 <strong>best active set</strong>, the handover
+has <strong>not occurred</strong>."
+</blockquote>
+
+<p>즉 <code>best active set − 1. best &lt; 0</code>이면 <strong>더 좋은 셀이 있는데 옮겨가지
+않은 것</strong>입니다.</p>
+
+<h4>상태 기계</h4>
+<table>
+<tr><th style="width:280px">전이</th><th>조건</th></tr>
+<tr><td>OK → Bad BLER</td><td><code>BLER &gt;= 20</code></td></tr>
+<tr><td><strong>Bad BLER → Missing handover</strong></td><td><code>Ec/N0 difference &lt; 0</code></td></tr>
+<tr><td>Missing handover → Bad BLER</td><td><code>Ec/N0 difference &gt; 0</code></td></tr>
+<tr><td>Bad BLER → OK</td><td><code>BLER &lt; 20</code></td></tr>
+<tr><td>Missing handover → OK</td><td><code>BLER &lt; 20</code></td></tr>
+</table>
+
+<p>
+<strong><code>OK → Missing handover</code> 전이가 없다는 점을 보십시오.</strong>
+Ec/N0 차이가 음수여도 <strong>BLER이 먼저 나빠진 상태를 거쳐야만</strong> 누락 핸드오버로
+판정됩니다. 이 <em>순서</em>가 기억 없이는 표현되지 않습니다.
+</p>
+
+<h4>절차</h4>
+<ol class="steps">
+<li>파라미터 3개 드롭 — <code>BLER</code>, <code>Ec/N0 best active set</code>,
+    <code>Ec/N0 Nth best</code>(Value = 1)</li>
+<li><strong>All Values Within Time Range</strong>로 Ec/N0 둘을 결합</li>
+<li>Math <strong>Subtraction</strong>으로 차이 계산</li>
+<li><strong>State Machine</strong></li>
+<li><code>Call dropped</code>와 다시 상관 → <strong>Output</strong></li>
+</ol>
+
+<div class="warn">
+<h5>우리 도구로 이 KPI를 만들 수 있는가 — 아니오</h5>
+<p>세 가지가 막습니다.</p>
+<ol class="steps">
+<li><strong>순서를 표현할 수 없습니다.</strong> 우리 State Machine이 상태를 기억하지 않으므로
+    "Bad BLER를 거쳐야 Missing handover"라는 제약이 사라집니다. 우리로 만들면
+    <code>BLER&gt;=20 AND diff&lt;0</code>인 <em>모든</em> 표본이 걸립니다 — 다른 KPI입니다.</li>
+<li><strong>드롭콜 이벤트와 상태 구간을 상관시킬 수 없습니다.</strong>
+    Previous/Current 계열이 없습니다.</li>
+<li><strong>active set 개념이 없습니다.</strong> 우리 <code>sample_neighbour</code>는
+    서빙 셀 하나 + 이웃 목록이고, "active set"(soft handover 중인 셀 집합)이 없습니다.</li>
+</ol>
+<p>
+<strong>이 셋이 "노드 그래프를 만들었다"와 "레퍼런스의 대표 KPI를 재현할 수 있다" 사이의 실제
+거리입니다.</strong>
+</p>
+</div>
+
+<div class="ours">
+<h5>그런데 <code>Missing neighbour</code>에 대한 우리 기존 판단은 <strong>틀렸습니다</strong></h5>
+<p>
+우리 격차 문서는 이렇게 적어 놨습니다 —
+<em>"<code>Missing neighbour</code> 원인 분류는 이웃 셀 측정으로 안 풀립니다.
+<strong>측정된</strong> 이웃과 <strong>설정된</strong> 이웃 목록의 차집합인데 우리는 후자가
+없습니다."</em>
+</p>
+<p>
+<strong>UC27이 보여주듯 Nemo는 설정된 이웃 목록을 쓰지 않습니다.</strong>
+<code>best active set − 1. best &lt; 0</code>, 즉 <strong>측정값만으로</strong> 판정합니다.
+그리고 우리에게 필요한 데이터 — 서빙 RSRP와 최강 이웃 RSRP — 는
+<strong>V7이 이미 넣었고</strong>, 실제로 <code>HO_MARGIN</code> 그래프로 계산해 본 적도 있습니다.
+</p>
+<p>
+<strong>진짜로 막고 있는 것은 우리 시드 생성기입니다.</strong> 생성기가 매 표본 argmax를 서빙
+셀로 고르기 때문에 "이웃이 서빙보다 강한" 표본이 <strong>정확히 0개</strong>입니다 —
+커밋 <code>9262db0</code>의 정합성 불변식 #2가 바로 그것을 단언하고, 통과합니다.
+</p>
+<p>
+실제 망은 time-to-trigger와 히스테리시스 때문에 서빙 셀이 <strong>일시적으로 열등해집니다.</strong>
+생성기에 그 지연을 넣으면 조건이 자연히 생기고, 그때 비로소 레퍼런스의 대표 KPI를
+<strong>우리 데이터에서 재현</strong>할 수 있게 됩니다.
+</p>
+<p>
+격차표에서 이 항목은 <strong>"(a) 데이터 모델이 막음" → "(b) 실제로 남은 작업"</strong>으로
+옮겨야 합니다.
+</p>
+</div>
+
+<h2>7. 우리 워크벤치의 현재 모습</h2>
+
+<figure>
+  <img src="../poc-screenshots/27-kpi-workbench.png" alt="우리 KPI Workbench">
+  <figcaption>우리 KPI Workbench — 손으로 그린 SVG 노드 편집기.
+    소스 · 결합 · 식 · 필터 · 상태 · 출력</figcaption>
+</figure>
+
+<p>구조는 맞게 만들었습니다. 우리 쪽이 <strong>더 나은</strong> 부분도 있습니다.</p>
+
+<table>
+<tr><th style="width:180px">항목</th><th>왜 우리가 나은가</th></tr>
+<tr><td><strong>필터 조건</strong></td><td>텍스트 한 줄. 레퍼런스는 이진 트리 다이얼로그로 조립 (UC26)</td></tr>
+<tr><td><strong>N개 상관</strong></td><td>세로형 스키마라 3개든 10개든 같은 난이도. 그들이 도구로 우회한 문제 <span class="src">p332</span></td></tr>
+<tr><td><strong>이름 검증</strong></td><td>열 별칭이 <code>session_id · seq · ts · value · rn</code>을 침범하면 저장 전에 거부</td></tr>
+<tr><td><strong>안전성</strong></td><td>파스 트리에서 재생성 — 사용자 입력 조각이 SQL에 복사되지 않음</td></tr>
+</table>
+
+<h2>8. 이 문서에서 남은 일로 확인된 것</h2>
+
+<table>
+<tr><th style="width:70px">순위</th><th style="width:250px">항목</th><th style="width:60px">규모</th><th>근거</th></tr>
+<tr><td>1</td><td>생성기에 <strong>핸드오버 지연</strong> 도입</td><td>중</td><td>레퍼런스 대표 KPI를 재현 가능하게 만드는 <strong>전제</strong></td></tr>
+<tr><td>2</td><td><strong>진짜 State Machine</strong> — 전이 그래프 + 구간 출력 + <code>time_interval</code></td><td>큼</td><td>워크벤치의 실제 가치가 여기 있음</td></tr>
+<tr><td>3</td><td><strong>Previous / Current / Next</strong> 상관 노드</td><td>중</td><td>근본 원인 분석의 핵심 조작</td></tr>
+<tr><td>4</td><td><strong>Top-N with Group by</strong></td><td>작음</td><td>"셀별 최강 2개" 같은 질의</td></tr>
+<tr><td>5</td><td><strong>Moving Average</strong>, Round/Root</td><td>작음</td><td>노이즈 제거는 실무에서 자주 필요</td></tr>
+<tr><td>—</td><td><code>Weight by</code></td><td>—</td><td><strong>하지 않음.</strong> 우리는 1 Hz 균일이라 의미 없음</td></tr>
+<tr><td>—</td><td>Sort 노드</td><td>—</td><td><strong>하지 않음.</strong> <code>seq</code> 키라 순서가 무너지지 않음</td></tr>
+<tr><td>—</td><td>Resample</td><td>—</td><td><strong>하지 않음.</strong> 재표본화할 불규칙성이 없음</td></tr>
+</table>
+
+<footer>
+출처: Nemo Analyze User Guide · <code>NTN00000A-90013</code> · Edition 1, 2023-11-27.
+요소 명세 원문은 <code>docs/reference/nemo-analyze-10.2/kpi-workbench.md</code>.
+그림은 <strong>재배포하지 않습니다</strong> (<code>docs/assets/NOTICE.md</code>).
+</footer>
+
+</div>
+</body>
+</html>

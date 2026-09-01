@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>④ 워크북과 리포트 — Nemo Analyze 10.2</title>
+<link rel="stylesheet" href="brief.css">
+</head>
+<body>
+<div class="wrap">
+
+<header class="top">
+  <h1>④ 워크북과 리포트</h1>
+  <div class="sub">화면을 조립해 보관하는 층 · 그리고 그것을 문서로 내보내는 층 · ch.9–ch.10</div>
+</header>
+
+<nav class="crumbs"><a href="index.html">← 브리프 목록</a> ·
+  이전: <a href="03-kpi-workbench.html">③ KPI Workbench</a> ·
+  다음: <a href="05-findings.html">⑤ 판정 요약</a></nav>
+
+<p>
+드라이브 테스트는 <strong>문서를 내놓기 위해</strong> 발주됩니다. 화면에서 문제를 찾는 것은
+중간 과정이고, 최종 산출물은 리포트입니다. 레퍼런스는 이 경로를 <strong>워크북 → 페이지 →
+데이터 뷰</strong>의 3층 구조 위에 얹었습니다.
+</p>
+
+<h2>1. 워크북 · 페이지 · 데이터 뷰 <span class="src">p215</span></h2>
+
+<blockquote>
+"Viewing measurement data in Nemo Analyze is extremely flexible and user-configurable. The
+various views are organized into <strong>workbooks, pages, and data views</strong>. A workbook is
+the main component that contains all the different pages and data views."
+</blockquote>
+
+<figure>
+  <img src="../assets/screenshots/manual10.2_workbook-pages_p216.png" alt="워크북 페이지 구조">
+  <figcaption>워크북 안의 페이지들 · 원문 p216</figcaption>
+</figure>
+
+<table>
+<tr><th style="width:170px">층</th><th>담는 것</th><th style="width:220px">우리</th></tr>
+<tr><td><strong>Workbook</strong></td><td>전체를 담는 그릇. 저장·복사·내보내기의 단위</td><td><span class="tag t-same"><code>workbook</code></span></td></tr>
+<tr><td><strong>Page</strong></td><td>한 화면분. <code>Add | Page</code>로 추가, <code>Remove | Page</code>로 제거</td><td><span class="tag t-none">없음 — 2층 구조</span></td></tr>
+<tr><td><strong>Data view</strong></td><td>Graph / Map / Grid 등 실제 뷰</td><td><span class="tag t-diff"><code>workbook_pane</code> (CHART / MAP)</span></td></tr>
+</table>
+
+<h3>여는 방법이 네 가지입니다</h3>
+
+<table>
+<tr><th style="width:250px">경로</th><th>얻는 것</th></tr>
+<tr><td><code>View | Workbook</code></td><td><strong>빈</strong> 워크북</td></tr>
+<tr><td><code>View | Workbook Layout</code></td><td><strong>미리 정의된 배치</strong> — 예: 2×2 그리드</td></tr>
+<tr><td>측정 파일 우클릭 → <code>Analyses</code></td><td>이 측정에 쓸 수 있는 <strong>워크북 전체 목록</strong></td></tr>
+<tr><td>우클릭 → <code>System | [폴더] | [워크북]</code></td><td><strong>기성 워크북</strong> — 예: <code>UMTS | UMTS full details</code></td></tr>
+</table>
+
+<p>
+워크북 실행 중에는 <code>Executing Queries</code> 다이얼로그가 뜨고
+<strong><code>Cancel</code> / <code>Cancel All</code></strong>로 질의를 중단할 수 있습니다
+<span class="src">p216</span>.
+</p>
+
+<h3>지도 워크북의 옵션 <span class="src">p469 부근</span></h3>
+
+<table>
+<tr><th style="width:190px">옵션</th><th>하는 일</th><th style="width:80px">우리</th></tr>
+<tr><td>Auto centering</td><td>현재 위치를 항상 지도 중앙에</td><td><span class="tag t-none">없음</span></td></tr>
+<tr><td>Route names</td><td>경로 이름 표시</td><td><span class="tag t-diff">Layers 이름</span></td></tr>
+<tr><td>Current position</td><td>현재 위치와 <strong>진행 방향</strong> 표시</td><td><span class="tag t-diff">위치만</span></td></tr>
+<tr><td>Highlight active route</td><td>Layers에서 선택한 경로를 강조</td><td><span class="tag t-none">없음</span></td></tr>
+<tr><td>Optimized drawing</td><td>경로 그리기 성능 향상 (드물게 왜곡되면 끄라고 안내)</td><td><span class="tag t-diff">데시메이션</span></td></tr>
+<tr><td>Scale bar</td><td>거리 축척 막대</td><td><span class="tag t-same">있음</span></td></tr>
+<tr><td>Select map</td><td>활성 지도 워크북의 지도 종류 변경</td><td><span class="tag t-none">없음</span></td></tr>
+</table>
+
+<div class="ours">
+<h5>우리 구현 — 3층이 아니라 2층입니다</h5>
+<p>
+V9에서 <strong>사용자가 조립하는 워크북</strong>을 만들었습니다. 구조는
+<code>workbook</code> → <code>workbook_pane</code>(<code>CHART</code> 또는 <code>MAP</code>) →
+<code>workbook_layer</code>입니다. <strong>Page 층이 없습니다</strong> — 워크북 하나가 곧 한 화면입니다.
+</p>
+<p>
+왜 이렇게 했는가: 우리 내장 탭들(Overview, Lab, Problem Survey)이 각각 목적을 가진 <em>완성된
+화면</em>이고, 없던 것은 <strong>사용자가 자기 파라미터로 자기 화면을 만들어 보관하는</strong>
+나머지 절반이었습니다. 그 절반에는 페이지 계층이 필요 없었습니다.
+</p>
+<p>
+설계에서 신경 쓴 두 가지:
+</p>
+<ul>
+<li><strong>서버에 저장합니다.</strong> 브라우저가 아니라. 문제를 쫓으며 만든 워크북은
+    동료에게 보낼 값어치가 있고, 사이트 데이터를 지웠다고 사라지면 안 됩니다.
+    레퍼런스가 워크북을 Workspace 아래 폴더에 두는 것과 같은 이유입니다.</li>
+<li><strong><code>visible</code>을 소속과 분리했습니다.</strong> 레이어를 <em>끄는 것</em>과
+    <em>빼는 것</em>은 다른 조작입니다. 껐다 켜는 동안 순서와 색이 유지돼야 합니다.</li>
+</ul>
+<p>
+없는 것 중 실제로 아쉬운 것은 <strong>레이아웃 프리셋</strong>(2×2 등)과
+<strong>기성 워크북 라이브러리</strong>입니다. 후자는 특히 값어치가 큽니다 —
+<code>UMTS full details</code>처럼 <em>"이 기술에서는 보통 이것들을 같이 본다"</em>는 지식이
+도구에 담겨 있는 것이니까요. 우리 내장 탭이 그 역할을 하지만
+<strong>사용자가 그것을 복사해 고칠 수는 없습니다.</strong>
+</p>
+</div>
+
+<div class="two">
+<figure>
+  <img src="../poc-screenshots/29-composed-workbook.png" alt="우리 사용자 조립 워크북">
+  <figcaption>사용자가 조립한 워크북 — 패널 쌓기 + Layers 도크</figcaption>
+</figure>
+<figure>
+  <img src="../poc-screenshots/17-fronthaul-workbook.png" alt="프론트홀 워크북">
+  <figcaption>내장 워크북 예 — 프론트홀 장애.
+    레퍼런스의 <code>System | …</code> 기성 워크북에 해당하지만 <strong>복사해 고칠 수
+    없습니다</strong></figcaption>
+</figure>
+</div>
+
+<h2>2. 리포트 <span class="src">p231–p318</span></h2>
+
+<h3>템플릿 형식 3종</h3>
+
+<table>
+<tr><th style="width:290px">형식</th><th>상태</th></tr>
+<tr><td><strong><code>.srt</code> Spreadsheet Report Template</strong></td><td><strong>권장</strong>. <code>Spreadsheet Report Designer</code>로 제작 <span class="src">p235</span></td></tr>
+<tr><td><code>.rpt</code> Crystal Reports</td><td>legacy, 갱신 중단</td></tr>
+<tr><td><code>.axt</code> Analyze Excel Template</td><td>legacy, 갱신 중단</td></tr>
+</table>
+
+<p>
+워크북 템플릿도 리포팅에 쓸 수 있지만 <strong>내보내기는 PDF만</strong> 가능합니다.
+반면 워크북 자체는 <strong>PDF · MS Word · MS PowerPoint · 이미지</strong>로 내보낼 수 있습니다.
+</p>
+
+<p>
+주목할 제약: 그들의 리포트 렌더링은 <strong>화면 해상도에 묶여 있습니다</strong> —
+최대 1920×1080, 배율 100%. 화면을 그려서 문서로 만드는 방식이기 때문입니다.
+</p>
+
+<div class="ours">
+<h5>우리 구현 — 형식이 하나뿐인 대신 제약도 없습니다</h5>
+<p>
+우리는 <strong>고정 레이아웃 HTML 리포트 한 종</strong>입니다
+(<code>/api/sessions/{id}/report.html</code>). 템플릿 디자이너가 없고, 사용자가 리포트 구성을
+바꿀 수 없습니다. <strong>이것이 레퍼런스 대비 가장 큰 격차 중 하나입니다</strong> —
+그들에게는 리포트 제작이 별도 제품 수준의 기능입니다.
+</p>
+<p>
+반대로 <strong>그들의 해상도 제약은 우리에게 없습니다.</strong> 우리 리포트는 HTML이라
+브라우저에서 인쇄하면 PDF가 되고, 페이지 크기와 배율은 브라우저가 정합니다.
+"1920×1080, 배율 100%로 맞추라"는 안내를 사용자에게 할 필요가 없습니다.
+</p>
+<p>
+그리고 리포트가 <strong>검증 대상</strong>입니다 — 검증 스크립트가 리포트를 실제로 받아
+와 내용을 확인합니다. 화면을 캡처해 붙이는 방식이 아니라 <strong>데이터에서 직접 생성</strong>하기
+때문에 가능한 일입니다.
+</p>
+</div>
+
+<figure>
+  <img src="../poc-screenshots/28-session-report.png" alt="우리 세션 리포트">
+  <figcaption>우리 세션 리포트 — 고정 레이아웃 HTML. 브라우저 인쇄로 PDF가 됩니다</figcaption>
+</figure>
+
+<h2>3. 유저 시나리오 — UC25: 이벤트 트리거로 리포트 자동화 <span class="src">p307</span></h2>
+
+<blockquote>
+"Triggering events enables <strong>report automation with server autoload</strong>, making running
+final measurement reports more convenient for the end-user. … please note that triggering events
+is <strong>not possible without a server connection</strong>."
+</blockquote>
+
+<h4>절차</h4>
+<ol class="steps">
+<li>Nemo Analyze <strong>Server</strong>에서 backup/retrieve, autoload, FTP autoload를 켬</li>
+<li>Backup &amp; Retrieve와 Autoload에서 <code>*.nmf</code>와 <code>*.zip</code>을 선택</li>
+<li>FTP 설정에서 <strong>하위 폴더 재귀 로드</strong>와 <strong>로드 후 서버에서 삭제</strong>를 선택</li>
+<li>FTP 서버에 폴더(예: <code>test</code>)를 만들고 측정 파일을 넣음 →
+    <strong>자동 로드</strong>되어 클라이언트의 같은 이름 폴더에 나타남</li>
+<li>클라이언트에서 <code>Tools | Event scheduler</code> → 달력 → <code>Triggering events</code> →
+    <code>Add</code></li>
+<li><code>Schedule Event Batch</code>의 <strong>Triggering folder</strong>에 FTP와 같은 폴더 이름을 입력</li>
+</ol>
+
+<p>
+즉 <strong>"파일이 도착하면 리포트가 자동으로 만들어진다"</strong>는 파이프라인입니다.
+정기 드라이브 테스트를 돌리는 조직의 실제 운영 형태이고,
+<em>측정 → 업로드 → 리포트</em>가 사람 손 없이 이어집니다.
+</p>
+
+<div class="ours">
+<h5>우리 구현에는 어떻게 반영됐나 — 없지만, 구조는 오히려 유리합니다</h5>
+<p>
+<strong>이벤트 스케줄러도, 자동 로드도 없습니다.</strong> 우리 임포트는 사람이 파일을 올리는
+것으로 시작합니다.
+</p>
+<p>
+다만 우리 구조가 이 시나리오에 <strong>더 가깝습니다.</strong> 레퍼런스는 <em>데스크톱
+클라이언트</em>가 <em>별도 서버 제품</em>에 붙는 구조라 자동화하려면 서버 설정 6단계와 FTP
+폴더 규약이 필요합니다. 우리는 처음부터 <strong>서버가 임포트하고 서버가 리포트를 생성</strong>합니다 —
+<code>report.html</code>은 이미 HTTP 엔드포인트입니다.
+</p>
+<p>
+그래서 "폴더를 감시해 임포트하고 리포트를 만든다"는 <strong>서버 쪽 작업 하나</strong>이지
+제품 간 연동이 아닙니다. 지금 없는 것은 <strong>트리거</strong>뿐입니다.
+</p>
+</div>
+
+<h2>4. 이 문서에서 남은 일로 확인된 것</h2>
+
+<table>
+<tr><th style="width:250px">항목</th><th style="width:70px">규모</th><th>왜</th></tr>
+<tr><td><strong>기성 워크북을 복사해 고치기</strong></td><td>작음</td><td>내장 탭의 지식을 사용자가 출발점으로 쓸 수 있게. 워크북 저장은 이미 있음</td></tr>
+<tr><td>워크북 <strong>레이아웃 프리셋</strong> (2×2 등)</td><td>작음</td><td>패널을 하나씩 쌓는 것보다 빠름</td></tr>
+<tr><td>리포트 <strong>구성 선택</strong></td><td>중간</td><td>템플릿 디자이너는 과하지만, 포함할 섹션을 고르는 것만으로도 큼</td></tr>
+<tr><td>실행 중 질의 <strong>취소</strong></td><td>작음</td><td><a href="01-workspace-and-views.html">①</a>의 Activity 항목과 같은 문제</td></tr>
+<tr><td>임포트 <strong>트리거</strong> → 리포트 자동 생성</td><td>중간</td><td>UC25. 우리 구조가 오히려 유리 — 트리거만 없음</td></tr>
+<tr><td>워크북을 <strong>PDF/이미지</strong>로</td><td>작음</td><td>지금은 리포트만 내보낼 수 있음</td></tr>
+</table>
+
+<footer>
+출처: Nemo Analyze User Guide · <code>NTN00000A-90013</code> · Edition 1, 2023-11-27.
+그림은 <code>docs/assets/screenshots/manual10.2_*</code>이며 <strong>재배포하지 않습니다</strong>
+(<code>docs/assets/NOTICE.md</code>).
+</footer>
+
+</div>
+</body>
+</html>

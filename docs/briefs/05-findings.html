@@ -1,0 +1,281 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>⑤ 판정 요약 — Nemo Analyze 10.2</title>
+<link rel="stylesheet" href="brief.css">
+</head>
+<body>
+<div class="wrap">
+
+<header class="top">
+  <h1>⑤ 판정 요약</h1>
+  <div class="sub">매뉴얼이 확인한 것, 뒤집은 것, 그리고 다음 우선순위</div>
+</header>
+
+<nav class="crumbs"><a href="index.html">← 브리프 목록</a> ·
+  이전: <a href="04-workbooks-and-reports.html">④ 워크북과 리포트</a></nav>
+
+<p>
+지금까지 우리 격차 분석은 <strong>스크린샷 판독과 마케팅용 Technical Overview</strong>에
+근거했습니다. 메뉴 설명도, 사용자 절차도 없는 자료였습니다.
+505페이지 사용자 가이드를 읽고 나서 그 판단들이 <strong>확인된 것과 틀린 것</strong>으로
+갈렸습니다. 이 문서가 그 결산입니다.
+</p>
+
+<h2>1. 확인된 것</h2>
+
+<table>
+<tr><th style="width:230px">우리 판단</th><th>매뉴얼</th></tr>
+<tr>
+  <td><strong>노드 그래프의 구조</strong> — 소스 → 결합 → 연산 → 상태 → 출력</td>
+  <td><span class="tag t-same">맞음</span> UC27이 그 화면을 만드는 절차를 그대로 기술합니다.
+      노드 배치, 연결 방향, 상태 이름(<code>OK</code>/<code>Bad BLER</code>/<code>Missing handover</code>)까지
+      일치 <span class="src">p403–410</span></td>
+</tr>
+<tr>
+  <td><strong>정렬 노드를 넣지 않음</strong> — "우리 행 집합은 <code>seq</code> 키라 정렬할 것이 없다"</td>
+  <td><span class="tag t-same">근거까지 맞음</span> 레퍼런스가 정렬이 필요한 이유는
+      <strong>Union이 순서를 파괴</strong>하기 때문입니다
+      (<em>"in no particular order"</em>) <span class="src">p359</span>.
+      우리는 Union이 없습니다</td>
+</tr>
+<tr>
+  <td><strong><code>Weight by</code>를 만들지 않음</strong></td>
+  <td><span class="tag t-same">맞음</span> 가중이 필요한 이유는 Nemo 파일이
+      <strong>시간 기반</strong>이라 표본 길이가 제각각이기 때문입니다.
+      우리는 1 Hz 균일이라 <strong>가중 없는 평균이 맞습니다</strong>
+      <span class="src">p353·375·378</span></td>
+</tr>
+<tr>
+  <td><strong>Resample을 만들지 않음</strong></td>
+  <td><span class="tag t-same">맞음</span> 같은 이유. 재표본화할 불규칙성이 없습니다</td>
+</tr>
+<tr>
+  <td><strong>파일럿 오염에 하한 조건</strong> (<code>best RSRP ≥ −110</code>)</td>
+  <td><span class="tag t-same">우리가 더 나음</span> 매뉴얼의 UC20에는 이 조건이 없습니다.
+      없으면 <strong>커버리지 홀이 파일럿 오염으로 오탐</strong>됩니다 —
+      모든 셀이 똑같이 약하면 "여러 셀이 비슷하게 강함"이 참이 되니까요</td>
+</tr>
+<tr>
+  <td><strong>필터를 텍스트 조건식으로</strong></td>
+  <td><span class="tag t-same">우리가 더 나음</span> 레퍼런스는 <strong>이진 트리</strong>라
+      한 노드에 자식이 둘뿐이고, 조건을 다이얼로그로 하나씩 조립해야 합니다
+      <span class="src">UC26, p396</span></td>
+</tr>
+</table>
+
+<h2>2. 뒤집힌 것</h2>
+
+<h3>C1. <code>Missing neighbour</code>는 막혀 있지 않았습니다</h3>
+
+<table>
+<tr><th style="width:110px">기존</th><td><em>"측정된 이웃과 <strong>설정된</strong> 이웃 목록의 차집합인데 우리는 후자가 없습니다"</em> — 격차표의 <strong>(a) 데이터 모델이 막음</strong></td></tr>
+<tr><th>매뉴얼</th><td>Nemo는 설정된 이웃 목록을 <strong>쓰지 않습니다.</strong> 측정값만으로 판정합니다 —
+    <em>"if Ec/N0 1. best is better than Ec/N0 best active set, the handover has not occurred"</em>
+    <span class="src">UC27, p404</span></td></tr>
+<tr><th>실제 원인</th><td><strong>우리 시드 생성기.</strong> 매 표본 argmax를 서빙 셀로 고르기 때문에
+    "이웃이 서빙보다 강한" 표본이 <strong>정확히 0개</strong>입니다 — 커밋 <code>9262db0</code>의
+    정합성 불변식 #2가 그것을 단언하고 통과합니다</td></tr>
+<tr><th>조치</th><td>격차표에서 <strong>(a) → (b) 실제로 남은 작업</strong>으로 이동.
+    생성기에 <strong>핸드오버 지연</strong>(time-to-trigger, 히스테리시스)을 넣으면 조건이 자연히 생깁니다</td></tr>
+</table>
+
+<h3>C2. State Machine — "기억이 없다"가 아니라 <strong>출력 모양이 다른 것</strong></h3>
+
+<table>
+<tr><th style="width:110px">기존</th><td><em>"표본별 <code>CASE</code>라 래칭이 없습니다. 이름이 실제보다 큽니다"</em></td></tr>
+<tr><th>매뉴얼</th><td>맞지만 <strong>부족합니다.</strong> 레퍼런스의 출력은 표본별 값이 아니라
+    <strong>상태 점유마다 한 행</strong>이고 <code>start_time</code>과
+    <strong><code>time_interval</code>(머문 시간 ms)</strong>을 냅니다 <span class="src">p370</span></td></tr>
+<tr><th>왜 중요한가</th><td>대표 용도가 그래서 두 가지입니다 — <strong>커스텀 이벤트 생성</strong>과
+    <strong>절차 지연 측정</strong>. radio bearer 확립 시간이 <code>time_interval</code>로 바로 나옵니다.
+    <strong>래칭만 붙인다고 레퍼런스가 되지 않습니다</strong></td></tr>
+<tr><th>조치</th><td>우리 노드의 정직한 이름은 <strong>Classifier</strong>.
+    진짜 State Machine은 별도 항목으로 세우고, <strong>구간 출력</strong>을 요구사항에 넣습니다</td></tr>
+</table>
+
+<h3>C3. Combine의 게이팅 — 그들은 <strong>세 모드</strong>가 있고 우리는 하나입니다</h3>
+
+<p>
+매뉴얼에는 결합 게이팅이 <strong>두 곳</strong>에 나옵니다.
+</p>
+
+<table>
+<tr><th style="width:230px">Correlate Parameters 모드 <span class="src">p84</span></th><th>출력 행 생성 조건</th><th style="width:150px">우리</th></tr>
+<tr><td>left outer join</td><td><strong>첫 파라미터</strong>가 바뀔 때. 나머지는 current/previous/next</td><td><span class="tag t-none">표현 불가</span></td></tr>
+<tr><td>outer join</td><td>어느 파라미터든 바뀌면</td><td><span class="tag t-same">우리 <code>COMBINE</code></span></td></tr>
+<tr><td>inner join</td><td>전부 유효할 때만</td><td><span class="tag t-diff">하류 <code>FILTER</code>로 우회</span></td></tr>
+</table>
+
+<p>
+KPI Workbench의 Correlation 요소들은 <strong>항상 primary 게이팅</strong>입니다 —
+<em>"the output will be written only when there are valid values in the primary dataset"</em>
+<span class="src">p354</span>.
+</p>
+
+<div class="ours">
+<h5>정정</h5>
+<p>
+기존 정리는 <em>"게이팅이 우리와 <strong>반대</strong>"</em>라고 적었습니다.
+더 정확히는 <strong>그들은 세 가지를 고를 수 있고, 우리는 그중 하나만 할 수 있습니다.</strong>
+우리가 가진 것(outer join)은 정보를 가장 덜 버리는 선택이지만,
+<strong>"통화 중일 때만 보고 싶다"를 노드로 말할 방법이 없다</strong>는 것이 실제 격차입니다.
+</p>
+</div>
+
+<h3>C4. Lee's criteria를 근거로 댔지만 구현하지 않았습니다</h3>
+
+<table>
+<tr><th style="width:110px">기존</th><td><em>"Distance binning ✅ 해소"</em> — 그리고 커밋 메시지에
+    <em>"the sampling convention drive testing has used since Lee"</em></td></tr>
+<tr><th>매뉴얼</th><td>Lee's criteria는 <strong>40λ</strong>입니다 <span class="src">p55</span>.
+    n78(3.5 GHz)에서 <strong>3.4 m</strong>, LTE 1800에서 6.7 m</td></tr>
+<tr><th>우리 빈</th><td><strong>50 / 100 / 250 m</strong> — 두 자릿수 큽니다</td></tr>
+<tr><th>조치</th><td>거리 비닝 자체와 정차 편향 제거는 유효합니다. 그러나
+    <strong>"Lee's criteria"라는 이름은 뗍니다.</strong> 붙이려면 캐리어 주파수에서 40λ를 계산해
+    빈 크기로 제안해야 하고, 변환 함수는 이미 있습니다
+    (<code>FieldToLabService.centreFreqMhz</code>). 빈 좌표도 다릅니다 —
+    레퍼런스는 <strong>첫 이벤트</strong>, 우리는 빈 내 평균</td></tr>
+</table>
+
+<h3>C5. 드릴다운 좌측 탭은 스타일이 아니라 <strong>동시 유지 기능</strong></h3>
+
+<table>
+<tr><th style="width:110px">기존</th><td><em>"드릴다운 breadcrumb를 좌측 세로 탭 형태로 — <strong>작음 · 순수 스타일</strong>"</em></td></tr>
+<tr><th>매뉴얼</th><td><em>"Each drill-down from the same chart will open a <strong>new tab</strong> …
+    displayed on the left side of the window with the <strong>colors of the corresponding
+    sectors</strong>"</em> <span class="src">p88</span></td></tr>
+<tr><th>실제 의미</th><td>여러 원인을 <strong>동시에 열어 놓고 오가는</strong> 기능. RACH 실패와
+    핸드오버 실패를 나란히 비교하는 것이 이 도구의 사용법입니다.
+    우리는 <code>Back to all categories</code> 한 단계뿐이라 <strong>한 번에 하나</strong></td></tr>
+<tr><th>조치</th><td><strong>중간 규모의 기능 격차</strong>로 재분류.
+    진입 조작도 다릅니다 — 레퍼런스는 더블클릭, 우리는 한 번 클릭
+    (이 쪽은 <strong>우리가 낫다고 판단</strong>해 유지합니다)</td></tr>
+</table>
+
+<h3>C6. KPI Workbench는 그들의 <strong>스키마 한계 우회로</strong>이기도 합니다</h3>
+
+<blockquote>
+셋 이상 테이블의 시간 상관이 <em>"impossible"</em> 하다 — 파라미터들이
+<strong>관계가 정의되지 않은 별도 테이블</strong>에 있기 때문 <span class="src">p332</span>
+</blockquote>
+
+<div class="ours">
+<p>
+우리 <code>sample_kpi</code>는 세로형 단일 테이블이라 N개 KPI 상관이 <strong>같은 키의
+조인</strong>입니다. <strong>그들이 도구로 우회한 문제를 우리는 스키마로 이미 풀어 놨습니다.</strong>
+</p>
+<p>
+실무적 함의가 큽니다: <strong>우리 Combine 노드의 값어치는 그들만큼 크지 않습니다.</strong>
+반대로 <strong>우리 워크벤치의 값어치는 전적으로 State Machine과 상관(Previous/Current/Next)
+쪽에 있고 — 그 둘이 지금 우리에게 없거나 다릅니다.</strong>
+개발 시간을 어디에 쓸지가 여기서 갈립니다.
+</p>
+</div>
+
+<h2>3. 다음 우선순위</h2>
+
+<p>기준은 <strong>"이걸 안 하면 다음 구현을 잘못 만든다"</strong>의 정도입니다.</p>
+
+<table>
+<tr><th style="width:45px">순위</th><th style="width:270px">항목</th><th style="width:60px">규모</th><th>근거</th></tr>
+<tr>
+  <td><strong>1</strong></td>
+  <td>시드 생성기에 <strong>핸드오버 지연</strong> 도입</td><td>중</td>
+  <td>C1. 레퍼런스 대표 KPI를 우리 데이터에서 재현 가능하게 만드는 <strong>전제</strong>.
+      이게 없으면 State Machine을 만들어도 시연할 데이터가 없습니다</td>
+</tr>
+<tr>
+  <td><strong>2</strong></td>
+  <td><strong>진짜 State Machine</strong> — 전이 그래프 + 구간 출력 + <code>time_interval</code></td><td>큼</td>
+  <td>C2 · C6. 워크벤치의 실제 값어치가 여기 있습니다</td>
+</tr>
+<tr>
+  <td><strong>3</strong></td>
+  <td><strong>Previous / Current / Next Value</strong> 상관 노드</td><td>중</td>
+  <td>C6. "드롭 <strong>직전</strong>의 값" — 근본 원인 분석의 핵심 질문</td>
+</tr>
+<tr>
+  <td>4</td>
+  <td>드릴다운 <strong>다중 탭</strong> (조각 색 유지)</td><td>중</td>
+  <td>C5. 재분류됨. 여러 원인 동시 비교</td>
+</tr>
+<tr>
+  <td>5</td>
+  <td><strong>Cell locator</strong></td><td>중</td>
+  <td>UC21. 우리는 정답(<code>cell_ref</code> 좌표)을 알고 있어
+      <strong>오차를 검증할 수 있는</strong> 형태로 만들 수 있습니다</td>
+</tr>
+<tr>
+  <td>6</td>
+  <td>거리 빈에 <strong>40λ 옵션</strong></td><td>작음</td>
+  <td>C4. 이름값을 하려면. 변환 함수는 이미 있음</td>
+</tr>
+<tr>
+  <td>7</td>
+  <td>푸트프린트 포함 기준을 <strong>3강 안</strong>으로</td><td>작음</td>
+  <td>UC1. V7 데이터로 바로 가능. 오버슛 판단의 실제 근거</td>
+</tr>
+<tr>
+  <td>8</td>
+  <td>임포트 <strong>진행 큐 + 취소</strong>, KPI 그래프 <strong>SQL 표시</strong></td><td>작음</td>
+  <td>Activity/Log window. SQL은 응답에 이미 있고 표시만 하면 됩니다</td>
+</tr>
+</table>
+
+<h2>4. 하지 않기로 한 것</h2>
+
+<p>
+격차표에 올라 있었지만 <strong>매뉴얼을 읽고 빼기로</strong> 한 항목들입니다.
+빼는 근거가 "귀찮아서"가 아니라 <strong>우리 데이터 모델에서 의미가 없어서</strong>라는 점이
+중요합니다.
+</p>
+
+<table>
+<tr><th style="width:230px">항목</th><th>왜 하지 않는가</th></tr>
+<tr><td><strong><code>Weight by</code></strong></td>
+    <td>시간 가중이 필요한 이유는 Nemo 파일이 <strong>값이 바뀔 때만 샘플을 만들기</strong>
+        때문입니다. 우리는 1 Hz 균일이라 <strong>가중 없는 평균이 맞습니다.</strong>
+        넣으면 <em>의미 없는 컨트롤</em>이 됩니다</td></tr>
+<tr><td><strong>Time: Resample</strong></td>
+    <td>같은 이유. 재표본화할 불규칙성이 없습니다</td></tr>
+<tr><td><strong>Sort 노드</strong></td>
+    <td>정렬이 필요한 이유가 Union의 순서 파괴인데 우리는 Union이 없고 <code>seq</code> 키입니다.
+        <strong>아무 일도 하지 않는 버튼은 없느니만 못합니다</strong></td></tr>
+<tr><td>MapX · Spreadsheet grid · Info views · Network Parameters · Query clipboard</td>
+    <td>MapInfo 자산 계열이거나, 우리가 다루지 않는 데이터 종류입니다. <strong>범위 차이지 격차가 아닙니다</strong></td></tr>
+<tr><td>Indoor / IBWC maps</td>
+    <td>실내 측정은 우리 범위 밖입니다</td></tr>
+<tr><td>드릴다운 <strong>더블클릭</strong> 진입</td>
+    <td><strong>한 번 클릭이 낫다고 판단합니다.</strong> 파이 조각의 더블클릭은 발견하기 어려운 조작입니다.
+        고칠 것은 <strong>동시 유지</strong> 쪽입니다</td></tr>
+</table>
+
+<h2>5. 이 브리프가 남긴 방법론적 교훈 하나</h2>
+
+<div class="warn">
+<p>
+우리가 노드 그래프를 설계하며 본 "스크린샷"은 사실 <strong>이 매뉴얼 p405의 UC27 상태
+흐름도</strong>였습니다 (파일 크기가 정확히 일치합니다). 구조는 정확히 읽어냈지만,
+<strong>그림 한 장에서 의미까지 추측한 부분이 여러 곳에서 틀렸습니다</strong> —
+State Machine의 출력 모양, Combine의 게이팅, <code>Missing neighbour</code>의 판정 방식.
+</p>
+<p>
+공통점이 있습니다. <strong>틀린 것은 전부 "화면에 보이지 않는 것"이었습니다.</strong>
+노드의 배치와 연결은 그림에 있지만, 노드가 <em>무엇을 출력하는지</em>는 그림에 없습니다.
+스크린샷 기반 분석의 한계가 정확히 거기였고, 앞으로도 같은 경계선을 의심해야 합니다.
+</p>
+</div>
+
+<footer>
+근거 원문: <code>docs/reference/nemo-analyze-10.2/corrections.md</code>.
+전체 정리는 <a href="index.html">브리프 목록</a>에서.
+출처: Nemo Analyze User Guide · <code>NTN00000A-90013</code> · Edition 1, 2023-11-27 ·
+<strong>재배포하지 않습니다</strong>.
+</footer>
+
+</div>
+</body>
+</html>

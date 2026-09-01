@@ -1,0 +1,313 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>① Workspace와 데이터 뷰 — Nemo Analyze 10.2</title>
+<link rel="stylesheet" href="brief.css">
+</head>
+<body>
+<div class="wrap">
+
+<header class="top">
+  <h1>① Workspace와 데이터 뷰</h1>
+  <div class="sub">Nemo Analyze 10.2 User Guide ch.6 · ch.8 기반 · 데이터를 찾고 여는 경로</div>
+</header>
+
+<nav class="crumbs"><a href="index.html">← 브리프 목록</a> ·
+  다음: <a href="02-analysis-and-drilldown.html">② 분석과 드릴다운</a></nav>
+
+<p>
+Nemo Analyze에서 <strong>화면을 여는 방법은 하나뿐입니다</strong> — 좌측 Workspace에서
+측정 파일을 고르고, 파라미터를 골라, "어디에 열지"를 고릅니다. 메뉴 구조가 아니라
+<strong>데이터에서 출발하는 구조</strong>입니다. 우리 화면이 탭 기반인 것과 근본적으로 다르고,
+이 차이가 아래 대부분의 격차를 설명합니다.
+</p>
+
+<h2>1. Workspace — 좌측 도크</h2>
+
+<figure>
+  <img src="../assets/screenshots/manual10.2_workspace-three-sections_p24.png"
+       alt="Workspace의 Folders / Measurements / Parameters 3단 구조">
+  <figcaption>Workspace <code>Measurements</code> 페이지의 3단 구조 · 원문 p24</figcaption>
+</figure>
+
+<blockquote>"The Workspace forms the basis of the user interface." <span class="src">p24</span></blockquote>
+
+<p>
+기본 위치는 좌측이고 떼어내 띄울 수 있으며, 더블클릭하면 다시 붙습니다.
+<strong>하단 아이콘 탭으로 9개 페이지를 전환</strong>합니다.
+</p>
+
+<table>
+<tr><th style="width:170px">페이지</th><th>담는 것</th><th style="width:90px">우리</th></tr>
+<tr><td><strong>Measurements</strong></td><td>측정 파일. 3단 — Folders(All Measurements + 사용자 폴더, 현재 DB 연결명 표시) · Measurements · Parameters</td><td><span class="tag t-diff">부분</span></td></tr>
+<tr><td>IP Traces</td><td>IP/UDP 패킷 트레이스 (UC3)</td><td><span class="tag t-out">범위 외</span></td></tr>
+<tr><td>Binary Logs</td><td>단말 바이너리 로그 (UC4)</td><td><span class="tag t-out">범위 외</span></td></tr>
+<tr><td>Base Stations</td><td>BTS 파일. 맵에 드래그해 경로와 연결</td><td><span class="tag t-none">없음</span></td></tr>
+<tr><td>Maps · Polygons</td><td>MapInfo/live map 자산, 폴리곤</td><td><span class="tag t-out">자산 종류 없음</span></td></tr>
+<tr><td>Data Source Files</td><td>외부 데이터 소스</td><td><span class="tag t-none">없음</span></td></tr>
+<tr><td>Macros · Reports</td><td>매크로, 리포트 템플릿</td><td><span class="tag t-diff">리포트만</span></td></tr>
+</table>
+
+<div class="ours">
+<h5>우리 구현</h5>
+<p>
+좌측에 <strong>Parameters 트리 + 검색창</strong>이 있고, 측정 세션은 <strong>상단 드롭다운</strong>입니다.
+즉 3단 중 <em>Parameters</em> 한 단만 도크에 있고 <em>Measurements</em>는 도크 밖으로 나갔습니다.
+세션이 수십 개 단위인 우리 규모에서는 드롭다운이 더 빠르지만, <strong>Folders(측정 파일 정리)</strong>는
+세션이 늘어나면 필요해집니다 — 지금 우리는 세션을 분류할 방법이 없습니다.
+</p>
+<p>Base Stations · Maps · Polygons · Data Source Files는 우리가 그런 <em>자산</em>을 다루지 않기
+때문에 페이지가 없는 것이 자연스럽습니다. 격차가 아니라 범위 차이입니다.</p>
+</div>
+
+<h3>그림에서 직접 읽히는 것</h3>
+
+<p>p24 그림 한 장에 3단이 그대로 보이고, 각 단의 구성도 읽힙니다.</p>
+
+<table>
+<tr><th style="width:150px">단</th><th>그림에 보이는 것</th><th style="width:230px">우리</th></tr>
+<tr>
+  <td><strong>Folders</strong></td>
+  <td><code>Analyze Local Database</code>(DB 연결명) 아래
+      <code>All Measurements (10)</code>, <code>Dropped calls (5 files, 21 hours)</code>,
+      <code>May 2016 (1 files, 3 mins)</code> — <strong>파일 수와 총 측정 시간</strong>이 함께</td>
+  <td><span class="tag t-none">없음</span> 세션은 드롭다운 하나</td>
+</tr>
+<tr>
+  <td><strong>Measurements</strong></td>
+  <td>검색창 + 파일 목록. 일부 항목은 <strong>펼칠 수 있음</strong>(한 드라이브 안의 여러 장치)</td>
+  <td><span class="tag t-diff">드롭다운</span></td>
+</tr>
+<tr>
+  <td><strong>Parameters</strong></td>
+  <td>검색창 + <strong>★ 즐겨찾기</strong> + 분류 트리 —
+      Analysis · CDMA · Circuit-switched data · EVDO · EVDO Scanner · Other ·
+      Packet-switched data · Services · UMTS · UMTS Scanner · <strong>User</strong> · WLAN</td>
+  <td><span class="tag t-diff">분류 + 검색은 있음</span></td>
+</tr>
+</table>
+
+<div class="ours">
+<h5>우리 Parameters 트리와 비교</h5>
+<p>
+<strong>분류 그룹핑과 검색은 우리도 있습니다</strong> — <code>ParameterTree</code>가
+카테고리별로 묶고, 검색은 표시명·내부명·카테고리를 모두 훑으며 <em>"N of M parameters"</em>로
+몇 개가 걸렸는지 알려 줍니다. 이 마지막 것은 레퍼런스에 없습니다.
+</p>
+<p>없는 것 둘:</p>
+<ul>
+<li><strong>★ 즐겨찾기.</strong> 실무에서 매일 보는 파라미터는 대여섯 개인데
+    매번 검색해야 합니다. <strong>비용이 아주 작고 매일 쓰이는 종류</strong>입니다.</li>
+<li><strong><code>User</code> 분류.</strong> 레퍼런스는 사용자가 만든 KPI를
+    <strong>전용 가지</strong>에 모읍니다 <span class="src">p83</span>.
+    우리는 KPI를 만들 때 <strong>카테고리를 사용자가 직접 입력</strong>하므로,
+    직접 만든 KPI가 기본 제공 KPI 사이에 섞여 구별되지 않습니다.
+    <em>"이 KPI는 어디서 왔나"</em>가 화면에서 사라진 셈입니다.</li>
+</ul>
+</div>
+
+<h2>2. Parameters 뷰 — 뷰가 아니라 "질의 진입점"</h2>
+
+<p>
+여기가 구조적으로 가장 다른 곳입니다. 파라미터를 <strong>우클릭·더블클릭하면 질의가 실행되고</strong>
+결과가 뷰로 열립니다. 즉 메뉴 항목이 아니라 <em>파라미터 × 열 곳</em>의 조합이 기능 목록입니다.
+</p>
+
+<table>
+<tr><th style="width:250px">항목</th><th>하는 일</th><th style="width:75px">원문</th><th style="width:80px">우리</th></tr>
+<tr><td><strong>Statistics over parameter</strong></td><td>파라미터 하나에 대한 통계, 필터 유무 선택</td><td class="src">p50</td><td><span class="tag t-same">있음</span></td></tr>
+<tr><td>Statistics by: No Grouping</td><td>그룹핑 없는 집계</td><td class="src">p51</td><td><span class="tag t-same">있음</span></td></tr>
+<tr><td>Statistics by: Fixed Geographical Bin Area</td><td>고정 지리 빈 단위 집계</td><td class="src">p52</td><td><span class="tag t-same">Area bins</span></td></tr>
+<tr><td><strong>Lee's criteria sampling</strong></td><td>스캐너 데이터의 <strong>거리 기반</strong> 집계 (별도 라이선스)</td><td class="src">p55</td><td><span class="tag t-diff">이름값 미달</span></td></tr>
+<tr><td><strong>Parameter launchpad</strong></td><td>Cumulation &amp; density · Count · Average · Min · Max · Std dev · Variance · Mode · Median · Midrange · <strong>Histogram</strong></td><td class="src">p57</td><td><span class="tag t-diff">일부</span></td></tr>
+<tr><td>Open Distance Bin In</td><td>거리 빈 결과를 map / graph / grid / text 중 하나로</td><td class="src">p59</td><td><span class="tag t-same">거리 프로파일</span></td></tr>
+<tr><td><strong>Change defaults</strong></td><td>파라미터별 기본 <strong>색상셋 · 그래프 축 상하한 · 기본 뷰 · 기본 통계 · 기본 드릴다운 워크북</strong></td><td class="src">p59</td><td><span class="tag t-diff">색상만</span></td></tr>
+</table>
+
+<h3>임계 경계의 "포함 방향"</h3>
+
+<p>
+<code>Change defaults</code>의 Statistics 탭에는 CDF/PDF 계산용
+<strong>Threshold · Condition · Minimum · Maximum · Interval · Direction</strong>이 있고,
+구간 경계의 <strong>어느 쪽을 포함할지</strong> 고르는 <strong>Up/Down</strong> 설정이 따로 있습니다 —
+<code>&gt;0 and &lt;=25</code> 대 <code>&gt;=0 and &lt;25</code>. <em>포함되는 쪽 값이 X축에 인쇄됩니다.</em>
+</p>
+
+<div class="ours">
+<h5>우리 구현</h5>
+<p>
+임계 편집기(<code>ThresholdEditor</code>)는 <strong>경계값만 편집</strong>하고 포함 방향은
+"하한 포함, 상한 배제"로 고정입니다. 값이 정확히 경계에 놓이는 표본이 어느 구간으로 가는지를
+사용자가 못 고릅니다. RSRP 같은 연속값에서는 거의 문제가 안 되지만, <strong>정수로 양자화된
+KPI</strong>(예: 임계가 정확히 −100인데 −100이 다량 존재)에서는 두 구간의 개수가 눈에 띄게 갈립니다.
+</p>
+</div>
+
+<div class="two">
+<figure>
+  <img src="../poc-screenshots/22-colour-scale-editor.png" alt="색상 스케일 편집기">
+  <figcaption>우리 색상 스케일 편집기 — 경계만 편집, 포함 방향 고정</figcaption>
+</figure>
+<figure>
+  <img src="../poc-screenshots/03-radio-thresholds.png" alt="무선 임계 화면">
+  <figcaption>임계 기반 분류 결과. 레퍼런스의 <code>Change defaults</code>는 이 임계를
+    <strong>파라미터의 기본값</strong>으로 저장합니다 — 우리는 화면 단위</figcaption>
+</figure>
+</div>
+
+<h2>3. 데이터 뷰 종류</h2>
+
+<table>
+<tr><th style="width:230px">뷰</th><th style="width:75px">원문</th><th>우리</th></tr>
+<tr><td><strong>Graphs</strong> — line / bar / scatter / <strong>color grid</strong> / <strong>surface</strong></td><td class="src">p94–111</td><td><span class="tag t-diff">라인·바·파이. color grid·surface 없음</span></td></tr>
+<tr><td>Grids (+ Side panel, Row details, Export)</td><td class="src">p112–121</td><td><span class="tag t-same">표</span></td></tr>
+<tr><td>Maps / Live Maps (+ Google Street View)</td><td class="src">p122–131</td><td><span class="tag t-diff">Street View 없음</span></td></tr>
+<tr><td>MapX (Map/Route/BTS properties)</td><td class="src">p132–146</td><td><span class="tag t-out">MapInfo 계열</span></td></tr>
+<tr><td>Spreadsheet grid (셀 서식·필터·<strong>수식</strong>)</td><td class="src">p180–189</td><td><span class="tag t-none">없음</span></td></tr>
+<tr><td>Indoor / IBWC maps</td><td class="src">p192–199</td><td><span class="tag t-out">실내 범위 외</span></td></tr>
+<tr><td>Numerical data views</td><td class="src">p200</td><td><span class="tag t-same">우측 Numerical Data</span></td></tr>
+<tr><td>Timeline view (+ Highlight Parameter, <strong>Range selection</strong>)</td><td class="src">p203–208</td><td><span class="tag t-diff">진행 바가 부분 대응</span></td></tr>
+<tr><td><strong>Activity</strong> — 업로드·변환 큐 진행 + <strong>Cancel All</strong></td><td class="src">p213</td><td><span class="tag t-diff">Import history(이력만)</span></td></tr>
+<tr><td><strong>Log window</strong> — 오류 메시지와 <strong>처리 중인 SQL</strong></td><td class="src">p213</td><td><span class="tag t-none">없음</span></td></tr>
+<tr><td>Info views · Network Parameters · Measurement Settings · Properties · Query clipboard</td><td class="src">p202–212</td><td><span class="tag t-none">없음</span></td></tr>
+</table>
+
+<div class="ours">
+<h5>우리 구현 — 두 가지가 눈에 띕니다</h5>
+<p>
+<strong>(1) Activity의 절반만 있습니다.</strong> 우리 Import history는 <em>끝난 것</em>의 이력이고,
+<strong>진행 중인 큐와 취소가 없습니다.</strong> 대용량 임포트 중에 사용자가 할 수 있는 일이 없습니다.
+</p>
+<p>
+<strong>(2) Log window의 SQL 표시에는 우리 쪽 대응물이 있습니다.</strong> 우리는 사용자가 SQL을
+볼 일이 없는 구조지만, <strong>KPI 그래프가 생성한 SQL</strong>은 같은 값어치가 있습니다 —
+"이 KPI가 실제로 무엇을 계산했나"를 검증할 수 있게 하니까요.
+현재 <code>validate</code> 응답에 <code>sql</code> 필드가 이미 들어 있으나 <strong>화면에 노출하지
+않습니다.</strong> 표시만 하면 되는, 비용이 거의 없는 항목입니다.
+</p>
+</div>
+
+<figure>
+  <img src="../poc-screenshots/12-import.png" alt="임포트 화면">
+  <figcaption>우리 Import 화면 — 이력은 있으나 진행 중 큐·취소가 없습니다</figcaption>
+</figure>
+
+<h2>4. 유저 시나리오</h2>
+
+<h3>UC5 — 2차 파라미터로 전역 필터 걸기 <span class="src">p77</span></h3>
+
+<p>
+사업자가 "커버리지 영역"을 특정 파라미터 임계로 정의하는 실무를 그대로 옮긴 시나리오입니다.
+</p>
+
+<blockquote>
+"all data with Received Signal Code Power (RSCP) of -100 or higher will be considered
+measurement data from coverage area … The global filter created based on this condition will
+exclude all data with RSCP values lower than -100 from <strong>all subsequent Nemo Analyze
+operations</strong>."
+</blockquote>
+
+<ol class="steps">
+<li>ribbon <code>Utilities | Global Filters</code> → <code>Edit</code></li>
+<li><code>Add</code> → Name에서 <code>&lt;Secondary parameter&gt;</code> 선택</li>
+<li>Value 열의 <code>…</code> 버튼 → 2차 파라미터로 <code>RSCP best active set</code> 선택</li>
+<li>다시 <code>Add</code> → <code>RSCP</code> <code>&gt;=</code> <code>-100</code></li>
+<li><code>Finish</code>. 이후 <strong>모든 조작</strong>이 이 필터를 통과한 데이터에만 적용됨</li>
+</ol>
+
+<p>
+핵심은 <strong>"1차 데이터셋을 2차 파라미터로 거른다"</strong>는 것입니다 — 결과 데이터셋에는
+2차 파라미터 조건을 만족하는 <em>시점</em>의 1차 값만 남습니다.
+</p>
+
+<div class="ours">
+<h5>우리 구현에는 어떻게 반영됐나</h5>
+<p>
+<strong>전역 필터라는 개념 자체가 없습니다.</strong> 우리 필터는 화면 단위입니다 —
+Statistics 탭의 범위 필터, 지도의 임계 색상. 화면을 옮기면 초기화됩니다.
+</p>
+<p>
+다만 <strong>2차 파라미터 게이팅은 KPI Workbench로 표현할 수 있습니다</strong> —
+<code>SOURCE_KPI(RSRP)</code> + <code>SOURCE_KPI(대상)</code> → <code>COMBINE</code> →
+<code>FILTER: rsrp &gt;= -100</code> → <code>OUTPUT</code>. 결과가 새 KPI가 되므로 이후 모든 화면에서
+쓸 수 있습니다. <strong>레퍼런스는 모드 설정으로, 우리는 파생 KPI로</strong> 같은 목적에 도달하는
+셈인데, 우리 쪽은 "지금 보고 있는 화면에 즉시" 적용되지 않는다는 차이가 남습니다.
+</p>
+</div>
+
+<h3>UC12 — L3/RRC 시그널링 메시지 값 검색 <span class="src">p121</span></h3>
+
+<ol class="steps">
+<li>측정 파일 선택 → <code>L3 signaling parameter search</code> 파라미터를 <strong>더블클릭</strong></li>
+<li>Filters 다이얼로그에 <strong>검색 텍스트</strong>(예: <code>Short MAC value</code>)와
+    <strong>검색 대상 메시지</strong>(예: <code>SERVICE_REQUEST</code>)를 입력</li>
+<li><code>Parameter name</code>으로 결과 열의 이름을 직접 정함</li>
+</ol>
+
+<p>
+즉 <strong>디코딩된 시그널링 본문에서 값을 뽑아 새 열로 만드는</strong> 기능입니다. 메시지 목록을
+보는 것이 아니라 <em>메시지 안의 필드를 파라미터로 승격</em>시킵니다.
+</p>
+
+<div class="ours">
+<h5>우리 구현에는 어떻게 반영됐나</h5>
+<p>
+우리 <strong>Signaling 화면</strong>은 메시지 목록과 필터, 그리고 커서 동기화를 제공합니다 —
+<em>보는 것</em>까지는 대응합니다. <strong>메시지 본문의 필드를 뽑아 KPI 열로 만드는 경로는
+없습니다.</strong> 우리 시그널링은 이벤트 타입과 시각이 주된 정보이고 본문 필드가 구조화돼 있지
+않습니다. 이 격차는 데이터 모델에서 시작하므로 UI만으로는 닫히지 않습니다.
+</p>
+</div>
+
+<figure>
+  <img src="../poc-screenshots/05-signaling.png" alt="시그널링 화면">
+  <figcaption>우리 Signaling 화면 — 목록·필터·커서 동기화. 본문 필드 추출은 없음</figcaption>
+</figure>
+
+<h3>UC10 · UC28–31 — 색상셋 <span class="src">p118 · p432–440</span></h3>
+
+<p>
+색상셋은 레퍼런스에서 <strong>독립된 1급 자산</strong>입니다. 값 범위에서 <strong>자동 생성</strong>
+(UC28)하거나 직접 만들고(UC29), 맵(UC30)과 그리드(UC31)에 각각 적용합니다.
+</p>
+
+<div class="ours">
+<h5>우리 구현에는 어떻게 반영됐나</h5>
+<p>
+<strong>여기는 우리가 대응을 갖춘 몇 안 되는 곳입니다.</strong> 색상 스케일 편집기가 있고,
+<strong>자동 스케일</strong>(값 범위에서 색 경계를 만드는 것 — UC28에 정확히 대응)도 있으며,
+지도·차트·범례가 같은 스케일을 공유합니다. 다르게 만든 부분은 <strong>스케일을 파라미터의
+기본값으로 저장</strong>하는 <code>Change defaults</code>의 층위입니다 — 우리는 화면 단위로만
+기억합니다.
+</p>
+</div>
+
+<figure>
+  <img src="../poc-screenshots/23-auto-scale-legend.png" alt="자동 스케일 범례">
+  <figcaption>우리 자동 스케일 + 범례 — UC28(값 범위에서 색상셋 자동 생성)의 대응물</figcaption>
+</figure>
+
+<h2>5. 이 문서에서 남은 일로 확인된 것</h2>
+
+<table>
+<tr><th style="width:220px">항목</th><th style="width:70px">규모</th><th>왜</th></tr>
+<tr><td>임포트 <strong>진행 큐 + 취소</strong></td><td>작음</td><td>Activity의 없는 절반. 대용량 임포트 중 사용자가 할 일이 없음</td></tr>
+<tr><td>KPI 그래프의 <strong>생성 SQL 표시</strong></td><td>매우 작음</td><td>응답에 이미 있음. 표시만 하면 됨</td></tr>
+<tr><td>임계 <strong>포함 방향</strong> 선택</td><td>작음</td><td>양자화된 KPI에서 구간 개수가 갈림</td></tr>
+<tr><td>파라미터 <strong>★ 즐겨찾기</strong></td><td>매우 작음</td><td>매일 보는 것은 대여섯 개인데 매번 검색해야 함</td></tr>
+<tr><td>사용자 KPI의 <strong>출처 표시</strong> (User 분류)</td><td>작음</td><td>직접 만든 KPI가 기본 제공 KPI와 구별되지 않음</td></tr>
+<tr><td>세션 <strong>폴더</strong></td><td>중간</td><td>세션 수가 늘면 필요. 지금은 아님</td></tr>
+<tr><td><strong>color grid · surface</strong> 그래프</td><td>중간</td><td>두 파라미터 상관을 보는 유일한 뷰 (UC8)</td></tr>
+</table>
+
+<footer>
+출처: Nemo Analyze User Guide · <code>NTN00000A-90013</code> · Edition 1, 2023-11-27.
+그림은 <code>docs/assets/screenshots/manual10.2_*</code>이며 <strong>재배포하지 않습니다</strong>
+(<code>docs/assets/NOTICE.md</code>).
+</footer>
+
+</div>
+</body>
+</html>
