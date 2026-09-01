@@ -205,6 +205,7 @@ Nemo Tools ──Field-To-Lab Conversion──▶ UXM 5G Wireless Test Platform 
 | 거리 빈에 **40λ 옵션** | 작음 — *신규.* 지금 이름값을 못 하고 있습니다(p55) |
 | 파라미터 **★ 즐겨찾기**, 사용자 KPI의 **출처 표시** | 작음 — *신규.* 레퍼런스는 사용자 KPI를 `User` 가지에 모읍니다(p83). 우리는 카테고리를 사용자가 입력해 기본 KPI와 섞입니다 |
 | 임포트 **진행 큐 + 취소**, KPI 그래프 **생성 SQL 표시** | 작음 — *신규.* Activity/Log window(p213). SQL은 `validate` 응답에 **이미 있고 화면에만 없습니다** |
+| **거리 가중 통계** — `statistics` · `distribution` · CDF · 리포트 | 중 — *신규.* 1 Hz 균일이 없애 주지 못하는 유일한 편향. 가중치는 `GeoAnalysisService.distanceBins()`가 이미 계산하는 대권거리 구간을 재사용 |
 | 기성 워크북을 **복사해 고치기**, 레이아웃 프리셋 | 작음 — *신규.* 내장 탭의 지식을 사용자 출발점으로(p215) |
 | **워크벤치가 상태 이름을 범례에 넘기지 않음** | 작음 — 화면은 넘긴다고 적어 놓고 코드가 없습니다. 문구를 내리거나 실제로 기록해야 합니다 |
 
@@ -325,11 +326,20 @@ created on a timeline only when **changes occur**)"*.
 
 | 항목 | 왜 하지 않는가 |
 |---|---|
-| 집계의 **`Weight by`** | 시간 가중이 필요한 이유는 Nemo 표본의 **길이가 제각각**이기 때문입니다. 우리는 1 Hz 균일이라 **가중 없는 평균이 맞습니다.** 넣으면 의미 없는 컨트롤이 됩니다 |
+| 집계의 **`Weight by <ins>time</ins>`** | 시간 가중이 필요한 이유는 Nemo 표본의 **길이가 제각각**이기 때문입니다. 우리는 1 Hz 균일이라 **가중 없는 평균이 맞습니다.** 넣으면 의미 없는 컨트롤이 됩니다 |
 | **Time: Resample** | 같은 이유. 재표본화할 불규칙성이 없습니다 |
 | **Sort 노드** | 정렬이 필요한 이유가 Union의 순서 파괴인데(p359) 우리는 Union이 없고 `seq` 키입니다 |
 | 드릴다운 **더블클릭** 진입 | 한 번 클릭이 낫다고 판단합니다. 고칠 것은 **동시 유지** 쪽입니다 |
 | MapX · Spreadsheet grid · Info views · Query clipboard | MapInfo 자산 계열이거나 우리가 다루지 않는 데이터 종류 — **범위 차이지 격차가 아닙니다** |
+
+> **2026-09-01 정정 — 이 표에서 한 줄을 뺐습니다.** 원래 `Weight by`가 통째로 여기
+> 있었습니다. **거리 가중은 여기 있으면 안 됩니다.** Appendix 3(p477)이 거리 가중의 근거를
+> 표본 간격과 **무관하게** 댑니다 — *"the weighting effect of time spent at traffic lights is
+> to be excluded, the samples should be weighted by distance."* 그리고 1 Hz 균일 샘플에서
+> 정차 편향은 **가장 심합니다**(정차 중에도 초당 1표본, 이동 0 m). Appendix 6에는
+> `QSR_DISTANCE`와 `QSR_TIME`이 별개 프로시저로 존재합니다(p495–497).
+> 거리 가중 통계는 **실제로 남은 작업**이며 §6(b)로 옮겼습니다.
+
 
 ### 8.3 매뉴얼이 확인해 준 것
 

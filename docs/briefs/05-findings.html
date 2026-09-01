@@ -42,11 +42,12 @@
       우리는 Union이 없습니다</td>
 </tr>
 <tr>
-  <td><strong><code>Weight by</code>를 만들지 않음</strong></td>
-  <td><span class="tag t-same">맞음</span> 가중이 필요한 이유는 Nemo 파일이
+  <td><strong><code>Weight by time</code>을 만들지 않음</strong></td>
+  <td><span class="tag t-same">맞음</span> <strong>시간</strong> 가중이 필요한 이유는 Nemo 파일이
       <strong>시간 기반</strong>이라 표본 길이가 제각각이기 때문입니다.
       우리는 1 Hz 균일이라 <strong>가중 없는 평균이 맞습니다</strong>
-      <span class="src">p353·375·378</span></td>
+      <span class="src">p353·375·378</span>.
+      <strong>단 거리 축은 여기 속하지 않습니다</strong> — 아래 C7 정정</td>
 </tr>
 <tr>
   <td><strong>Resample을 만들지 않음</strong></td>
@@ -124,6 +125,55 @@ KPI Workbench의 Correlation 요소들은 <strong>항상 primary 게이팅</stro
 <strong>"통화 중일 때만 보고 싶다"를 노드로 말할 방법이 없다</strong>는 것이 실제 격차입니다.
 </p>
 </div>
+
+<h3>C7. <code>Weight by</code> — 두 축을 하나로 묶은 것이 잘못이었습니다
+  <span class="tag t-none">이 브리프의 자체 정정</span></h3>
+
+<table>
+<tr><th style="width:110px">기존</th><td><em>"<code>Weight by</code>가 없는 것은 격차가 아니다"</em> —
+    "하지 않을 것" 표에 통째로 올려 놨습니다</td></tr>
+<tr><th>매뉴얼</th><td><strong>Appendix 3, p477</strong>이 두 축을 명시적으로 <strong>나눕니다</strong>:
+    <em>"the duration can be <strong>in time or in distance</strong> … If the samples from the
+    entire measurement route are to have equal weight and for instance the weighting effect of
+    <strong>time spent at traffic lights</strong> is to be excluded, the samples should be
+    weighted by distance."</em>
+    같은 페이지가 <strong>시간</strong> 가중의 근거는 산수로 보여 줍니다 —
+    <code>0/90초, 5/0.5초, 0/10초</code>의 단순 평균 <strong>1.667</strong> 대
+    지속시간 가중 평균 <strong>0.025</strong></td></tr>
+<tr><th>SQL 층</th><td>Appendix 6에 <code>QSR_DISTANCE</code>(p495) · <code>QSR_TIME</code>(p497) ·
+    <code>SR_SAMPLE</code>(p496)이 <strong>별개 프로시저</strong>로 있습니다.
+    입력 8개·반환 5개가 같고 <strong>가중 방식만 다릅니다</strong></td></tr>
+<tr><th>왜 틀렸나</th><td>거리 가중의 근거는 <strong>표본 간격의 규칙성과 무관</strong>합니다.
+    그리고 <strong>1 Hz 균일 샘플에서 정차 편향은 오히려 가장 심합니다</strong> —
+    신호 대기 중인 차는 초당 1표본을 꼬박 내면서 <strong>0 m</strong>를 이동합니다.
+    균일 샘플링은 <em>시간</em> 축을 해결하고 <em>거리</em> 축은 조금도 건드리지 않습니다</td></tr>
+<tr><th>우리 상태</th><td>거리 가중 집계가 <strong>어디에도 없습니다.</strong> 거리 비닝은
+    <strong>그 화면 안에서만</strong> 편향을 없애고, 통계·분포·비교 CDF·리포트는 전부
+    정차 편향을 안고 있습니다</td></tr>
+<tr><th>조치</th><td>"하지 않을 것"에서 <strong>거리 가중을 빼고 우선순위로</strong> 올립니다.
+    가중치는 거리 비닝이 이미 계산하는 대권거리 구간을 표본별 가중 열로 재사용하면 됩니다</td></tr>
+</table>
+
+<h3>C8. "셋 이상 테이블의 시간 상관은 SQL로 불가능" — 우리가 너무 세게 옮겼습니다
+  <span class="tag t-none">자체 정정</span></h3>
+
+<p>
+p332의 <em>"with three or more tables the task becomes impossible"</em>을 우리는
+<strong>"SQL로 불가능"</strong>이라고 그대로 옮겨 적었습니다. 그런데 같은 매뉴얼
+<strong>p480</strong>에 <strong>세 테이블을 시간으로 상관시키는 SQL 한 문장</strong>이
+실려 있습니다 — <code>REAL_FREEZE_FRAME</code>을 두 번 부르고, 서브질의를
+<strong>문자열로</strong> 넘기고, 첫 인자로 <strong>손으로 관리하는 캐시 순번</strong>(1, 2)을
+줍니다.
+</p>
+<p>
+<strong>정확한 표현</strong>: 평범한 조인으로는 안 되고 <strong>전용 스칼라와 수동 캐시
+키</strong>가 필요합니다. 워크벤치는 불가능한 연산의 유일한 통로가 아니라
+<strong>그 SQL의 인체공학 층</strong>입니다.
+</p>
+<p>
+<strong>결론은 오히려 강해집니다.</strong> 우리 세로형 스키마에서 같은 상관은 평범한 키
+조인입니다 — 그들이 전용 스칼라와 캐시 순번으로 치르는 비용을 우리는 치르지 않습니다.
+</p>
 
 <h3>C4. Lee's criteria를 근거로 댔지만 구현하지 않았습니다</h3>
 
@@ -235,10 +285,11 @@ KPI Workbench의 Correlation 요소들은 <strong>항상 primary 게이팅</stro
 
 <table>
 <tr><th style="width:230px">항목</th><th>왜 하지 않는가</th></tr>
-<tr><td><strong><code>Weight by</code></strong></td>
+<tr><td><strong><code>Weight by time</code></strong></td>
     <td>시간 가중이 필요한 이유는 Nemo 파일이 <strong>값이 바뀔 때만 샘플을 만들기</strong>
         때문입니다. 우리는 1 Hz 균일이라 <strong>가중 없는 평균이 맞습니다.</strong>
-        넣으면 <em>의미 없는 컨트롤</em>이 됩니다</td></tr>
+        넣으면 <em>의미 없는 컨트롤</em>이 됩니다.
+        <br><strong>거리 가중은 이 표에서 뺐습니다</strong> — C7 정정 참조</td></tr>
 <tr><td><strong>Time: Resample</strong></td>
     <td>같은 이유. 재표본화할 불규칙성이 없습니다</td></tr>
 <tr><td><strong>Sort 노드</strong></td>

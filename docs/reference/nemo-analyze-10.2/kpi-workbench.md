@@ -16,6 +16,13 @@
 1. **셋 이상 테이블의 시간 상관.** 두 테이블은 시간 기반으로 조인할 수 있지만
    *"with three or more tables the task becomes impossible"* — BLER·Ec/N0·TX power가 각각
    별도 테이블이고 **테이블 간 관계가 정의돼 있지 않기** 때문입니다.
+
+   > **단서 (2026-09-01)**: 이 "impossible"은 **평범한 조인으로는**이라는 뜻입니다.
+   > 같은 매뉴얼 Appendix 5(p480)에 **세 테이블을 시간으로 상관시키는 SQL 한 문장**이
+   > 실려 있습니다 — `REAL_FREEZE_FRAME` 스칼라를 두 번 부르고, 서브질의를 **문자열로**
+   > 넘기며, 첫 인자로 **손으로 관리하는 캐시 순번**(1, 2)을 줍니다.
+   > 즉 워크벤치는 *불가능한 연산의 유일한 통로*가 아니라 **이 SQL의 인체공학 층**입니다.
+   > 우리가 이 문장을 "SQL로 불가능"이라고 그대로 옮겨 적은 것은 과했습니다.
 2. **이벤트 시퀀스 추적** — 특정 파라미터의 변화 순서를 좇는 질의.
 
 > **우리에겐 1번이 문제가 아닙니다.** `sample_kpi`가 `(session_id, seq, kpi_name, value)`
@@ -120,9 +127,13 @@ Sum, Count, Mode, Median, Percentile, First, Last.
 각 집계에 **`Weight by`** 가 있습니다 — 시간 또는 **거리(GPS 좌표 기반)**. p375가 이유를
 못박습니다: Nemo 파일이 시간 기반이라 Average/Count는 시간 가중이 **필수**입니다.
 
-> 우리는 1 Hz 균일 샘플이라 가중이 필요 없습니다. **`Weight by`가 없는 것은 격차가
-> 아니라 데이터 모델의 차이입니다.** 단 `Weight by distance`는 우리 거리 비닝과 같은
-> 문제의식입니다.
+> **시간 가중**은 우리에게 필요 없습니다 — 1 Hz 균일이라 모든 표본의 지속시간이 같습니다.
+>
+> **거리 가중은 다릅니다.** p477이 그 근거를 표본 간격과 무관하게 댑니다 —
+> *"the weighting effect of time spent at traffic lights is to be excluded, the samples should
+> be weighted by distance."* 1 Hz 균일 샘플에서 이 편향은 **오히려 최악**입니다(정차 중에도
+> 초당 1표본, 이동 0 m). Appendix 6에는 `QSR_DISTANCE`와 `QSR_TIME`이 **별개 프로시저**로
+> 있습니다(p495–497). 자세한 것은 `corrections.md` C7.
 
 ---
 
