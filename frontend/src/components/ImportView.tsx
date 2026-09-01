@@ -31,6 +31,8 @@ export function ImportView({ onImported, eventTypes = [], sessionId = null }: {
   const [defs, setDefs] = useState<KpiDefinition[]>([])
   const [createUnknown, setCreateUnknown] = useState(false)
   const [jobs, setJobs] = useState<Array<Record<string, unknown>>>([])
+  /** Which file of how many, while a folder's worth is being loaded. */
+  const [batch, setBatch] = useState<{ done: number; total: number; current: string | null } | null>(null)
 
   const reloadJobs = () => { api.importJobs().then(setJobs).catch(() => {}) }
 
@@ -39,27 +41,53 @@ export function ImportView({ onImported, eventTypes = [], sessionId = null }: {
     reloadJobs()
   }, [])
 
+  // Polled only while something is running. The import is one synchronous request, so
+  // the only way to see inside it is to ask the job row, which it updates on each batch.
+  useEffect(() => {
+    if (!busy) return
+    const t = setInterval(reloadJobs, 700)
+    return () => clearInterval(t)
+  }, [busy])
+
+  const running = jobs.find((j) => j.status === 'RUNNING')
+
+  /**
+   * Import every chosen file, one after another.
+   *
+   * A drive produces a folder, not a file, and importing twelve of them meant filling the
+   * same four fields twelve times. Sequentially rather than in parallel on purpose: each
+   * import is one transaction over the same tables, and running them together would turn
+   * a slow import into several slow imports contending with each other.
+   */
   const submit = async () => {
-    const file = fileRef.current?.files?.[0]
-    if (!file) { setError('Choose a CSV file first.'); return }
-    setBusy(true); setError(null); setResult(null)
-    const form = new FormData()
-    form.append('file', file)
-    if (name) form.append('sessionName', name)
-    if (device) form.append('device', device)
-    if (operator) form.append('operator', operator)
-    if (technology) form.append('technology', technology)
-    if (description) form.append('description', description)
-    if (createUnknown) form.append('createUnknownColumns', 'true')
-    try {
-      setResult(await api.importCsv(form))
-      onImported()
+    const files = [...(fileRef.current?.files ?? [])]
+    if (files.length === 0) { setError('Choose at least one CSV file first.'); return }
+    setBusy(true); setError(null); setResult(null); setBatch(null)
+    const failures: string[] = []
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i]
+      setBatch({ done: i, total: files.length, current: file.name })
+      const form = new FormData()
+      form.append('file', file)
+      // With several files the typed name would name them all the same, and the import
+      // refuses a duplicate - so the file names them, which is what the user meant.
+      if (name && files.length === 1) form.append('sessionName', name)
+      if (device) form.append('device', device)
+      if (operator) form.append('operator', operator)
+      if (technology) form.append('technology', technology)
+      if (description) form.append('description', description)
+      if (createUnknown) form.append('createUnknownColumns', 'true')
+      try {
+        setResult(await api.importCsv(form))
+        onImported()
+      } catch (e) {
+        failures.push(`${file.name}: ${e instanceof Error ? e.message : String(e)}`)
+      }
       reloadJobs()
-    } catch (e) {
-      setError(e instanceof Error ? e.message : String(e))
-    } finally {
-      setBusy(false)
     }
+    setBatch({ done: files.length, total: files.length, current: null })
+    if (failures.length > 0) setError(failures.join(' · '))
+    setBusy(false)
   }
 
   return (
@@ -67,7 +95,11 @@ export function ImportView({ onImported, eventTypes = [], sessionId = null }: {
       <div className="panel">
         <header><span className="title">Import measurement data (CSV)</span></header>
         <div style={{ padding: 10, display: 'grid', gap: 8, maxWidth: 620 }}>
-          <label>File<br /><input ref={fileRef} type="file" accept=".csv,.txt,text/csv" /></label>
+          {/* multiple, because a drive produces a folder. The four fields below are
+              filled once and reused for all of them - typing them twelve times is what
+              made a folder's worth of measurements a chore rather than a task. */}
+          <label>Files<br />
+            <input ref={fileRef} type="file" multiple accept=".csv,.txt,text/csv" /></label>
           <label style={{ display: 'flex', gap: 6, alignItems: 'flex-start' }}>
             <input type="checkbox" checked={createUnknown} style={{ marginTop: 2 }}
                    onChange={(e) => setCreateUnknown(e.target.checked)} />
@@ -81,17 +113,17 @@ export function ImportView({ onImported, eventTypes = [], sessionId = null }: {
             </span>
           </label>
           <label>Session name<br />
-            <input value={name} onChange={(e) => setName(e.target.value)}
+            <input value={name} aria-label="Session name" onChange={(e) => setName(e.target.value)}
                    placeholder="defaults to the file name" style={{ width: '100%' }} /></label>
           <div style={{ display: 'flex', gap: 8 }}>
             <label style={{ flex: 1 }}>Device<br />
-              <input value={device} onChange={(e) => setDevice(e.target.value)}
+              <input value={device} aria-label="Device" onChange={(e) => setDevice(e.target.value)}
                      style={{ width: '100%' }} /></label>
             <label style={{ flex: 1 }}>Operator<br />
-              <input value={operator} onChange={(e) => setOperator(e.target.value)}
+              <input value={operator} aria-label="Operator" onChange={(e) => setOperator(e.target.value)}
                      style={{ width: '100%' }} /></label>
             <label style={{ flex: 1 }}>Technology<br />
-              <input value={technology} onChange={(e) => setTechnology(e.target.value)}
+              <input value={technology} aria-label="Technology" onChange={(e) => setTechnology(e.target.value)}
                      style={{ width: '100%' }} /></label>
           </div>
           {/* Two weeks on, the file name is all that distinguishes four drives in the
@@ -101,8 +133,29 @@ export function ImportView({ onImported, eventTypes = [], sessionId = null }: {
                    onChange={(e) => setDescription(e.target.value)}
                    placeholder="what this drive was - build, route, conditions"
                    style={{ width: '100%' }} /></label>
-          <div>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
             <button onClick={submit} disabled={busy}>{busy ? 'Importing…' : 'Import'}</button>
+            {/* A number, not a spinner. "Importing…" with nothing behind it is the state
+                in which a user reaches for the browser's stop button - which abandons the
+                response while the server carries on to completion. */}
+            {busy && (
+              <span className="import-progress">
+                {batch && batch.total > 1 && (
+                  <b>file {Math.min(batch.done + 1, batch.total)} of {batch.total}</b>
+                )}
+                {batch?.current && <span className="dim"> {batch.current}</span>}
+                {running != null && (
+                  <> · {Number(running.rows_read ?? 0).toLocaleString()} rows read</>
+                )}
+                {running != null && (
+                  <button style={{ marginLeft: 8 }}
+                          onClick={() => api.cancelImport(Number(running.id))
+                            .then(reloadJobs).catch(() => {})}>
+                    Stop
+                  </button>
+                )}
+              </span>
+            )}
           </div>
         </div>
       </div>

@@ -43,7 +43,66 @@ public class AnalysisService {
     // ---------------------------------------------------------------- sessions
 
     public List<SessionSummary> listSessions() {
-        return sessions.findAllByOrderByStartedAtDesc().stream().map(this::summarize).toList();
+        return listSessions(null, null, null, null, null, null);
+    }
+
+    /**
+     * The measurement list, narrowed.
+     *
+     * Filtered here rather than in the browser because the list is the one thing that
+     * grows without bound: a team doing weekly drives has thousands of measurements after
+     * a year, and "fetch them all and hide most" stops working long before the screen
+     * that shows them does.
+     *
+     * Every parameter is optional and null means "do not narrow by this" - not "match
+     * nothing", which is the reading that turns an empty filter box into an empty screen.
+     */
+    public List<SessionSummary> listSessions(String query, String device, String operator,
+                                             String technology, String from, String to) {
+        StringBuilder sql = new StringBuilder(
+                "SELECT id FROM measurement_session WHERE 1=1");
+        List<Object> args = new ArrayList<>();
+        if (notBlank(query)) {
+            // Name, build and notes together: a user searching "1.4.2" means the build,
+            // and searching "depot" means whatever they wrote in the notes, and asking
+            // them which field it was in is asking them to remember how they filed it.
+            sql.append(" AND (lower(name) LIKE ? OR lower(coalesce(build_label, '')) LIKE ?"
+                     + " OR lower(coalesce(notes, '')) LIKE ?)");
+            String like = "%" + query.trim().toLowerCase() + "%";
+            args.add(like); args.add(like); args.add(like);
+        }
+        if (notBlank(device)) { sql.append(" AND device = ?"); args.add(device.trim()); }
+        if (notBlank(operator)) { sql.append(" AND operator = ?"); args.add(operator.trim()); }
+        if (notBlank(technology)) { sql.append(" AND technology = ?"); args.add(technology.trim()); }
+        // Dates are inclusive at both ends, because a user typing one date twice means
+        // "that day" and an exclusive end would silently return nothing.
+        if (notBlank(from)) { sql.append(" AND started_at >= ?::date"); args.add(from.trim()); }
+        if (notBlank(to)) { sql.append(" AND started_at < (?::date + 1)"); args.add(to.trim()); }
+        sql.append(" ORDER BY started_at DESC");
+
+        List<Long> ids = jdbc.queryForList(sql.toString(), Long.class, args.toArray());
+        return ids.stream()
+                .map(id -> sessions.findById(id).orElse(null))
+                .filter(java.util.Objects::nonNull)
+                .map(this::summarize)
+                .toList();
+    }
+
+    /** The distinct values a filter can offer, so the controls are never a free-text guess. */
+    public Map<String, List<String>> sessionFacets() {
+        return Map.of(
+                "device", distinct("device"),
+                "operator", distinct("operator"),
+                "technology", distinct("technology"));
+    }
+
+    private List<String> distinct(String column) {
+        return jdbc.queryForList("SELECT DISTINCT " + column + " FROM measurement_session"
+                + " WHERE " + column + " IS NOT NULL ORDER BY 1", String.class);
+    }
+
+    private static boolean notBlank(String s) {
+        return s != null && !s.isBlank();
     }
 
     public SessionSummary getSession(long id) {

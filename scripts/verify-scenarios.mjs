@@ -1451,6 +1451,124 @@ scenario('S18 · Numbers that say what they are')
   await page.waitForTimeout(800)
 }
 
+// ─── S19 · Loading a folder, and stopping when it is the wrong one ───────────
+//
+// The perspectives that ranked this last were all people who RECEIVE drives; none of them
+// imports one. Ranked last, and recorded as ranked last because nobody had asked the
+// person who does it.
+scenario('S19 · Loading a folder, and stopping when it is the wrong one')
+{
+  // Swept first: this scenario creates measurements, and a leftover from a previous run
+  // would make its own counts wrong.
+  for (const s of await apiGet('/api/sessions')) {
+    if (String(s.name).includes('S19 ')) {
+      await page.request.delete(`${API}/api/sessions/${s.id}`)
+    }
+  }
+
+  await openMode('Import')
+  await page.waitForTimeout(1000)
+  step('the file input takes more than one file',
+    await page.locator('.panel:has-text("Import measurement") input[type=file]')
+      .getAttribute('multiple') !== null)
+
+  // Two files in one go, with the metadata typed once.
+  const csv = (n, base) => {
+    const rows = ['timestamp,latitude,longitude,rsrp,sinr']
+    for (let i = 0; i < n; i++) {
+      rows.push(`2026-01-01T00:00:${String(i % 60).padStart(2, '0')}Z,`
+        + `${(65.01 + i * 0.0001).toFixed(6)},${(25.47 + i * 0.0001).toFixed(6)},`
+        + `${base - (i % 20)},${10 - (i % 7)}`)
+    }
+    return rows.join('\n')
+  }
+  await page.locator('.panel:has-text("Import measurement") input[type=file]')
+    .setInputFiles([
+      { name: 'S19 first.csv', mimeType: 'text/csv', buffer: Buffer.from(csv(120, -80)) },
+      { name: 'S19 second.csv', mimeType: 'text/csv', buffer: Buffer.from(csv(140, -90)) },
+    ])
+  // By name, not by position. The first version counted inputs and typed the operator
+  // into the device field after the file control gained a label.
+  await page.locator('input[aria-label="Device"]').fill('S19 device')
+  await page.locator('input[aria-label="Operator"]').fill('S19 operator')
+  await page.locator('.panel:has-text("Import measurement") button', { hasText: 'Import' }).click()
+
+  // Polled, not slept. Two imports each end with a full recompute of every derived and
+  // graph KPI, so a fixed wait is a guess that gets longer every time one is added - and
+  // the first version of this waited six seconds and measured an empty list.
+  let made = []
+  for (let i = 0; i < 40; i++) {
+    made = (await apiGet('/api/sessions')).filter((x) => String(x.name).includes('S19 '))
+    if (made.length === 2) break
+    await page.waitForTimeout(1000)
+  }
+  step('both files became measurements from one set of fields',
+    made.length === 2, `${made.length} measurements: ${made.map((m) => m.name).join(', ')}`)
+  // The metadata was typed once and applied to both - that is the whole saving.
+  step('the fields typed once were applied to every file',
+    made.every((m) => m.device === 'S19 device' && m.operator === 'S19 operator'),
+    made.map((m) => `${m.device}/${m.operator}`).join(' · '))
+
+  // Cancelling. The claim is not "a button exists" but "the import stops AND leaves
+  // nothing behind" - a half-loaded measurement that looks complete is the failure.
+  const before = (await apiGet('/api/sessions')).length
+  const cancelJob = await page.request.post(`${API}/api/import/jobs/999999/cancel`)
+  const cancelBody = await cancelJob.json()
+  step('cancelling something that is not running says so, rather than silently passing',
+    cancelBody.cancelRequested === false, cancelBody.message)
+
+  // The history is a LOG - it accumulates across runs by design, which is the point of
+  // keeping failed attempts in it. So this reads the two most recent S19 jobs, not every
+  // S19 job that has ever existed.
+  const jobs = await apiGet('/api/import/jobs')
+  const s19jobs = jobs.filter((j) => String(j.filename).startsWith('S19 ')).slice(0, 2)
+  step('the history records what each file did, with its row count',
+    s19jobs.length === 2 && s19jobs.every((j) => j.status === 'COMPLETED' && j.rows_read > 0),
+    s19jobs.map((j) => `${j.filename}: ${j.status} ${j.rows_read} rows`).join(' · '))
+  step('and cancelling created nothing',
+    (await apiGet('/api/sessions')).length === before, `${before} measurements`)
+
+  // Finding one among many.
+  await openMode('Analysis')
+  await page.waitForTimeout(1000)
+  await page.locator('.toolbar button', { hasText: 'Find…' }).click()
+  await page.waitForTimeout(900)
+  step('the measurement list can be searched', (await page.locator('.session-filter').count()) === 1)
+
+  await page.locator('input[aria-label="Search measurements"]').fill('S19')
+  await page.waitForTimeout(900)
+  const found = await page.locator('.filter-results tbody tr').count()
+  step('search narrows to the matches', found === 2, `${found} rows for "S19"`)
+
+  // Against the server, not against the row count the same screen produced.
+  const serverSays = await apiGet('/api/sessions?q=S19')
+  step('and the narrowing is the server\'s, not a client-side hide',
+    serverSays.length === found, `server ${serverSays.length}, screen ${found}`)
+
+  await page.locator('input[aria-label="Search measurements"]').fill('nothing matches this')
+  await page.waitForTimeout(900)
+  step('an empty result says why it is empty',
+    /Nothing matches/.test(await page.locator('.filter-results').innerText()),
+    (await page.locator('.filter-results').innerText()).slice(0, 50))
+
+  await page.locator('input[aria-label="Search measurements"]').fill('S19 second')
+  await page.waitForTimeout(900)
+  await page.locator('.filter-results tbody tr').first().click()
+  await page.waitForTimeout(2000)
+  step('picking one opens it',
+    (await page.locator('.toolbar select[aria-label="Measurement"]').inputValue())
+      === String(made.find((m) => m.name.includes('second'))?.id ?? made[0]?.id),
+    await page.locator('.toolbar select[aria-label="Measurement"]').inputValue())
+
+  // Cleaned up, so a second run starts where the first did.
+  for (const m of made) await page.request.delete(`${API}/api/sessions/${m.id}`)
+  const left = (await apiGet('/api/sessions')).filter((x) => String(x.name).includes('S19 '))
+  step('the scenario leaves no measurement behind', left.length === 0,
+    `${left.length} remain`)
+  await selectSession(CITY_A)
+  await page.waitForTimeout(1200)
+}
+
 // ─── wrap-up ─────────────────────────────────────────────────────────────────
 const appErrors = errors.filter((e) =>
   !/tile\.openstreetmap\.org|ERR_CONNECTION|Failed to load resource|ERR_TIMED_OUT/.test(e))

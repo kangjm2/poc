@@ -44,6 +44,51 @@ public class ImportJobLog {
         update(jobId, sessionId, rows, samples, kpis, "COMPLETED", null);
     }
 
+    /**
+     * Publishes how far the import has got, in its own transaction so a screen can read
+     * it while the import's own transaction is still open.
+     *
+     * Progress is a fact about the attempt, not about the data, so it survives the
+     * rollback that a failure or a cancellation causes - which is what lets the history
+     * say "stopped after 40,000 rows" rather than just "stopped".
+     */
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void progress(long jobId, long rowsRead, long samplesLoaded) {
+        jdbc.update("UPDATE import_job SET rows_read = ?, samples_loaded = ? WHERE id = ?",
+                rowsRead, samplesLoaded, jobId);
+    }
+
+    /**
+     * Whether someone has asked for this import to stop.
+     *
+     * Read in its own transaction for the same reason progress is written in one: the
+     * request that sets the flag commits while the import's transaction is still open,
+     * and a read inside that transaction would never see it.
+     */
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public boolean cancelRequested(long jobId) {
+        Boolean b = jdbc.queryForObject(
+                "SELECT cancel_requested FROM import_job WHERE id = ?", Boolean.class, jobId);
+        return Boolean.TRUE.equals(b);
+    }
+
+    /**
+     * Marks the request. Only a RUNNING job can be cancelled - asking to stop something
+     * that has already finished should say so rather than silently doing nothing.
+     */
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public boolean requestCancel(long jobId) {
+        return jdbc.update("UPDATE import_job SET cancel_requested = TRUE"
+                + " WHERE id = ? AND status = 'RUNNING'", jobId) > 0;
+    }
+
+    /** Records a stop the user asked for. Not FAILED: it did not break, it was stopped. */
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void cancelled(long jobId, long rowsRead, String message) {
+        jdbc.update("UPDATE import_job SET status='CANCELLED', rows_read=?, finished_at=now(),"
+                + " message=? WHERE id=?", rowsRead, message, jobId);
+    }
+
     /** Records a failure in its own transaction, so it outlives the rollback. */
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void failed(long jobId, String message) {
