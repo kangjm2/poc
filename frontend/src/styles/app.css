@@ -456,3 +456,14 @@ kbd {
   top: 4px;
   right: 6px;
 }
+
+/* A legend bin shown alone on the map. */
+.legend-row.isolated { background: #eef3fa; outline: 1px solid #9dbbdd; }
+.legend-note.isolating {
+  background: #eef3fa;
+  border-color: #9dbbdd;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.legend-note.isolating button { margin-left: auto; font-size: 11px; padding: 0 5px; }
