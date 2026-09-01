@@ -206,7 +206,7 @@ milliseconds"*.
 
 ---
 
-## 7. UC27 — 워크벤치 실전 예제 (p403–p410)
+## 7. UC27 — 워크벤치 실전 예제 (p403–p426)
 
 우리가 스크린샷에서 판독한 바로 그 그래프의 제작 절차입니다. **구조 판독은 정확했고**,
 이제 각 단계의 이유가 확인됐습니다.
@@ -224,17 +224,94 @@ milliseconds"*.
 |---|---|
 | OK → Bad BLER | `BLER >= 20` |
 | Bad BLER → Missing handover | `Ec/N0 difference < 0` |
-| Missing handover → Bad BLER | `Ec/N0 difference > 0` |
+| Missing handover → Bad BLER | `Ec/N0 difference >= 0` |
 | Bad BLER → OK | `BLER < 20` |
 | Missing handover → OK | `BLER < 20` |
 
-**단계**: 파라미터 3개 드롭(`Ec/N0 Nth best`는 Value=1) → `All Values Within Time Range`로
-Ec/N0 둘 결합 → Math `Subtraction` → State Machine → `Call dropped`와 다시 상관 → Output.
+**단계 (p405–p426, 실제 그래프는 p425)**:
 
-> **우리 도구로 이 KPI를 만들 수 있는가**: **아니오.** 세 가지가 막습니다 —
-> (1) State Machine이 상태를 기억하지 않아 `Bad BLER`를 거쳐야 `Missing handover`가 된다는
-> 순서를 표현할 수 없고, (2) 드롭콜 이벤트와 상태 구간을 상관시킬 Previous/Current 계열이
-> 없고, (3) 우리 `sample_neighbour`에는 **active set 개념이 없습니다**(서빙 셀 하나 + 이웃).
+| # | 노드 | 매뉴얼이 밝힌 이유 |
+|---|---|---|
+| 1 | 파라미터 3개 드롭 — `BLER`, `Ec/N0 best active set`, `Ec/N0 Nth best`(Value=1) | |
+| 2 | Ec/N0 둘 → **All Values Within Time Range** | 시간 기준 결합 |
+| 3 | → **Math 뺄셈** (`- ec/no AND 1. best Ec/No AS Ec/No difference`) | 차이를 열 하나로 |
+| 4 | `BLER` + 차이 → **Union** | *"a correlation method that **does not remove any data** from either of the sets, namely Union"* (p407) |
+| 5 | → **Ascending sort (Column = time)** | *"rows are not ordered by time. As **most operations require the input data to be ordered by time**, you need to sort the data set before performing any further operations"* (p409) |
+| 6 | → **State Machine** (OK / Bad BLER / Missing handover) | |
+| 7 | `Call dropped` + 상태 기계 → **All Values Within Time Range** | 상태 기계가 **primary**(가장 왼쪽 소켓) |
+| 8 | → **Output** (`Column count: 19`) | |
+| 9 | 우클릭 → Save → 이름 입력 → **Column Aliases** 마법사 | 저장하면 *"can now be found in the Parameters view under the **User** item"* (p426) |
+
+> **정정 (2026-09-01)**: 이전 판의 단계 목록에서 4·5단계(**Union**과 **정렬**)가 빠져
+> 있었고, `p408`을 "완성 그래프"라고 적었으나 그것은 Output이 아직 빨강인 **중간
+> 단계**였습니다. 완성 그래프는 **p425**입니다.
 >
-> 이 셋이 "노드 그래프를 만들었다"와 "레퍼런스의 대표 KPI를 재현할 수 있다" 사이의
+> 다만 **설계가 이 노드들을 못 본 것은 아닙니다.** 우리가 근거로 삼은
+> `nemo-analyze_kpi-workbench.png`는 p425와 내용이 같은 완성 그래프이고,
+> `Union`과 `Ascending time`이 그 안에 있습니다. 정렬 노드를 넣지 않기로 한 판단도
+> 그것을 보고 내린 것입니다. 빠진 것은 **이 문서의 단계 목록**뿐이었습니다.
+
+### 7.1 Output 필드의 의미 — 상태가 아니라 **나가는 전이**에 붙입니다
+
+전이 5개 중 Output 이름을 넣는 것은 **둘뿐**입니다.
+
+| 전이 | 조건 | Output 필드 |
+|---|---|---|
+| OK → Bad BLER | `bler >= 20` | **비움** |
+| Bad BLER → OK | `bler < 20` | **비움** |
+| Bad BLER → Missing handover | `Ec/N0 difference < 0` | **비움** |
+| **Missing handover → OK** | `bler < 20` | **`Missing handover`** |
+| **Missing handover → Bad BLER** | `Ec/N0 difference >= 0` | **`Missing handover`** |
+
+매뉴얼의 설명이 규칙을 그대로 말합니다 — *"Because the only relevant state in terms of the KPI is
+Missing handover and the output should not include any data from the state OK, leave the Output
+field empty"* (p415), 그리고 *"As the output should include the data from the state Missing
+handover, enter the name Missing handover to the Output field"* (p421).
+
+> 즉 **행은 그 상태를 빠져나올 때 기록되고, 이름은 방금 있었던 상태를 가리킵니다.**
+> 그래서 `time_interval`이 "그 상태에 머문 시간"이 됩니다. 관심 있는 상태에서 **나가는 모든
+> 전이**에 같은 Output 이름을 적어야 빠짐없이 잡힙니다.
+
+### 7.2 실행 결과 — 출력 모양이 실제 값으로 확인됩니다 (p426)
+
+| start_time | end_time | time_interval | index | text | Event ID | Event |
+|---|---|---|---|---|---|---|
+| 15:55:46.435 | 15:55:51.776 | **5341** | 1 | **Missing handover** | CAD | Call dropped |
+| 15:55:48.986 | 15:55:51.776 | 5341 | 1 | Missing handover | CAD | Call dropped |
+
+전체 측정에서 **2행**입니다. `time_interval` 5341 ms = 드롭 전에 나쁜 상태에 머문 5.3초.
+*"The final output includes **only the rows with Missing handover events** … and if there are
+Call dropped events within the time range of the Missing handover events, these will be displayed
+as well"* (p425).
+
+> 이것이 이 도구의 값어치를 한 장으로 보여 줍니다. 수만 표본에서 **행 2개**가 남고,
+> 각 행이 "언제부터 언제까지, 몇 ms 동안, 무엇 때문에" 를 전부 답합니다.
+> 우리 `STATE_MACHINE`은 표본마다 상태 번호 하나를 내므로 **이 표를 만들 수 없습니다.**
+
+> **우리 도구로 이 KPI를 만들 수 있는가**: **아니오.** 네 가지가 막습니다 —
+> (1) State Machine이 상태를 기억하지 않아 `Bad BLER`를 거쳐야 `Missing handover`가 된다는
+> **순서**를 표현할 수 없고, (2) 출력이 표본별 값이라 `start_time`/`time_interval` 구간 행을
+> 낼 수 없고, (3) 드롭콜 이벤트와 상태 구간을 상관시킬 **primary 게이팅**이 없고,
+> (4) 우리 `sample_neighbour`에는 **active set 개념이 없습니다**(서빙 셀 하나 + 이웃).
+>
+> 이 넷이 "노드 그래프를 만들었다"와 "레퍼런스의 대표 KPI를 재현할 수 있다" 사이의
 > 실제 거리입니다.
+
+### 7.3 위상이 다릅니다 — 그들은 **스트림**, 우리는 **행**
+
+4단계의 Union이 이 차이를 만듭니다. Union은 행을 **쌓습니다** — 결과 스트림의 한 행에는
+`BLER`이 있거나 `Ec/N0 difference`가 있고, 보통 **둘 다 있지는 않습니다**. 그래서 시간순
+정렬이 필수이고, 상태 기계는 **"직전에 본 다른 파라미터의 값"을 기억해야만** 동작합니다.
+
+우리 `COMBINE`은 키 스파인 조인이라 한 행에 **모든 입력이 동시에** 들어옵니다.
+1 Hz 균일 샘플이라 같은 `seq`에 BLER과 Ec/N0 차이가 함께 존재하기 때문입니다.
+
+> **함의**: 우리가 진짜 State Machine을 만들 때 필요한 기억은 그들보다 **적습니다.**
+> 그들의 기억은 두 가지 일을 합니다 — (a) 상태 순서(`OK`→`Bad BLER`→`Missing handover`)를
+> 강제하는 것과 (b) 스트림이 흩어 놓은 파라미터 값을 모으는 것. **우리에게 필요한 것은
+> (a)뿐입니다.** (b)는 스키마가 이미 해결했습니다.
+>
+> 반대로 우리가 반드시 새로 만들어야 하는 것은 **구간 출력**입니다. 그건 기억의 문제가
+> 아니라 결과 테이블의 모양 문제이고, 지금 우리 워크벤치는 출력이 `sample_kpi`의
+> `(session_id, seq, kpi_name, value)` 한 행으로 고정돼 있어 `start_time`/`time_interval`을
+> 담을 곳이 없습니다. **저장 모델을 건드려야 하는 유일한 항목입니다.**

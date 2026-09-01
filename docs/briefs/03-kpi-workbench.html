@@ -19,18 +19,28 @@
   다음: <a href="04-workbooks-and-reports.html">④ 워크북과 리포트</a></nav>
 
 <div class="warn">
-<h5>먼저 밝혀 둘 것 — 우리가 보고 만든 "스크린샷"의 정체</h5>
+<h5>먼저 밝혀 둘 것 — 그리고 이 자리에서 한 번 정정합니다</h5>
 <p>
 우리는 웹에서 주운 <code>nemo-analyze_kpi-workbench.png</code>(774×717)를 보고 노드 그래프를
-설계했습니다. 이번에 매뉴얼 <strong>p405</strong>에서 추출한 그림과 <strong>크기가 정확히
-일치</strong>합니다. 우리가 "스크린샷"이라 부른 것은 사실 <strong>이 매뉴얼 UC27의 상태
-흐름도</strong>였습니다.
+설계했습니다. 이 브리프의 첫 판에서 저는 <em>"그 그림은 매뉴얼 p405의 상태 흐름도였다"</em>고
+적었습니다. <strong>틀렸습니다.</strong> 근거가 <strong>크기가 같다</strong>는 것뿐이었는데,
+이 매뉴얼에는 774×717 그림이 최소 셋 있습니다(p405 · p411 · p424). 픽셀로 비교하니 셋 중
+어느 것과도 일치하지 않았습니다.
 </p>
 <p>
-구조를 읽어낸 것은 결과적으로 옳았지만 — 노드 배치, 연결 방향, 상태 이름
-(<code>OK</code> / <code>Bad BLER</code> / <code>Missing handover</code>)까지 맞았습니다 —
-<strong>우리는 그림 한 장에서 의미까지 추측했고, 그 추측이 여러 곳에서 틀렸습니다.</strong>
-아래가 그 목록입니다.
+그림을 <strong>실제로 열어 보니</strong> UC27의 <strong>완성 노드 그래프</strong>였습니다 —
+아래 p425 그림과 내용이 같고 자른 높이만 다릅니다.
+</p>
+<p>
+<strong>그래서 결론이 반대로 바뀝니다.</strong> 우리는 부분 그림이 아니라
+<strong>완성된 그래프를 보고 설계했고</strong>, 거기 있던 <code>Union</code>과
+<code>Ascending time</code>도 보았습니다. 정렬 노드를 넣지 않기로 한 판단은 그것을 보고
+내린 것입니다. 구조 판독은 정확했습니다 — 노드 배치, 연결 방향, 상태 이름
+(<code>OK</code> / <code>Bad BLER</code> / <code>Missing handover</code>)까지.
+</p>
+<p>
+<strong>틀린 것은 여전히 있습니다.</strong> 그림에서 <em>읽을 수 없는 것</em>을 추측한
+부분입니다 — 각 노드가 무엇을 출력하는지. 아래가 그 목록입니다.
 </p>
 </div>
 
@@ -413,10 +423,18 @@ often necessary to [sort]" <span class="src">p359, Union 설명</span>
   <figcaption>상태 흐름: OK / Bad BLER / Missing handover · p405</figcaption>
 </figure>
 <figure>
-  <img src="../assets/screenshots/manual10.2_uc27-full-graph_p408.png" alt="UC27 완성 그래프">
-  <figcaption>완성된 노드 그래프 · p408</figcaption>
+  <img src="../assets/screenshots/manual10.2_uc27-graph-partial-union_p408.png" alt="UC27 중간 단계 그래프">
+  <figcaption><strong>중간 단계</strong> — Union까지 만들고 Output은 아직 빨강 · p408</figcaption>
 </figure>
 </div>
+
+<figure>
+  <img src="../assets/screenshots/manual10.2_uc27-complete-graph_p425.png" alt="UC27 완성 그래프">
+  <figcaption>
+    <strong>완성 그래프</strong> · p425. 우리가 설계 근거로 인용해 온
+    <em>"Output 노드의 <code>Column count: 19</code>"</em> 가 이 그림의 것입니다
+  </figcaption>
+</figure>
 
 <h4>문제</h4>
 <p>
@@ -441,7 +459,7 @@ has <strong>not occurred</strong>."
 <tr><th style="width:280px">전이</th><th>조건</th></tr>
 <tr><td>OK → Bad BLER</td><td><code>BLER &gt;= 20</code></td></tr>
 <tr><td><strong>Bad BLER → Missing handover</strong></td><td><code>Ec/N0 difference &lt; 0</code></td></tr>
-<tr><td>Missing handover → Bad BLER</td><td><code>Ec/N0 difference &gt; 0</code></td></tr>
+<tr><td>Missing handover → Bad BLER</td><td><code>Ec/N0 difference &gt;= 0</code></td></tr>
 <tr><td>Bad BLER → OK</td><td><code>BLER &lt; 20</code></td></tr>
 <tr><td>Missing handover → OK</td><td><code>BLER &lt; 20</code></td></tr>
 </table>

@@ -35,12 +35,25 @@
 | `manual10.2_kpi-workbench-sockets_p349.png` | p349 | Correlation 실물 예 — `Call attempt failure`(primary) + `Ec/N0 active set` → `Previous Value` → `Output`. 미설정 노드가 빨강인 색 규약이 보임 |
 | `manual10.2_state-machine-states_p368.png` | p368 | State Machine 상태 정의 대화상자 |
 | `manual10.2_uc27-state-flow_p405.png` | p405 | UC27 상태 흐름도 (OK / Bad BLER / Missing handover) |
-| `manual10.2_uc27-full-graph_p408.png` | p408 | UC27 완성 그래프 |
+| `manual10.2_uc27-graph-partial-union_p408.png` | p408 | UC27 **중간 단계** — Union까지 연결하고 Output은 아직 빨강(미연결). 색 규약이 보이는 그림 |
+| `manual10.2_uc27-complete-graph_p425.png` | p425 | UC27 **완성 그래프** (기존 `nemo-analyze_kpi-workbench.png`와 같은 내용, 다른 크롭) — BLER + (Ec/No best active set − 1. best) → **Union** → **Ascending time** → State Machine → Call dropped와 상관 → `Output (Column count: 19)` |
+| `manual10.2_uc27-result-grid_p426.png` | p426 | UC27 **실행 결과** — `start_time · end_time · time_interval · index · text · Event ID · Event · Measurement`. 상태 점유마다 한 행이라는 사실이 실제 값(5341 ms, `Missing handover`, `CAD`)으로 보임 |
 
-> **기존 `nemo-analyze_kpi-workbench.png`(774×717)의 정체가 밝혀졌습니다.** `p405`에서
-> 추출한 그림과 크기가 정확히 같습니다 — 우리가 웹에서 주워 스크린샷이라 불렀던 것은
-> 사실 **이 매뉴얼 UC27의 상태 흐름도**였습니다. 그걸 보고 노드 그래프를 설계한 것은
-> 결과적으로 옳았지만, 근거의 출처를 이제야 정확히 알게 됐습니다.
+> **기존 `nemo-analyze_kpi-workbench.png`(774×717)의 정체 — 두 번 고쳤습니다.**
+>
+> 처음에는 크기가 같다는 이유로 *"`p405`의 상태 흐름도"* 라고 적었습니다. **틀렸습니다.**
+> 이 매뉴얼에는 774×717 그림이 최소 셋(`p405`·`p411`·`p424`) 있어 **크기 일치는 식별이
+> 아니었고**, 픽셀 비교에서 셋 중 어느 것과도 일치하지 않았습니다.
+>
+> 그림을 실제로 열어 보니 **UC27의 완성 노드 그래프**입니다 — `p425`와 내용이 같고
+> (BLER + Ec/No 차이 → `Union` → `Ascending time` → State Machine → `Call dropped`와 상관 →
+> `Output (Column count: 19)`) 자른 높이만 다릅니다(717 대 660).
+>
+> **함의**: 우리는 설계할 때 **완성 그래프를 본 것이 맞습니다.** `Union`과 정렬 노드도
+> 보았고, 정렬 노드를 넣지 않기로 한 판단은 그것을 보고 내린 것입니다.
+> 빠뜨린 것은 설계가 아니라 **레퍼런스 문서의 단계 목록**이었고, 그쪽을 고쳤습니다.
+>
+> 교훈은 방법에 있습니다 — **치수 일치를 동일성의 근거로 쓰면 안 됩니다.**
 
 ---
 
