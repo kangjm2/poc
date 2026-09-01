@@ -14,12 +14,24 @@ export function StatisticsPanel({
 }: { sessionId: number | null; kpi: string; unit: string; range?: SeqRange | null }) {
   const [stats, setStats] = useState<Statistics | null>(null)
   const [error, setError] = useState<string | null>(null)
+  /**
+   * Both default to what this panel did before the choice existed.
+   *
+   * The dB mean is not a calculation request, it is a labelling failure: the veteran
+   * objects to the linear mean because his number then disagrees with everyone else's,
+   * the newcomer wants it quietly corrected, and the fault-chaser needs the conventional
+   * figure for a ticket. Naming which one is on screen satisfies all three; changing the
+   * arithmetic silently satisfies none of them.
+   */
+  const [weightedBy, setWeightedBy] = useState('SAMPLE')
+  const [domain, setDomain] = useState('AS_RECORDED')
 
   useEffect(() => {
     if (sessionId == null) return
     setError(null)
-    api.statistics(sessionId, kpi, range).then(setStats).catch((e) => setError(String(e)))
-  }, [sessionId, kpi, range])
+    api.statistics(sessionId, kpi, range, weightedBy, domain)
+      .then(setStats).catch((e) => setError(String(e)))
+  }, [sessionId, kpi, range, weightedBy, domain])
 
   if (error) return <div className="error">{error}</div>
   if (!stats) return <div className="panel"><div className="loading">Loading…</div></div>
@@ -51,7 +63,35 @@ export function StatisticsPanel({
             {stats.count.toLocaleString()} samples
             {range && (range.from != null || range.to != null) ? ' (filtered range)' : ''}
           </span>
+          <span className="basis-controls">
+            <label>Weight by</label>
+            <select value={weightedBy} aria-label="Weight by"
+                    title="A log is a time series, so a stopped vehicle contributes a sample a second to a place it is not moving through"
+                    onChange={(e) => setWeightedBy(e.target.value)}>
+              <option value="SAMPLE">Sample</option>
+              <option value="DISTANCE">Distance</option>
+            </select>
+            {stats.domain !== 'NOT_APPLICABLE' && (
+              <>
+                <label>Mean in</label>
+                <select value={domain} aria-label="Mean domain"
+                        title="Only the mean changes: percentiles are order statistics and dB-to-power is monotone"
+                        onChange={(e) => setDomain(e.target.value)}>
+                  <option value="AS_RECORDED">dB as recorded</option>
+                  <option value="LINEAR">linear power</option>
+                </select>
+              </>
+            )}
+          </span>
         </header>
+        {/* The basis, in the server's own words, beside the numbers it produced. */}
+        <div className="basis-note">
+          {stats.displayName}{unit ? ` (${unit})` : ''} <b>{stats.basisLabel}</b>
+          {stats.weightedBy === 'DISTANCE'
+            && ' — weighted by ground covered, so time spent stopped does not count twice'}
+          {stats.domain === 'LINEAR'
+            && ' — the mean is in power; the percentiles are unchanged, being order statistics'}
+        </div>
         <table className="grid">
           <thead><tr><th>Min</th><th>p05</th><th>p50</th><th>Mean</th><th>p95</th><th>Max</th></tr></thead>
           <tbody>

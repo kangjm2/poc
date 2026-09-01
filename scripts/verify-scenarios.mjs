@@ -1333,6 +1333,124 @@ scenario('S17 · Building a KPI without publishing your guesses')
     leftovers.length === 0, `${leftovers.length} S17 graphs remain`)
 }
 
+// ─── S18 · Numbers that say what they are ────────────────────────────────────
+//
+// Nobody was blocked by this. The failure mode is quieter and worse: submitting a wrong
+// number with no way to know it was wrong. A drive-test log is a time series, so a
+// vehicle held at a light contributes a sample a second to a spot it is not moving
+// through - and the legend said "[Sample]" as a literal typed into one component while
+// three other screens showing the same figures said nothing at all.
+scenario('S18 · Numbers that say what they are')
+{
+  const cityA = sessions.find((x) => x.name === CITY_A).id
+
+  const bySample = await apiGet(`/api/sessions/${cityA}/statistics?kpi=RSRP&weightedBy=SAMPLE`)
+  const byDistance = await apiGet(`/api/sessions/${cityA}/statistics?kpi=RSRP&weightedBy=DISTANCE`)
+  step('statistics carry the basis that produced them',
+    bySample.basisLabel === '[Sample]' && byDistance.basisLabel === '[Distance]',
+    `${bySample.basisLabel} / ${byDistance.basisLabel}`)
+
+  // If the two agreed there would be nothing to choose between and no reason for the
+  // control to exist. The stopped-vehicle bias is the whole point.
+  step('the two bases genuinely disagree',
+    Math.abs(bySample.mean - byDistance.mean) > 0.2
+    && bySample.p05 !== byDistance.p05,
+    `mean ${bySample.mean} vs ${byDistance.mean}, p05 ${bySample.p05} vs ${byDistance.p05}`)
+
+  const linear = await apiGet(`/api/sessions/${cityA}/statistics?kpi=RSRP&domain=LINEAR`)
+  step('the linear-domain mean is offered under its own name',
+    linear.basisLabel === '[Sample, linear dB]' && linear.mean !== bySample.mean,
+    `${linear.basisLabel}: mean ${linear.mean} vs ${bySample.mean}`)
+
+  // The claim in the code is specific: only the MEAN moves, because percentiles are order
+  // statistics and dB-to-power is monotone. If the percentiles moved too, the
+  // implementation would be doing something other than what it says.
+  // Equality alone is not enough: two equally broken percentile sets are also equal.
+  // They must additionally sit inside the min/max the same response reports, which comes
+  // from a different aggregate - so a transform applied to the percentiles and not to the
+  // extremes falls outside and is caught.
+  const ordered = (t) => t.min <= t.p05 && t.p05 <= t.p50 && t.p50 <= t.p95 && t.p95 <= t.max
+  step('and it moves only the mean, as percentiles are order statistics',
+    linear.p05 === bySample.p05 && linear.p50 === bySample.p50
+    && linear.p95 === bySample.p95 && ordered(linear) && ordered(bySample),
+    `p05/p50/p95 ${linear.p05}/${linear.p50}/${linear.p95} within `
+    + `${linear.min}..${linear.max}`)
+
+  // A KPI in a non-logarithmic unit has no second domain, so it must not be offered one -
+  // a "linear power mean" of a throughput in Mbps would be arithmetic on nothing.
+  const throughput = await apiGet(
+    `/api/sessions/${cityA}/statistics?kpi=MAC_DL_THROUGHPUT&domain=LINEAR`)
+  step('a KPI with no logarithmic unit is not given a domain choice',
+    throughput.domain === 'NOT_APPLICABLE' && throughput.basisLabel === '[Sample]',
+    `${throughput.basisLabel} (${throughput.domain})`)
+
+  // The named payoff: the A/B verdict is only as meaningful as its basis.
+  const cityB = sessions.find((x) => x.name === CITY_B).id
+  const cmpSample = await apiGet(
+    `/api/compare?a=${cityA}&b=${cityB}&kpis=RSRP&kpis=DL_BLER&weightedBy=SAMPLE`)
+  const cmpDist = await apiGet(
+    `/api/compare?a=${cityA}&b=${cityB}&kpis=RSRP&kpis=DL_BLER&weightedBy=DISTANCE`)
+  const deltaS = cmpSample.rows.map((r) => r.meanDelta)
+  const deltaD = cmpDist.rows.map((r) => r.meanDelta)
+  step('the build comparison can be put on either basis, and they differ',
+    deltaS.every((d, i) => Math.abs(d - deltaD[i]) > 0.1),
+    `sample ${deltaS.join(', ')} vs distance ${deltaD.join(', ')}`)
+
+  // On screen, not only in the API. Asserting the heading reads "[Sample]" would pass on
+  // a heading typed into the component, which is the defect being fixed - so the heading
+  // has to be shown to TRACK the server, by changing when the server's answer changes.
+  await selectSession(CITY_A)
+  await openWorkbook('Overview')
+  await page.waitForTimeout(1200)
+  const legendSample = await page.locator('.dock.right .legend-row').first().innerText()
+  await page.locator('select[aria-label="Legend weight by"]').selectOption('DISTANCE')
+  await page.waitForTimeout(1500)
+  const legendDistance = await page.locator('.dock.right .legend-row').first().innerText()
+  const distByDistance = await apiGet(
+    `/api/sessions/${cityA}/distribution?kpi=RSRP&weightedBy=DISTANCE`)
+  step('the legend prints the basis the server decided',
+    /\[Sample\]/.test(legendSample) && /\[Distance\]/.test(legendDistance),
+    `${legendSample.replace(/\s+/g, ' ').slice(0, 30)} -> `
+    + `${legendDistance.replace(/\s+/g, ' ').slice(0, 30)}`)
+
+  // And the shares move with it, or the label describes a weighting the numbers do not
+  // have. The sample count must NOT move: it is how many measurements are behind a
+  // percentage, and a bin holding 90% of the distance and four samples is a different
+  // claim from one holding 90% and four hundred.
+  const shownPct = await page.locator('.dock.right .legend-row .pct').allInnerTexts()
+  const shownN = await page.locator('.dock.right .legend-row .count').allInnerTexts()
+  const worstPct = Number((shownPct[1] ?? '').replace('%', '').trim())
+  step('and the shares are the ones that basis produces',
+    Math.abs(worstPct - distByDistance.bins[0].percentage) < 0.02
+    && Number(shownN[1]) === distByDistance.bins[0].count,
+    `worst bin ${worstPct}% of ${shownN[1]} samples, server says `
+    + `${distByDistance.bins[0].percentage}% of ${distByDistance.bins[0].count}`)
+  await page.locator('select[aria-label="Legend weight by"]').selectOption('SAMPLE')
+  await page.waitForTimeout(1200)
+
+  await openWorkbook('Statistics')
+  await page.waitForTimeout(1500)
+  step('the statistics screen states its basis too',
+    /\[Sample\]/.test(await page.locator('.basis-note').first().innerText()),
+    (await page.locator('.basis-note').first().innerText()).slice(0, 70))
+
+  await page.locator('select[aria-label="Weight by"]').selectOption('DISTANCE')
+  await page.waitForTimeout(1500)
+  const shown = await page.locator('.basis-note').first().innerText()
+  const meanCell = await page.locator('.panel:has-text("Statistics") tbody tr td').nth(3).innerText()
+  step('changing the basis changes both the label and the numbers',
+    // The cell carries its unit, so the number has to be parsed out of it rather than
+    // coerced - Number('-82.04 dBm') is NaN, which no comparison can be true of.
+    /\[Distance\]/.test(shown)
+    && Number((meanCell.match(/-?\d+(\.\d+)?/) ?? [NaN])[0]) === byDistance.mean,
+    `${shown.slice(0, 40)} — mean on screen ${meanCell}, server says ${byDistance.mean}`)
+
+  await page.locator('select[aria-label="Weight by"]').selectOption('SAMPLE')
+  await page.waitForTimeout(1200)
+  await openWorkbook('Overview')
+  await page.waitForTimeout(800)
+}
+
 // ─── wrap-up ─────────────────────────────────────────────────────────────────
 const appErrors = errors.filter((e) =>
   !/tile\.openstreetmap\.org|ERR_CONNECTION|Failed to load resource|ERR_TIMED_OUT/.test(e))

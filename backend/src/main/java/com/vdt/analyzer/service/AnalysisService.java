@@ -29,13 +29,15 @@ public class AnalysisService {
     private final SessionRepo sessions;
     private final KpiCatalog catalog;
     private final AutoScale autoScale;
+    private final WeightedStats weighted;
 
     public AnalysisService(JdbcTemplate jdbc, SessionRepo sessions, KpiCatalog catalog,
-                           AutoScale autoScale) {
+                           AutoScale autoScale, WeightedStats weighted) {
         this.jdbc = jdbc;
         this.sessions = sessions;
         this.catalog = catalog;
         this.autoScale = autoScale;
+        this.weighted = weighted;
     }
 
     // ---------------------------------------------------------------- sessions
@@ -351,30 +353,71 @@ public class AnalysisService {
     /** Counts per bin, computed by the database. The legend doubles as a summary. */
     public Distribution distribution(long sessionId, String kpiName,
                                      Integer fromSeq, Integer toSeq) {
+        return distribution(sessionId, kpiName, fromSeq, toSeq, AggregationBasis.BY_SAMPLE);
+    }
+
+    /**
+     * Bin shares under a stated basis.
+     *
+     * The legend is where the stopped-vehicle bias is most visible and least suspected:
+     * a car held for ninety seconds in one bad spot puts ninety samples into the worst
+     * bin, and the legend reports that as ninety samples' worth of bad coverage rather
+     * than as one spot. Weighting by ground covered answers "how much of the ROAD is
+     * bad", which is the question a coverage review is actually asking.
+     *
+     * The sample count stays in `count` under either basis. Only the share changes, so a
+     * reader can always see how many measurements are behind a percentage - a bin holding
+     * 90% of the distance and four samples is a different claim from one holding 90% and
+     * four hundred, and collapsing them into one number would hide it.
+     */
+    public Distribution distribution(long sessionId, String kpiName,
+                                     Integer fromSeq, Integer toSeq, String weightedBy) {
         KpiDefinition def = catalog.require(kpiName);
         List<KpiThreshold> scale = autoScale.effective(sessionId, def);
+        AggregationBasis basis = AggregationBasis.of(def, weightedBy,
+                AggregationBasis.AS_RECORDED);
+        boolean byDistance = AggregationBasis.BY_DISTANCE.equals(basis.weightedBy());
+
+        // Same geometry, same rule, same class as everywhere else: the legend must not
+        // disagree with the map about how long a stretch of road is.
         String sql = """
-                SELECT %s AS bin_ordinal, count(*) AS n
-                FROM sample_kpi WHERE session_id = ? AND kpi_name = ?
-                  AND seq >= ? AND seq <= ?
+                WITH geo AS (
+                    SELECT seq, %2$s AS step_m, %3$s AS dt_s FROM sample WHERE session_id = ?
+                ),
+                stepped AS (SELECT seq, step_m, %4$s AS brk FROM geo)
+                SELECT %1$s AS bin_ordinal, count(*) AS n, sum(%5$s) AS w
+                FROM sample_kpi k
+                JOIN stepped g ON g.seq = k.seq
+                WHERE k.session_id = ? AND k.kpi_name = ?
+                  AND k.seq >= ? AND k.seq <= ?
                 GROUP BY 1
-                """.formatted(KpiSql.binOrdinalExpr(scale, "value"));
+                """.formatted(
+                KpiSql.binOrdinalExpr(scale, "k.value"),
+                RouteContinuity.STEP_METRES,
+                RouteContinuity.SECONDS_SINCE_PREV,
+                RouteContinuity.classify("step_m", "dt_s"),
+                byDistance ? RouteContinuity.travelledMetres("g.step_m", "g.brk") : "1.0");
 
         Map<Integer, Long> counts = new HashMap<>();
-        jdbc.query(sql, rs -> { counts.put(rs.getInt("bin_ordinal"), rs.getLong("n")); },
-                sessionId, kpiName, lo(fromSeq), hi(toSeq));
+        Map<Integer, Double> weights = new HashMap<>();
+        jdbc.query(sql, rs -> {
+            counts.put(rs.getInt("bin_ordinal"), rs.getLong("n"));
+            weights.put(rs.getInt("bin_ordinal"), rs.getDouble("w"));
+        }, sessionId, sessionId, kpiName, lo(fromSeq), hi(toSeq));
 
         long total = counts.values().stream().mapToLong(Long::longValue).sum();
+        double totalW = weights.values().stream().mapToDouble(Double::doubleValue).sum();
         List<DistributionBin> bins = new ArrayList<>();
         for (KpiThreshold t : scale) {
             long count = counts.getOrDefault(t.getOrdinal(), 0L);
-            double pct = total == 0 ? 0 : (count * 100.0) / total;
+            double w = weights.getOrDefault(t.getOrdinal(), 0.0);
+            double pct = totalW <= 0 ? 0 : (w * 100.0) / totalW;
             bins.add(new DistributionBin(t.getLabel(), t.getColor(), t.getSeverity(),
                     t.getLowerBound(), t.getUpperBound(), count,
                     Math.round(pct * 100.0) / 100.0));
         }
         return new Distribution(kpiName, def.getDisplayName(), def.getUnit(), total, bins,
-                autoScale.isDerived(def));
+                autoScale.isDerived(def), basis.label());
     }
 
     // ------------------------------------------------------------- statistics
@@ -393,41 +436,23 @@ public class AnalysisService {
 
     public Statistics statistics(long sessionId, String kpiName,
                                  Integer fromSeq, Integer toSeq) {
+        return statistics(sessionId, kpiName, fromSeq, toSeq,
+                AggregationBasis.BY_SAMPLE, AggregationBasis.AS_RECORDED);
+    }
+
+    /**
+     * Under a stated basis. Sample weighting in the recorded domain is delegated back to
+     * the same weighted implementation rather than kept as a separate fast path: two
+     * implementations of "the mean" is how the default and the option start to disagree.
+     */
+    public Statistics statistics(long sessionId, String kpiName,
+                                 Integer fromSeq, Integer toSeq,
+                                 String weightedBy, String domain) {
         KpiDefinition def = catalog.require(kpiName);
-        Map<String, Object> agg = jdbc.queryForMap("""
-                SELECT count(*) AS n, min(value) AS lo, max(value) AS hi, avg(value) AS mean,
-                       percentile_cont(
-                           (SELECT array_agg(i / 100.0 ORDER BY i)
-                            FROM generate_series(0, 100) AS i)
-                       ) WITHIN GROUP (ORDER BY value) AS curve
-                FROM sample_kpi WHERE session_id = ? AND kpi_name = ?
-                  AND seq >= ? AND seq <= ?
-                """, sessionId, kpiName, lo(fromSeq), hi(toSeq));
-
-        long n = ((Number) agg.get("n")).longValue();
-        if (n == 0) {
-            return new Statistics(kpiName, def.getDisplayName(), def.getUnit(), 0,
-                    null, null, null, null, null, null, List.of());
-        }
-
-        Double[] curve = toDoubleArray(agg.get("curve"));
-        List<CdfPoint> cdf = new ArrayList<>(curve.length);
-        for (int i = 0; i < curve.length; i++) {
-            if (curve[i] != null) cdf.add(new CdfPoint(round(curve[i]), i));
-        }
-
-        return new Statistics(kpiName, def.getDisplayName(), def.getUnit(), n,
-                round(num(agg.get("lo"))), round(num(agg.get("hi"))), round(num(agg.get("mean"))),
-                round(curve[5]), round(curve[50]), round(curve[95]), cdf);
+        return weighted.compute(sessionId, def,
+                AggregationBasis.of(def, weightedBy, domain), fromSeq, toSeq);
     }
 
-    private static Double[] toDoubleArray(Object sqlArray) {
-        try {
-            return (Double[]) ((java.sql.Array) sqlArray).getArray();
-        } catch (java.sql.SQLException e) {
-            throw new IllegalStateException("Could not read percentile array", e);
-        }
-    }
 
     // ------------------------------------------------------------ degradation
 
@@ -488,13 +513,27 @@ public class AnalysisService {
     // ------------------------------------------------------------- comparison
 
     public Comparison compare(long idA, long idB, List<String> kpiNames) {
+        return compare(idA, idB, kpiNames,
+                AggregationBasis.BY_SAMPLE, AggregationBasis.AS_RECORDED);
+    }
+
+    /**
+     * A/B under a stated basis.
+     *
+     * This is where the choice earns its keep. A build compared on sample weighting is
+     * partly a comparison of where the two drives happened to stop; on distance weighting
+     * it is a comparison of the road. The verdict can differ between them, which is
+     * precisely why the answer has to say which one produced it.
+     */
+    public Comparison compare(long idA, long idB, List<String> kpiNames,
+                              String weightedBy, String domain) {
         SessionSummary a = getSession(idA);
         SessionSummary b = getSession(idB);
         List<ComparisonRow> rows = new ArrayList<>();
         for (String name : kpiNames) {
             KpiDefinition def = catalog.require(name);
-            Statistics sa = statistics(idA, name);
-            Statistics sb = statistics(idB, name);
+            Statistics sa = statistics(idA, name, null, null, weightedBy, domain);
+            Statistics sb = statistics(idB, name, null, null, weightedBy, domain);
             Double delta = (sa.mean() == null || sb.mean() == null)
                     ? null : round(sb.mean() - sa.mean());
             rows.add(new ComparisonRow(name, def.getDisplayName(), def.getUnit(),

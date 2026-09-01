@@ -44,6 +44,8 @@ export interface Distribution {
   total: number; bins: DistributionBin[]
   /** true = bins came from this session's own distribution, not from configuration */
   derived: boolean
+  /** What the shares are weighted by, in the server's own words. */
+  basisLabel: string
 }
 
 export interface KpiValue {
@@ -62,6 +64,12 @@ export interface Statistics {
   min: number | null; max: number | null; mean: number | null
   p05: number | null; p50: number | null; p95: number | null
   cdf: CdfPoint[]
+  /** SAMPLE | DISTANCE */
+  weightedBy: string
+  /** AS_RECORDED | LINEAR | NOT_APPLICABLE */
+  domain: string
+  /** The heading to print, decided by the server so every screen prints the same one. */
+  basisLabel: string
 }
 
 export interface Degradation {

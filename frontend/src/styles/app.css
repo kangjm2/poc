@@ -500,3 +500,15 @@ kbd {
 .node-preview .preview-count { margin: 6px 0 4px; font-size: 12px; }
 .node-preview table.grid { font-size: 11px; }
 .node-preview table.grid th { position: static; }
+
+/* Saying which basis produced the numbers, beside the numbers. */
+.basis-controls { display: flex; align-items: center; gap: 5px; margin-left: auto; }
+.basis-controls label { font-size: 11px; color: var(--text-dim); }
+.basis-controls select { font-size: 11px; padding: 0 2px; }
+.basis-note {
+  padding: 5px 10px;
+  font-size: 11px;
+  color: var(--text-dim);
+  border-bottom: 1px solid var(--border);
+}
+.legend-basis { float: right; font-size: 11px; margin: 2px 4px 0 0; }

@@ -51,8 +51,20 @@ public final class Dtos {
             Double lowerBound, Double upperBound, long count, double percentage) {}
 
     /** derived = the bins came from this session's own distribution, not configuration. */
+    /**
+     * Bin shares. `basisLabel` is the heading the legend prints - it used to be the
+     * literal "[Sample]" typed into one component, which meant every other screen showing
+     * the same numbers explained nothing.
+     */
     public record Distribution(String kpi, String displayName, String unit,
-                               long total, List<DistributionBin> bins, boolean derived) {}
+                               long total, List<DistributionBin> bins, boolean derived,
+                               String basisLabel) {
+
+        public Distribution(String kpi, String displayName, String unit,
+                            long total, List<DistributionBin> bins, boolean derived) {
+            this(kpi, displayName, unit, total, bins, derived, "[Sample]");
+        }
+    }
 
     /**
      * One serving cell's share of a session, for the per-cell bar chart.
@@ -77,9 +89,27 @@ public final class Dtos {
     public record Snapshot(Instant ts, int seq, Double latitude, Double longitude,
                            Integer servingPci, Map<String, List<KpiValue>> byCategory) {}
 
+    /**
+     * Summary statistics, and how they were computed.
+     *
+     * The basis travels WITH the numbers rather than being decided by whichever screen
+     * prints them. The legend used to carry a hardcoded "[Sample]" while the statistics
+     * panel, the report and the CSV export said nothing at all, so the same figures
+     * appeared on four screens with one of them explaining what they meant.
+     */
     public record Statistics(String kpi, String displayName, String unit, long count,
                              Double min, Double max, Double mean, Double p05, Double p50,
-                             Double p95, List<CdfPoint> cdf) {}
+                             Double p95, List<CdfPoint> cdf,
+                             String weightedBy, String domain, String basisLabel) {
+
+        /** For callers that have no basis to state - kept so old construction sites compile. */
+        public Statistics(String kpi, String displayName, String unit, long count,
+                          Double min, Double max, Double mean, Double p05, Double p50,
+                          Double p95, List<CdfPoint> cdf) {
+            this(kpi, displayName, unit, count, min, max, mean, p05, p50, p95, cdf,
+                 "SAMPLE", "NOT_APPLICABLE", "[Sample]");
+        }
+    }
 
     public record CdfPoint(double value, double percentile) {}
 
