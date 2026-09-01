@@ -15,6 +15,8 @@ VDT 장비·소프트웨어 자체는 별도 저장소에서 개발되었으며,
 | [`docs/user-guide.md`](docs/user-guide.md) | **사용자 가이드.** 작업별 안내 — 주행 분석, 빌드 비교, 랩 캠페인, 커버리지, 임포트, 색상 스케일, KPI 추가 |
 | [`docs/architecture.md`](docs/architecture.md) | **아키텍처.** 구성 요소, 요청 흐름, 데이터 모델, API 전체, 전체를 지탱하는 설계 규칙 |
 | [`docs/ui-gap-vs-reference.md`](docs/ui-gap-vs-reference.md) | **UI 격차 분석.** 실제 제품 스크린샷 대비 우리 화면을 요소 단위로 대조 |
+| [`docs/briefs/index.html`](docs/briefs/index.html) | **기존 툴 분석 브리프 (HTML).** Nemo Analyze 10.2 사용자 가이드 기반 — 메뉴 설명·유저 시나리오·우리 구현에 어떻게 반영됐는가 |
+| [`docs/reference/nemo-analyze-10.2/`](docs/reference/nemo-analyze-10.2/) | **구현 작업용 레퍼런스.** 노드 요소 명세, 화면 인벤토리, 목차·Use Case 인덱스, 기존 문서 정정 목록 |
 | [`docs/keysight-vdt-research.md`](docs/keysight-vdt-research.md) | 기존 솔루션 리서치. 제품 구성, 아키텍처, KPI, 경쟁 지형, UI 구조, 시각 디자인 언어 |
 | [`docs/requirements-analysis.md`](docs/requirements-analysis.md) | 기능 인벤토리(FR-xx), 추가 기능(NEW-xx), 화면 명세, 데이터 모델, 검증 기준 |
 | [`docs/assets/MANIFEST.md`](docs/assets/MANIFEST.md) | 참고 자료 출처·취득 방법 |
@@ -162,6 +164,11 @@ UE 측만 보면 "이 단말이 힘들다"와 "이 셀이 혼잡하다"를 구�
   표시되지 않습니다. 앱은 이를 감지해 안내 문구를 띄우고 격자 배경 위에 경로를 그립니다.
   일반 네트워크에서는 정상 동작합니다.
 - **아직 없는 것**: 벤더 바이너리 로그(DLF 등) 파싱, 3D 시각화, 리포트 템플릿 생성,
-  랩 런 실행기, 파생 KPI 수식. 전체 목록과 우선순위는 [`docs/gap-analysis.md`](docs/gap-analysis.md),
+  세션 간 추세·대시보드. 전체 목록과 우선순위는 [`docs/gap-analysis.md`](docs/gap-analysis.md),
   다음 리서치 항목은 [`docs/research-agenda.md`](docs/research-agenda.md)에 있습니다.
-  (CSV 임포트와 area binning은 이후 구현되었습니다.)
+  (CSV 임포트, area binning, 랩 런 실행기, 파생 KPI 수식은 이후 구현되었습니다.)
+- **레퍼런스 대비 다음 세 가지**(2026-09-01, 사용자 가이드 505페이지를 읽고 갱신):
+  ① 시드 생성기에 **핸드오버 지연**을 넣어 `Missing handover` 조건이 발생하게 하기,
+  ② **진짜 State Machine**(전이 그래프 + 구간 출력 + `time_interval`),
+  ③ **Previous / Current / Next Value** 상관 노드.
+  근거는 [`docs/briefs/index.html`](docs/briefs/index.html)에 있습니다.
