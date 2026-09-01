@@ -434,3 +434,37 @@ export interface Workbook {
 export interface WorkbookRequest {
   id: number | null; name: string; panes: WorkbookPane[]
 }
+
+/** One contiguous stretch of the drive that fell inside a drawn shape. */
+export interface AreaPass { startSeq: number; endSeq: number; sampleCount: number }
+
+export interface AreaStats {
+  kpi: string; displayName: string; unit: string
+  sampleCount: number
+  /**
+   * How many separate times the drive entered the shape. A road driven three times is
+   * one place but three passes, and the aggregate alone cannot tell "this street is bad"
+   * from "one of the three passes was bad".
+   */
+  passCount: number
+  passes: AreaPass[]
+  statistics: Statistics
+}
+
+export interface DiffBin {
+  centerLat: number; centerLon: number; sizeMeters: number
+  countA: number | null; countB: number | null
+  avgA: number | null; avgB: number | null
+  /** null where only one drive visited the tile - deliberately not 0. */
+  deltaValue: number | null
+  color: string; label: string
+}
+
+export interface SpatialDiff {
+  kpi: string; displayName: string; unit: string
+  sessionA: number; sessionB: number; sizeMeters: number
+  tilesBoth: number; tilesOnlyA: number; tilesOnlyB: number
+  /** HIGHER_IS_BETTER | LOWER_IS_BETTER | NEUTRAL - a NEUTRAL KPI gets no verdict. */
+  direction: string
+  bins: DiffBin[]
+}

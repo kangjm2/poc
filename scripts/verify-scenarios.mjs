@@ -1076,6 +1076,121 @@ scenario('S15 · A view handed to somebody else')
   await page.waitForTimeout(2500)
 }
 
+// ─── S16 · A complaint about a PLACE ─────────────────────────────────────────
+//
+// Complaints arrive as geography - "calls drop on the ring road past the depot" - and
+// until now the only way to ask about a place was to convert it into time by hand, once
+// per pass, with no way to add the passes together.
+scenario('S16 · A complaint about a place, not a time')
+{
+  await selectSession(CITY_A)
+  await openWorkbook('Overview')
+  await page.waitForSelector('.leaflet-overlay-pane path.route-run')
+
+  await page.locator('.toolbar button', { hasText: 'Ask an area' }).click()
+  await page.waitForTimeout(400)
+  step('drawing mode is announced on the map',
+    (await page.locator('.map.drawing').count()) > 0
+    && (await page.locator('.area-draw').count()) === 1)
+
+  // Two corners enclose nothing, so Finish must not be offered yet - a two-point
+  // "area" would select zero samples and read as "no problem here".
+  const box = await page.locator('.map').first().boundingBox()
+  const pt = (fx, fy) => ({ x: box.x + box.width * fx, y: box.y + box.height * fy })
+  for (const [fx, fy] of [[0.30, 0.30], [0.70, 0.30]]) {
+    await page.mouse.click(pt(fx, fy).x, pt(fx, fy).y)
+    await page.waitForTimeout(350)
+  }
+  step('two corners are not yet an area',
+    await page.locator('.area-draw button', { hasText: 'Finish' }).isDisabled(),
+    `${await page.locator('.area-vertex').count()} corners placed`)
+
+  // The button being disabled is a courtesy of this screen. The RULE has to hold at the
+  // server too, or any other caller can ask about a line and be told, with a straight
+  // face, that it contains no samples.
+  const twoCorner = await page.request.get(
+    `${API}/api/sessions/${sessions.find((x) => x.name === CITY_A).id}/area-statistics`
+    + `?kpi=RSRP&polygon=${encodeURIComponent('65,25;65,26')}`)
+  step('and the server refuses one too', twoCorner.status() === 400,
+    `HTTP ${twoCorner.status()}`)
+
+  for (const [fx, fy] of [[0.70, 0.72], [0.30, 0.72]]) {
+    await page.mouse.click(pt(fx, fy).x, pt(fx, fy).y)
+    await page.waitForTimeout(350)
+  }
+  // Wait for the ring rather than asserting on whatever has rendered by now: the polygon
+  // appears one commit after the fourth click, and a fixed sleep raced it.
+  await page.waitForSelector('path.area-ring', { timeout: 5000 }).catch(() => {})
+  step('the shape is drawn as it is built',
+    (await page.locator('.area-vertex').count()) === 4
+    && (await page.locator('path.area-ring').count()) === 1)
+
+  await page.locator('.area-draw button', { hasText: 'Finish' }).click()
+  await page.waitForTimeout(1500)
+  step('the area answers with statistics', (await page.locator('.area-stats').count()) === 1)
+
+  // The passes must account for every enclosed sample - but checked against the number
+  // the STATISTICS were computed over, not against the header total. The header total is
+  // the sum of the pass list, so comparing the two compares a value with the thing it was
+  // derived from: truncating the pass list moves both and the check never notices. The
+  // statistics come from a separate query over the same shape, so they are the witness.
+  const shownPasses = await page.locator('.area-stats tbody tr td:nth-child(4)')
+    .allInnerTexts()
+  const summed = shownPasses.map(Number).filter(Number.isFinite)
+    .reduce((a, b) => a + b, 0)
+  const valuesUsed = Number((await page.locator('.area-stats tbody tr').first().innerText())
+    .match(/(\d+) values/)[1])
+  const meanShown = await page.locator('.area-stats tbody tr').nth(1).innerText()
+  step('the answer covers every pass through the shape, not just one',
+    summed === valuesUsed && shownPasses.length >= 1,
+    `${shownPasses.length} passes summing to ${summed}, statistics over ${valuesUsed} values`)
+
+  const anySeq = await page.locator('.area-stats tbody tr').last().locator('td').nth(1)
+    .innerText().catch(() => '')
+  step('the statistics are for the enclosed samples',
+    /-?\d/.test(meanShown), meanShown.replace(/\n/g, ' ').slice(0, 60))
+  step('a pass is addressable', /^\d+$/.test(anySeq.trim()), `pass starts at seq ${anySeq}`)
+
+  await page.locator('.area-stats button', { hasText: 'Close' }).click()
+  await page.waitForTimeout(300)
+
+  // And the same drive compared to another ON THE GROUND, which is the question the
+  // whole-drive verdict cannot answer.
+  await openWorkbook('Compare on the Ground')
+  await page.waitForTimeout(2500)
+  const tiles = await page.locator('path.diff-tile').count()
+  const legendText = await page.locator('.diff-legend').innerText()
+  step('two drives are differenced tile by tile', tiles > 5, `${tiles} tiles`)
+  // The legend text is printed unconditionally, so reading it proves nothing about the
+  // data. The claim is about the BINS: a tile exactly one drive visited must carry no
+  // delta and must say so, because a zero there states "both measured this and agreed".
+  const sessAId = sessions.find((x) => x.name === CITY_A).id
+  const otherSel = Number(await page.locator('select[aria-label="Compare against"]').inputValue())
+  const rsrpDiff = await apiGet(
+    `/api/sessions/${sessAId}/spatial-diff?other=${otherSel}&kpi=RSRP&sizeMeters=150`)
+  const oneSided = rsrpDiff.bins.filter((b) => (b.countA == null) !== (b.countB == null))
+  step('tiles only one drive visited are not called "no change"',
+    /one drive only/.test(legendText) && oneSided.length > 0
+    && oneSided.every((b) => b.deltaValue === null && b.label === 'one drive only'),
+    `${oneSided.length} one-sided tiles, labels `
+    + `${[...new Set(oneSided.map((b) => b.label))].join(',')}`)
+
+  // The verdict direction has to come from the catalogue, not from the sign of the
+  // number: a BLER improvement is a smaller number, and a diverging ramp that assumed
+  // "higher is better" would paint it red.
+  const sessA = sessions.find((x) => x.name === CITY_A).id
+  const otherId = Number(await page.locator('select[aria-label="Compare against"]').inputValue())
+  const diff = await apiGet(`/api/sessions/${sessA}/spatial-diff?other=${otherId}&kpi=DL_BLER&sizeMeters=150`)
+  const improved = diff.bins.filter((b) => b.deltaValue != null && b.deltaValue < -1)
+  step('a lower-is-better KPI improving is coloured as better',
+    diff.direction === 'LOWER_IS_BETTER'
+    && improved.every((b) => /better/.test(b.label)),
+    `${improved.length} tiles improved, labels ${[...new Set(improved.map((b) => b.label))].join(',') || 'none'}`)
+
+  await openWorkbook('Overview')
+  await page.waitForTimeout(1200)
+}
+
 // ─── wrap-up ─────────────────────────────────────────────────────────────────
 const appErrors = errors.filter((e) =>
   !/tile\.openstreetmap\.org|ERR_CONNECTION|Failed to load resource|ERR_TIMED_OUT/.test(e))

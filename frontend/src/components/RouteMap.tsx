@@ -2,7 +2,8 @@ import { useEffect, useRef, useState } from 'react'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
 import type {
-  AreaBin, CellFootprint, CellRef, EventType, MonitoredCell, NetworkEvent, TrackPoint,
+  AreaBin, CellFootprint, CellRef, DiffBin, EventType, MonitoredCell, NetworkEvent,
+  TrackPoint,
 } from '../api/types'
 import type { ColorBy } from '../view/paint'
 import { buildPciColors, paint } from '../view/paint'
@@ -62,6 +63,18 @@ interface Props {
    * was opening the colour editor, painting every other bin grey, looking, and undoing.
    */
   isolate?: string | null
+  /**
+   * True while the user is drawing an area to ask about.
+   *
+   * Drawn by hand rather than with leaflet-draw: the whole editor is a click handler, a
+   * polyline and a polygon, and a dependency would arrive with a toolbar, an icon set and
+   * a stylesheet whose look does not match anything else here.
+   */
+  drawingArea?: boolean
+  /** Called with the closed ring when the user finishes, or null if they cancelled. */
+  onAreaDrawn?: (ring: [number, number][] | null) => void
+  /** Per-tile difference between two drives, drawn instead of the route. */
+  diffBins?: DiffBin[] | null
 }
 
 /**
@@ -73,6 +86,7 @@ export function RouteMap({
   track, cells, cursorSeq, onCursorChange, kpiName, bins, showServingLine = true,
   monitored = null, footprints = null, events = [], eventTypes,
   frameKey = '', refitToken = 0, colorBy = 'kpi', isolate = null,
+  drawingArea = false, onAreaDrawn, diffBins = null,
 }: Props) {
   const hostRef = useRef<HTMLDivElement>(null)
   const mapRef = useRef<L.Map | null>(null)
@@ -85,6 +99,10 @@ export function RouteMap({
   const footprintLayer = useRef<L.LayerGroup | null>(null)
   const cursorMarker = useRef<L.CircleMarker | null>(null)
   const [basemapFailed, setBasemapFailed] = useState(false)
+  const drawLayer = useRef<L.LayerGroup | null>(null)
+  const diffLayer = useRef<L.LayerGroup | null>(null)
+  /** Vertices of the shape being drawn, in click order. */
+  const [ring, setRing] = useState<[number, number][]>([])
   /**
    * Which drive the current frame belongs to, and which refit request produced it.
    *
@@ -124,10 +142,97 @@ export function RouteMap({
     cellLayer.current = L.layerGroup().addTo(map)
     // Last, so event symbols sit above the route and the cell markers rather than under
     // a 6px coloured line.
+    diffLayer.current = L.layerGroup().addTo(map)
     eventLayer.current = L.layerGroup().addTo(map)
+    // Last of all, so the shape being drawn is never buried under the route it is
+    // being drawn over.
+    drawLayer.current = L.layerGroup().addTo(map)
     mapRef.current = map
     return () => { map.remove(); mapRef.current = null }
   }, [])
+
+  /**
+   * Collect the shape's corners while drawing.
+   *
+   * The click handler is attached only while `drawingArea` is on, so the map's ordinary
+   * click-to-move-the-cursor behaviour is untouched the rest of the time - two meanings
+   * for one click, separated by mode rather than by a modifier key nobody would find.
+   */
+  useEffect(() => {
+    const map = mapRef.current
+    if (!map) return
+    if (!drawingArea) { setRing([]); return }
+    const onClick = (e: L.LeafletMouseEvent) => {
+      setRing((r) => [...r, [e.latlng.lat, e.latlng.lng]])
+    }
+    map.on('click', onClick)
+    return () => { map.off('click', onClick) }
+  }, [drawingArea])
+
+  // Draw the shape as it is built: a line while it is open, a filled ring once it
+  // encloses anything, and a handle on every corner so it is obvious what was clicked.
+  useEffect(() => {
+    const layer = drawLayer.current
+    if (!layer) return
+    layer.clearLayers()
+    if (!drawingArea || ring.length === 0) return
+    for (const [lat, lon] of ring) {
+      L.circleMarker([lat, lon], {
+        className: 'area-vertex', radius: 4, color: '#30578d', weight: 2,
+        fillColor: '#fff', fillOpacity: 1,
+      }).addTo(layer)
+    }
+    if (ring.length >= 3) {
+      L.polygon(ring, {
+        className: 'area-ring', color: '#30578d', weight: 2, dashArray: '6 4',
+        fillColor: '#30578d', fillOpacity: 0.12,
+      }).addTo(layer)
+    } else if (ring.length === 2) {
+      L.polyline(ring, {
+        className: 'area-ring', color: '#30578d', weight: 2, dashArray: '6 4',
+      }).addTo(layer)
+    }
+  }, [drawingArea, ring])
+
+  /**
+   * The difference tiles, drawn where the route would be.
+   *
+   * A tile only one drive visited is drawn hollow rather than filled grey: filled, it
+   * reads as a measured "no change", which is the one thing it is not.
+   */
+  useEffect(() => {
+    const map = mapRef.current
+    const layer = diffLayer.current
+    if (!map || !layer) return
+    layer.clearLayers()
+    if (!diffBins || diffBins.length === 0) return
+    const frame: [number, number][] = []
+    for (const b of diffBins) {
+      const dLat = b.sizeMeters / 111_320
+      const dLon = b.sizeMeters / (111_320 * Math.cos((b.centerLat * Math.PI) / 180))
+      const oneSided = b.deltaValue == null
+      const corners: [[number, number], [number, number]] = [
+        [b.centerLat - dLat / 2, b.centerLon - dLon / 2],
+        [b.centerLat + dLat / 2, b.centerLon + dLon / 2],
+      ]
+      frame.push(corners[0], corners[1])
+      L.rectangle(corners, {
+        className: 'diff-tile',
+        color: b.color, weight: 1,
+        fillColor: b.color, fillOpacity: oneSided ? 0 : 0.7,
+        dashArray: oneSided ? '3 3' : undefined,
+      }).bindTooltip(
+        oneSided
+          ? `Only one drive came here<br/>${b.countA != null ? 'A' : 'B'}: `
+            + `${b.countA ?? b.countB} samples`
+          : `${b.label}<br/>A ${b.avgA} \u2192 B ${b.avgB}`
+            + `<br/>${b.deltaValue! > 0 ? '+' : ''}${b.deltaValue}`
+            + `<br/>${b.countA} / ${b.countB} samples`,
+        { sticky: true },
+      ).addTo(layer)
+    }
+    fitOnce(map, frame)
+  }, [diffBins])
 
   // Tiles and the raw route are alternatives, never both at once.
   useEffect(() => {
@@ -458,10 +563,24 @@ export function RouteMap({
           )}
           {track.length} samples
         </span>
+        {drawingArea && (
+          <span className="area-draw">
+            {/* The count is the affordance: three is the smallest shape that encloses
+                anything, and until it is reached Finish would produce a line and a
+                selection of nothing. */}
+            <b>{ring.length}</b> corner{ring.length === 1 ? '' : 's'}
+            <button disabled={ring.length < 3}
+                    title={ring.length < 3 ? 'An area needs at least three corners' : 'Use this area'}
+                    onClick={() => onAreaDrawn?.(ring)}>Finish</button>
+            <button disabled={ring.length === 0}
+                    onClick={() => setRing((r) => r.slice(0, -1))}>Undo</button>
+            <button onClick={() => onAreaDrawn?.(null)}>Cancel</button>
+          </span>
+        )}
       </header>
       <div
         ref={hostRef}
-        className={`map${basemapFailed ? ' no-basemap' : ''}`}
+        className={`map${basemapFailed ? ' no-basemap' : ''}${drawingArea ? ' drawing' : ''}`}
         style={{ flex: 1 }}
         tabIndex={0}
         // The pan Leaflet's own handler used to give, handed back on the two keys the

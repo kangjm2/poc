@@ -467,3 +467,30 @@ kbd {
   gap: 6px;
 }
 .legend-note.isolating button { margin-left: auto; font-size: 11px; padding: 0 5px; }
+
+/* Drawing an area on the map. */
+.area-draw {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  margin-left: auto;
+  font-size: 11px;
+}
+.area-draw button { font-size: 11px; padding: 1px 6px; }
+.map.drawing { cursor: crosshair; }
+
+/* The difference map's key. */
+.diff-legend {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding: 6px 10px;
+  font-size: 11px;
+}
+.diff-legend span { display: inline-flex; align-items: center; gap: 4px; }
+.diff-legend .swatch.hollow {
+  background: transparent;
+  border: 1px dashed var(--text-dim);
+}
+.toolbar .group button.on { background: #dce8f6; border-color: #7fa5cd; }

@@ -288,6 +288,8 @@ API는 호출자가 보낸 라벨도 그대로 저장하므로, 경계와 라벨
 | GET | `/sessions/{id}/statistics?kpi&fromSeq&toSeq` | 요약 통계 + 101점 CDF |
 | GET | `/sessions/{id}/degradations?kpi&minSamples&fromSeq&toSeq` | 연속 열화 구간 |
 | GET | `/sessions/{id}/events` · `/messages` · `/cells` | 이벤트 · L3 메시지 · 셀 목록 |
+| GET | `/sessions/{id}/area-statistics?polygon=` | 지도에 그린 도형 안의 통계 + **통과 목록**. 짝홀 광선 판정을 SQL에서 (PostGIS 없음) |
+| GET | `/sessions/{id}/spatial-diff?other=` | 두 주행을 **하나의 격자**에 담아 타일별 차분 |
 | GET | `/compare?a&b&kpis` | 두 세션 KPI별 통계·판정 |
 
 ### 공간·내보내기
