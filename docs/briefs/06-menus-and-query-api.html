@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>⑥ 메뉴 바와 질의 API — Nemo Analyze 10.2</title>
+<link rel="stylesheet" href="brief.css">
+</head>
+<body>
+<div class="wrap">
+
+<header class="top">
+  <h1>⑥ 메뉴 바와 질의 API</h1>
+  <div class="sub">ch.13 메뉴 전체 · ch.14 단축키 · Appendix 5·6 함수 62개 — 도구의 조작 표면과 계산 어휘</div>
+</header>
+
+<nav class="crumbs"><a href="index.html">← 브리프 목록</a> ·
+  이전: <a href="05-findings.html">⑤ 판정 요약</a></nav>
+
+<p>
+앞의 다섯 편은 <strong>화면</strong>을 다뤘습니다. 이 편은 나머지 둘입니다 —
+사용자가 무엇을 <em>누를 수</em> 있는가(메뉴 바 77개 항목)와, 무엇을 <em>계산할 수</em>
+있는가(스칼라 함수 46개 + 저장 프로시저 16개). 원래 질문이었던
+<strong>"각 메뉴에 대한 자세한 설명"</strong>이 실려 있는 곳이 바로 여기입니다.
+</p>
+
+<h2>1. 메뉴 바 — 8개, 항목 77개 <span class="src">p465–470</span></h2>
+
+<p>
+먼저 조작 방식 자체가 낯섭니다. <strong>메뉴 바가 아니라 좌측 상단 로고를 클릭해서</strong>
+엽니다. 그리고 File·View 메뉴는 <strong>더블클릭으로 빠져나옵니다</strong>
+<span class="src">p466</span>. 리본과 이 로고 메뉴가 공존하는 구조입니다.
+</p>
+
+<table>
+<tr><th style="width:150px">메뉴</th><th>담는 것</th><th style="width:90px">항목 수</th></tr>
+<tr><td><strong>루트</strong>(로고)</td><td>Open · Workspace · Workbook · <strong>Export to…</strong> · Print · Recent Workspaces · Exit</td><td>7</td></tr>
+<tr><td><strong>File</strong></td><td>Open · Save · Organize · <strong>Project manager</strong> · <strong>Menu editor</strong> · Import · Export · Print</td><td>12</td></tr>
+<tr><td><strong>View</strong></td><td>Add Data View · Options · <strong>Panels</strong></td><td>3</td></tr>
+<tr><td><strong>Tools</strong></td><td><strong>KPI workbench</strong> · Query manager · Color set editor · Notifications · <strong>Event scheduler</strong> · Macro editor · User manager · Operators · <strong>Database Browser</strong> · Server statistics · Spreadsheet/PowerPoint/Word 템플릿</td><td>14</td></tr>
+<tr><td><strong>Utilities</strong></td><td>Reconnect · <strong>Synchronization</strong>(재생 트랜스포트 8종) · <strong>Global Filters</strong></td><td>11</td></tr>
+<tr><td><strong>Map / Live Map</strong><br><span class="src">지도가 열려 있을 때만</span></td><td>레이어·탐색·그리기 도구 27종 — Polygon region · Area/Distance binning · <strong>Delta plotting</strong> · Measure distance · Offset route · Show Elevation · Export to KML …</td><td>27</td></tr>
+<tr><td><strong>Layout</strong><br><span class="src">워크북이 열려 있을 때만</span></td><td>Add/Remove Page · Copy Workbook · Organize</td><td>4</td></tr>
+<tr><td><strong>Help</strong></td><td>온라인 도움말 · <strong>Nemo 파일 형식 명세</strong> · 매크로 레퍼런스</td><td>3</td></tr>
+</table>
+
+<p>
+<strong>두 메뉴는 조건부로 통째로 사라집니다</strong> — Map은 지도가 열려 있을 때만,
+Layout은 워크북이 열려 있을 때만 존재하고 마지막 워크북을 닫으면 자동으로 닫힙니다
+<span class="src">p468 · p469</span>.
+</p>
+
+<div class="warn">
+<h5>메뉴가 알려 주는 사실 하나 — 우리가 복제한 기능은 <strong>유료 옵션</strong>입니다</h5>
+<p>
+Tools 메뉴의 설명이 지나가듯 밝힙니다:
+<strong>"The KPI Workbench is part of the Troubleshooting Toolkit option"</strong>
+<span class="src">p466</span>. <code>User manager</code>는
+<strong>Enterprise Edition 전용</strong>입니다 <span class="src">p467</span>.
+드릴다운 역시 <em>"optional component"</em>였습니다(<a href="02-analysis-and-drilldown.html">②</a>).
+</p>
+<p>
+즉 우리가 "레퍼런스 대비 격차"로 세어 온 항목 중 상당수는 <strong>기본 제품에도 없는
+것</strong>이고, 기존 사용자 전부가 써 본 기능도 아닙니다. 격차의 <em>크기</em>가 아니라
+<em>누구에게 격차인지</em>가 달라집니다.
+</p>
+</div>
+
+<h3>1.1 우리에게 대응물이 있는 것 / 없는 것</h3>
+
+<table>
+<tr><th style="width:210px">메뉴 항목</th><th style="width:70px">원문</th><th>우리</th></tr>
+<tr><td><strong>Synchronization</strong> — Reset Source · 처음으로 · 뒤로 재생 · 한 칸씩 · 정지 · 재생 · <strong>Go to timestamp</strong></td><td class="src">p467</td>
+    <td><span class="tag t-diff">2/9</span> 커서 이동과 진행 바만 있습니다. <strong>자동 재생·재생 속도·역방향이 없습니다.</strong> 레퍼런스는 사실상 미디어 플레이어입니다</td></tr>
+<tr><td><strong>Global Filters</strong></td><td class="src">p467</td>
+    <td><span class="tag t-none">없음</span> <em>"applied to <strong>all operations</strong> performed with Nemo Analyze"</em>. 우리 필터는 전부 화면 단위입니다</td></tr>
+<tr><td><strong>Polygon region</strong></td><td class="src">p468</td>
+    <td><span class="tag t-none">없음</span> <em>"specify an area of <strong>any shape</strong>, and run statistics over that area"</em>. 우리 영역 비닝은 <strong>고정 격자</strong>입니다</td></tr>
+<tr><td><strong>Delta plotting</strong></td><td class="src">p469</td>
+    <td><span class="tag t-none">없음</span> 같은 경로의 <strong>두 측정 그룹을 지도 위에서 차분</strong>. 우리 비교는 통계·CDF까지이고 <strong>공간 비교가 없습니다</strong></td></tr>
+<tr><td><strong>Fill GPS gaps</strong></td><td class="src">p465</td>
+    <td><span class="tag t-none">없음</span> 터널 등의 결측 구간에 인공 GPS 점을 생성. <strong>최소 간격 50 m</strong>이고, 원본과 <code>_gps</code> 접미사가 붙은 사본 <strong>두 파일을 로드</strong>합니다</td></tr>
+<tr><td>Area binning · Distance binning</td><td class="src">p469</td><td><span class="tag t-same">있음</span></td></tr>
+<tr><td>Measure distance · Show Elevation · Offset route · Export to KML</td><td class="src">p468</td>
+    <td><span class="tag t-diff">일부</span> GeoJSON 내보내기만. 나머지 셋은 없음</td></tr>
+<tr><td><strong>Database Browser</strong> — 테이블 구조를 보여주고 커스텀 질의를 작성·테스트</td><td class="src">p467</td>
+    <td><span class="tag t-none">없음</span> 우리는 사용자가 SQL을 쓰지 않는 구조입니다. <strong>다만 KPI 그래프가 만든 SQL을 보여주는 것</strong>은 같은 값어치가 있고, <code>validate</code> 응답에 이미 들어 있습니다</td></tr>
+<tr><td>Menu editor — 워크북을 Workspace 메뉴에 등록</td><td class="src">p466</td>
+    <td><span class="tag t-none">없음</span> 우리 워크북은 탭 스트립에 바로 붙습니다</td></tr>
+<tr><td><strong>Open | Folder</strong> — 폴더 통째로 로드</td><td class="src">p466</td>
+    <td><span class="tag t-none">없음</span> CSV 한 개 = 세션 한 개</td></tr>
+</table>
+
+<h3>1.2 단축키 — 16개뿐입니다 <span class="src">p471</span></h3>
+
+<p>
+일반 10개는 <strong>Ctrl+n</strong>(새 워크북)과 <strong>Ctrl+F6</strong>(다음 워크북)을 빼면
+전부 표준 Windows 편집·창 명령입니다. 나머지 6개는 재생 트랜스포트입니다.
+<strong>분석 기능에는 단축키가 하나도 없습니다.</strong>
+</p>
+
+<div class="ours">
+<h5>우리 구현</h5>
+<p>
+<strong>프론트엔드에 단축키가 전혀 없습니다.</strong> 다만 레퍼런스도 분석 쪽은 비어 있으니
+"업계 표준을 못 따라간 것"은 아닙니다. 커서 이동(←/→)과 워크북 전환 정도가
+<strong>레퍼런스보다 나아질 수 있는</strong> 작은 자리입니다.
+</p>
+</div>
+
+<h2>2. 유저 시나리오 — 메뉴에서 읽히는 것</h2>
+
+<h3>UC5 재방문 — 전역 필터가 왜 메뉴에 있나 <span class="src">p467</span></h3>
+
+<p>
+<a href="01-workspace-and-views.html">①</a>에서 본 전역 필터가 <code>Utilities</code> 메뉴에
+있는 이유가 여기서 분명해집니다. 매뉴얼의 설명이
+<em>"applied to <strong>all operations</strong> performed with Nemo Analyze"</em> 이고,
+예시로 <strong>폴리곤 영역 선택</strong>을 듭니다. 즉 <strong>지도에서 그린 도형이 앱 전체의
+필터가 됩니다.</strong>
+</p>
+
+<div class="ours">
+<h5>우리 구현에는 어떻게 반영됐나</h5>
+<p>
+전역 필터가 없으므로 <strong>"이 영역만 보기"를 표현할 방법이 없습니다.</strong>
+우리 대응은 <strong>파생 KPI</strong>입니다 — 워크벤치로 조건을 건 새 KPI를 만들면 이후 모든
+화면에서 쓸 수 있습니다. 다만 <em>지금 보고 있는 화면에 즉시</em> 걸리지는 않고,
+<strong>공간 조건은 아예 표현할 수 없습니다</strong>(워크벤치가 위경도를 읽지 못하므로 —
+<a href="05-findings.html">⑤ C9</a>).
+</p>
+</div>
+
+<h3>FAQ가 흘리는 사실 둘 <span class="src">p473</span></h3>
+
+<table>
+<tr><th style="width:180px">FAQ 항목</th><th>내용</th></tr>
+<tr><td><strong>데이터베이스</strong></td><td>Nemo Analyze는 <strong>PostgreSQL</strong>을 씁니다.
+    우리도 PostgreSQL 16입니다 — <strong>같은 선택</strong>이고, 벤더 자료가 아니라 1차 자료로 확인됐습니다</td></tr>
+<tr><td><strong>지도에 값이 안 나올 때</strong></td><td>Analyze Wizard로 파라미터를 먼저 고르면
+    <strong>색이 칠해지지 않습니다.</strong> <em>지도를 먼저 열고 측정을 지도로 드래그</em>해야 합니다 —
+    같은 데이터에 두 경로가 있고 결과가 다른, 전형적인 함정</td></tr>
+</table>
+
+<p>
+Troubleshooting 장(p472)에는 항목이 <strong>딱 하나</strong> 있습니다 — HASP 동글과 VMware의
+충돌, 권장 조치는 <em>VMware를 제거하라</em>. 소프트웨어 회피책이 아니라 물리 동글 문제라는
+점이 이 제품의 배포 형태를 말해 줍니다.
+</p>
+
+<h2>3. 질의 API — 계산 어휘 62개 <span class="src">Appendix 5·6, p479–502</span></h2>
+
+<p>
+메뉴가 조작 표면이라면, 부록 5·6은 <strong>계산 표면</strong>입니다. Keysight가
+OpenAccess SQL에 얹은 <strong>독자 확장</strong>이고, 전사본은
+<code>docs/reference/nemo-analyze-10.2/query-api.md</code>에 있습니다
+(signature 전문 · <code>T_FORMAT</code> 코드 21개 · 레지스트리 키 · <strong>원문 결함 17건</strong>).
+</p>
+
+<div class="warn">
+<h5>이 표를 만든 이유 — 요약하면 없어지는 자료입니다</h5>
+<p>
+이 범위를 처음 추출했을 때는 다른 절과 똑같이 "발견" 형식으로 요약했고,
+<strong>함수 46개가 항목 13개로 뭉개져 signature가 통째로 사라졌습니다.</strong>
+열거형 자료에 서술형 추출을 적용한 것이 잘못이었습니다.
+</p>
+<p>
+다시 할 때는 원문 표제에서 이름을 <strong>기계적으로</strong> 62개 뽑아 각 작업자에게
+"이 이름들에 대해 정확히 한 행씩"을 요구하고, 끝나고 <strong>집합이 일치하는지 코드로
+확인</strong>했습니다 — 62개 요청, 62개 회수, 누락 0, 초과 0.
+</p>
+</div>
+
+<h3>3.1 46개를 그대로 격차로 읽으면 안 됩니다</h3>
+
+<table>
+<tr><th style="width:180px">범주</th><th style="width:55px">개수</th><th style="width:90px">우리에게</th><th>왜</th></tr>
+<tr><td>Freeze frame</td><td>3</td><td><span class="tag t-out">불필요</span></td>
+    <td>스키마에 관계가 없는 테이블을 시간으로 잇는 <strong>우회로</strong>입니다. 우리는 키 조인.
+        <strong>단</strong> <code>Correlation type (-1, 0, 1)</code>이 곧 Previous/Current/Next이고,
+        <code>0</code>의 정의(<em>"parent query timestamp is within the time range of the subquery
+        row's time interval"</em>)는 우리가 그 노드를 만들 때 쓸 <strong>정의 그 자체</strong>입니다</td></tr>
+<tr><td>Time · Binary Time · Interval · SQL Time</td><td>18</td><td><span class="tag t-out">불필요</span></td>
+    <td>전부 <strong>binary time</strong>이라는 그들 고유 표현을 다룹니다. 우리는 <code>TIMESTAMPTZ</code> 하나라 변환할 표현이 없습니다</td></tr>
+<tr><td><strong>Translator</strong></td><td>2</td><td><span class="tag t-none">필요</span></td>
+    <td>숫자 코드 ↔ 사람이 읽는 라벨의 <strong>코드북</strong>. 우리 <code>STATE_MACHINE</code>은 상태를
+        <strong>맨 정수</strong>로 내보내고 이름은 그래프 JSON에만 있습니다</td></tr>
+<tr><td>Datatype</td><td>5</td><td><span class="tag t-diff">일부</span></td>
+    <td><code>IS_FLOAT_EQUAL</code>이 <strong>정밀도 인자</strong>를 받습니다. 우리 <code>FILTER</code>는
+        <code>double</code>에 맨 <code>=</code>를 허용합니다 — 사실상 항상 거짓일 수 있는 비교</td></tr>
+<tr><td>Decoder</td><td>13</td><td><span class="tag t-out">데이터 없음</span></td>
+    <td>시그널링 메시지 <strong>본문</strong>을 질의로 끌어들입니다. 우리 본문은 구조화돼 있지 않습니다</td></tr>
+<tr><td>Connection</td><td>2</td><td><span class="tag t-diff">결정 필요</span></td>
+    <td><strong>호(connection)라는 개체</strong>와 부모-자식 관계를 전제합니다. 우리 계층은
+        세션 → 표본뿐이고 <strong>중간 구간 개체가 없습니다</strong></td></tr>
+<tr><td>lr_id</td><td>3</td><td><span class="tag t-out">불필요</span></td>
+    <td>그들의 행 식별자. 우리는 <code>(session_id, seq)</code>.
+        <strong>이 범주는 매뉴얼 목차에서 빠져 있습니다</strong> — 목차만 따라간 추출은 통째로 놓칩니다</td></tr>
+</table>
+
+<h3>3.2 진짜 격차는 개수가 아니라 <strong>확장점이 0개</strong>라는 것</h3>
+
+<p>
+우리 식 언어(<code>KpiExpression</code> · <code>ColumnExpression</code>)의 문법은
+<code>+ − × ÷</code>, 괄호, 숫자, 단항 마이너스, KPI 이름이 전부입니다.
+<strong>함수 호출이라는 생산 규칙 자체가 없습니다.</strong>
+</p>
+<p>
+그래서 위에서 "필요"로 표시한 것들 — 코드북, 정밀도 있는 동등 비교, 그리고
+dB↔선형 변환(<code>log10</code>/<code>power</code>) — 을 사용자가 <strong>우회할 방법도
+없습니다.</strong>
+</p>
+
+<div class="ours">
+<h5>비용은 작습니다</h5>
+<p>
+파서는 이미 <strong>허용 목록 설계</strong>입니다 — 연산자를 하드코딩 목록과 대조하고
+<em>매칭된 상수</em>를 출력하므로 사용자 입력이 SQL로 복사되지 않습니다.
+함수 하나를 여는 것은 <code>factor()</code>에 분기를 더하고 이름 허용 목록을 두는 일이지
+<strong>보안 모델을 바꾸는 일이 아닙니다.</strong> 그리고 이 표의 여러 칸을 한꺼번에 엽니다.
+</p>
+</div>
+
+<h3>3.3 dB 평균 — 매뉴얼이 옵션으로 두고 있는 것</h3>
+
+<p>
+<code>Options – Statistics</code>에 <em>"whether the <strong>dB-parameter statistics</strong> are
+calculated using <strong>linear math</strong>"</em> 토글이 있습니다 <span class="src">p457</span>.
+</p>
+<p>
+우리는 <strong>전부 dB 도메인에서 <code>avg()</code></strong> 합니다 — RSRP·RSRQ·SINR 모두.
+전력의 산술 평균과 dB의 산술 평균은 같지 않고, 편차가 클수록 벌어집니다.
+드라이브 테스트 관행상 dB 평균도 널리 쓰이므로 <em>틀렸다</em>고까지는 못 하지만,
+<strong>레퍼런스는 사용자에게 고르게 하고 우리는 고정</strong>입니다.
+평균에만 해당하고 min·max·백분위는 순서 통계라 영향이 없습니다.
+</p>
+
+<h2>4. 이 문서에서 남은 일로 확인된 것</h2>
+
+<table>
+<tr><th style="width:250px">항목</th><th style="width:70px">규모</th><th>왜</th></tr>
+<tr><td><strong>식 언어에 함수 도입</strong> (허용 목록)</td><td>작음</td>
+    <td>확장점이 0개인 것이 근본. <code>log10</code>·<code>power</code>·코드북·정밀도 비교를 한꺼번에 엽니다</td></tr>
+<tr><td><strong>폴리곤 영역 통계</strong></td><td>중</td><td><code>Polygon region</code>. 자산이 아니라 기능이었습니다</td></tr>
+<tr><td><strong>전역 필터</strong></td><td>중</td><td>모든 조작에 걸리는 필터. 우리는 화면 단위뿐</td></tr>
+<tr><td><strong>Delta plotting</strong> (공간 차분 비교)</td><td>중</td><td>우리 비교는 통계까지이고 지도 위 차분이 없습니다</td></tr>
+<tr><td>재생 트랜스포트 (자동 재생·속도·역방향)</td><td>작음</td><td>9개 중 2개만 있습니다</td></tr>
+<tr><td>dB 파라미터 <strong>선형 평균</strong> 옵션</td><td>작음</td><td>평균에만 해당. 레퍼런스는 토글로 둡니다</td></tr>
+<tr><td>KPI 그래프의 <strong>생성 SQL 표시</strong></td><td>매우 작음</td><td><code>Database Browser</code>의 값어치. 응답에 이미 있습니다</td></tr>
+<tr><td>폴더 통째로 임포트 · 단축키</td><td>작음</td><td>둘 다 없음. 단축키는 레퍼런스도 분석 기능엔 없습니다</td></tr>
+</table>
+
+<footer>
+출처: Nemo Analyze User Guide · <code>NTN00000A-90013</code> · Edition 1, 2023-11-27.
+함수 signature 전문은 <code>docs/reference/nemo-analyze-10.2/query-api.md</code>.
+그림은 <strong>재배포하지 않습니다</strong> (<code>docs/assets/NOTICE.md</code>).
+</footer>
+
+</div>
+</body>
+</html>

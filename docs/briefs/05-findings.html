@@ -42,11 +42,12 @@
       우리는 Union이 없습니다</td>
 </tr>
 <tr>
-  <td><strong><code>Weight by</code>를 만들지 않음</strong></td>
-  <td><span class="tag t-same">맞음</span> 가중이 필요한 이유는 Nemo 파일이
+  <td><strong><code>Weight by time</code>을 만들지 않음</strong></td>
+  <td><span class="tag t-same">맞음</span> <strong>시간</strong> 가중이 필요한 이유는 Nemo 파일이
       <strong>시간 기반</strong>이라 표본 길이가 제각각이기 때문입니다.
       우리는 1 Hz 균일이라 <strong>가중 없는 평균이 맞습니다</strong>
-      <span class="src">p353·375·378</span></td>
+      <span class="src">p353·375·378</span>.
+      <strong>단 거리 축은 여기 속하지 않습니다</strong> — 아래 C7 정정</td>
 </tr>
 <tr>
   <td><strong>Resample을 만들지 않음</strong></td>
@@ -125,6 +126,55 @@ KPI Workbench의 Correlation 요소들은 <strong>항상 primary 게이팅</stro
 </p>
 </div>
 
+<h3>C7. <code>Weight by</code> — 두 축을 하나로 묶은 것이 잘못이었습니다
+  <span class="tag t-none">이 브리프의 자체 정정</span></h3>
+
+<table>
+<tr><th style="width:110px">기존</th><td><em>"<code>Weight by</code>가 없는 것은 격차가 아니다"</em> —
+    "하지 않을 것" 표에 통째로 올려 놨습니다</td></tr>
+<tr><th>매뉴얼</th><td><strong>Appendix 3, p477</strong>이 두 축을 명시적으로 <strong>나눕니다</strong>:
+    <em>"the duration can be <strong>in time or in distance</strong> … If the samples from the
+    entire measurement route are to have equal weight and for instance the weighting effect of
+    <strong>time spent at traffic lights</strong> is to be excluded, the samples should be
+    weighted by distance."</em>
+    같은 페이지가 <strong>시간</strong> 가중의 근거는 산수로 보여 줍니다 —
+    <code>0/90초, 5/0.5초, 0/10초</code>의 단순 평균 <strong>1.667</strong> 대
+    지속시간 가중 평균 <strong>0.025</strong></td></tr>
+<tr><th>SQL 층</th><td>Appendix 6에 <code>QSR_DISTANCE</code>(p495) · <code>QSR_TIME</code>(p497) ·
+    <code>SR_SAMPLE</code>(p496)이 <strong>별개 프로시저</strong>로 있습니다.
+    입력 8개·반환 5개가 같고 <strong>가중 방식만 다릅니다</strong></td></tr>
+<tr><th>왜 틀렸나</th><td>거리 가중의 근거는 <strong>표본 간격의 규칙성과 무관</strong>합니다.
+    그리고 <strong>1 Hz 균일 샘플에서 정차 편향은 오히려 가장 심합니다</strong> —
+    신호 대기 중인 차는 초당 1표본을 꼬박 내면서 <strong>0 m</strong>를 이동합니다.
+    균일 샘플링은 <em>시간</em> 축을 해결하고 <em>거리</em> 축은 조금도 건드리지 않습니다</td></tr>
+<tr><th>우리 상태</th><td>거리 가중 집계가 <strong>어디에도 없습니다.</strong> 거리 비닝은
+    <strong>그 화면 안에서만</strong> 편향을 없애고, 통계·분포·비교 CDF·리포트는 전부
+    정차 편향을 안고 있습니다</td></tr>
+<tr><th>조치</th><td>"하지 않을 것"에서 <strong>거리 가중을 빼고 우선순위로</strong> 올립니다.
+    가중치는 거리 비닝이 이미 계산하는 대권거리 구간을 표본별 가중 열로 재사용하면 됩니다</td></tr>
+</table>
+
+<h3>C8. "셋 이상 테이블의 시간 상관은 SQL로 불가능" — 우리가 너무 세게 옮겼습니다
+  <span class="tag t-none">자체 정정</span></h3>
+
+<p>
+p332의 <em>"with three or more tables the task becomes impossible"</em>을 우리는
+<strong>"SQL로 불가능"</strong>이라고 그대로 옮겨 적었습니다. 그런데 같은 매뉴얼
+<strong>p480</strong>에 <strong>세 테이블을 시간으로 상관시키는 SQL 한 문장</strong>이
+실려 있습니다 — <code>REAL_FREEZE_FRAME</code>을 두 번 부르고, 서브질의를
+<strong>문자열로</strong> 넘기고, 첫 인자로 <strong>손으로 관리하는 캐시 순번</strong>(1, 2)을
+줍니다.
+</p>
+<p>
+<strong>정확한 표현</strong>: 평범한 조인으로는 안 되고 <strong>전용 스칼라와 수동 캐시
+키</strong>가 필요합니다. 워크벤치는 불가능한 연산의 유일한 통로가 아니라
+<strong>그 SQL의 인체공학 층</strong>입니다.
+</p>
+<p>
+<strong>결론은 오히려 강해집니다.</strong> 우리 세로형 스키마에서 같은 상관은 평범한 키
+조인입니다 — 그들이 전용 스칼라와 캐시 순번으로 치르는 비용을 우리는 치르지 않습니다.
+</p>
+
 <h3>C4. Lee's criteria를 근거로 댔지만 구현하지 않았습니다</h3>
 
 <table>
@@ -175,53 +225,119 @@ KPI Workbench의 Correlation 요소들은 <strong>항상 primary 게이팅</stro
 </p>
 </div>
 
+<h3>C9. 워크벤치를 실제로 묶고 있는 것은 <strong>그래프의 모양</strong> 하나입니다
+  <span class="tag t-diff">구조적 발견</span></h3>
+
+<p>
+매뉴얼 뒷부분(p396–504)까지 훑고 나서, 서로 달라 보이던 격차 넷이 <strong>같은 제약
+하나</strong>에서 나온다는 것이 드러났습니다.
+</p>
+
+<p>
+<code>KpiGraph</code>의 모든 CTE는 예외 없이 <code>(session_id, seq, ts)</code>를 키로 잡고,
+<code>OUTPUT</code>은 <strong>열 하나</strong>를 골라 <code>sample_kpi</code>에 실체화합니다.
+<code>V8</code>의 <code>UNIQUE (output_kpi_name)</code>이 그 계약을 스키마에 못박았습니다.
+</p>
+
+<blockquote><strong>그래프 하나 = 표본당 한 행 × 출력 열 하나.</strong></blockquote>
+
+<table>
+<tr><th style="width:250px">겉보기 격차</th><th>실제 원인</th></tr>
+<tr><td><strong>이벤트를 캔버스에 못 올림</strong></td>
+    <td><code>network_event</code>는 <code>(session_id, ts)</code>이고 <strong><code>seq</code>가
+        없습니다.</strong> 표본 격자 위의 행이 아니라 키가 맞지 않습니다</td></tr>
+<tr><td><strong>State Machine이 구간을 못 냄</strong></td>
+    <td>구간 행은 <code>start_time</code>·<code>time_interval</code>을 갖는 <strong>다른
+        모양</strong>입니다. 표본당 한 행에 담을 곳이 없습니다</td></tr>
+<tr><td><strong>Nth Best · Group By 불가</strong></td>
+    <td>행 수와 열 수를 <strong>바꾸는</strong> 노드들입니다. 매뉴얼은 이 부류를
+        <em>"dynamic procedures … the actual result set is defined at runtime rather than
+        fixed"</em> 라 부릅니다 <span class="src">p501</span></td></tr>
+<tr><td><strong>지오메트리를 못 읽음</strong></td>
+    <td><code>sample</code>의 위경도·속도·서빙 PCI를 읽는 소스 노드가 없습니다.
+        이건 유일하게 <strong>모양 문제가 아니라 그냥 없는 것</strong></td></tr>
+</table>
+
+<div class="warn">
+<h5>그래서 우리가 공표한 우선순위 순서가 틀렸습니다</h5>
+<p>
+기존 순서는 <strong>① 생성기 핸드오버 지연 → ② 진짜 State Machine → ③ Previous/Current/Next</strong>
+였습니다. <strong>②와 ③은 둘 다 위 제약에 걸립니다</strong> — ②의 산출물인 구간 행은
+실체화할 곳이 없고, ③의 대표 용도인 <em>"드롭 직전의 값"</em>은
+<strong>드롭(이벤트)을 캔버스에 올릴 수 없어</strong> 성립하지 않습니다.
+</p>
+<p>
+UC27이 그것을 그림으로 보여 줍니다 — 그 그래프의 <strong>마지막 노드</strong>가
+<code>Call dropped</code> 이벤트와의 상관입니다.
+<strong>우리는 거기서 시작조차 못 합니다.</strong> State Machine을 아무리 잘 만들어도
+상관시킬 상대가 캔버스에 없습니다.
+</p>
+<p>
+<strong>0번 항목이 새로 생깁니다</strong> — 그래프가 낼 수 있는 <strong>두 번째 결과 모양</strong>을
+정하는 결정. 반대로 <code>SOURCE_SAMPLE</code>(지오메트리 소스)은 이 결정과 <strong>무관</strong>합니다.
+표본당 한 행, 열 하나 — 지금 모양에 정확히 맞고 값은 이미 <code>sample</code>에 있습니다.
+<strong>지금 바로 할 수 있는 유일한 워크벤치 항목입니다.</strong>
+</p>
+</div>
+
 <h2>3. 다음 우선순위</h2>
 
 <p>기준은 <strong>"이걸 안 하면 다음 구현을 잘못 만든다"</strong>의 정도입니다.</p>
 
 <table>
-<tr><th style="width:45px">순위</th><th style="width:270px">항목</th><th style="width:60px">규모</th><th>근거</th></tr>
+<tr><th style="width:45px">순위</th><th style="width:280px">항목</th><th style="width:60px">규모</th><th>근거</th></tr>
+<tr>
+  <td><strong>0</strong></td>
+  <td><strong>그래프의 두 번째 결과 모양을 결정</strong> — KPI 실체화 외에 결과 집합을
+      돌려주는 경로를 둘 것인가</td><td>결정</td>
+  <td><strong>C9.</strong> 4·5번이 여기 매달려 있습니다. 코드가 아니라 <em>결정</em>이 먼저입니다</td>
+</tr>
 <tr>
   <td><strong>1</strong></td>
-  <td>시드 생성기에 <strong>핸드오버 지연</strong> 도입</td><td>중</td>
-  <td>C1. 레퍼런스 대표 KPI를 우리 데이터에서 재현 가능하게 만드는 <strong>전제</strong>.
-      이게 없으면 State Machine을 만들어도 시연할 데이터가 없습니다</td>
+  <td><code>SOURCE_SAMPLE</code> 노드 — 위경도 · 속도 · 서빙 PCI</td><td>작음</td>
+  <td>C9. 0번과 <strong>무관하게 지금 가능.</strong> 값은 이미 <code>sample</code>에 있고
+      <code>SOURCE_KPI</code>와 구조가 같습니다</td>
 </tr>
 <tr>
   <td><strong>2</strong></td>
-  <td><strong>진짜 State Machine</strong> — 전이 그래프 + 구간 출력 + <code>time_interval</code></td><td>큼</td>
-  <td>C2 · C6. 워크벤치의 실제 값어치가 여기 있습니다</td>
+  <td><code>SOURCE_EVENT</code> + 시간 상관 — 이벤트를 표본 척추에 얹기</td><td>중</td>
+  <td>C9. UC27의 <strong>마지막</strong> 노드. 이것 없이는 State Machine의 산출물을 쓸 데가 없습니다</td>
 </tr>
 <tr>
-  <td><strong>3</strong></td>
-  <td><strong>Previous / Current / Next Value</strong> 상관 노드</td><td>중</td>
-  <td>C6. "드롭 <strong>직전</strong>의 값" — 근본 원인 분석의 핵심 질문</td>
+  <td>3</td>
+  <td>시드 생성기에 <strong>핸드오버 지연</strong> 도입</td><td>중</td>
+  <td>C1. 레퍼런스 대표 KPI를 우리 데이터에서 재현하는 전제</td>
 </tr>
 <tr>
   <td>4</td>
-  <td>드릴다운 <strong>다중 탭</strong> (조각 색 유지)</td><td>중</td>
-  <td>C5. 재분류됨. 여러 원인 동시 비교</td>
+  <td><strong>진짜 State Machine</strong> — 전이 그래프 + 구간 출력 + <code>time_interval</code></td><td>큼</td>
+  <td>C2. <strong>0번 결정 이후</strong></td>
 </tr>
 <tr>
   <td>5</td>
-  <td><strong>Cell locator</strong></td><td>중</td>
-  <td>UC21. 우리는 정답(<code>cell_ref</code> 좌표)을 알고 있어
-      <strong>오차를 검증할 수 있는</strong> 형태로 만들 수 있습니다</td>
+  <td><strong>Previous / Current / Next Value</strong> 상관 노드</td><td>중</td>
+  <td>C8. <strong>2번 이후</strong> — 상관시킬 이벤트가 있어야 의미가 생깁니다</td>
 </tr>
 <tr>
   <td>6</td>
-  <td>거리 빈에 <strong>40λ 옵션</strong></td><td>작음</td>
-  <td>C4. 이름값을 하려면. 변환 함수는 이미 있음</td>
+  <td><strong>거리 가중 통계</strong> — 통계 · 분포 · CDF · 리포트</td><td>중</td>
+  <td>C7. 1 Hz 균일이 <strong>없애 주지 못하는</strong> 유일한 편향</td>
 </tr>
 <tr>
   <td>7</td>
-  <td>푸트프린트 포함 기준을 <strong>3강 안</strong>으로</td><td>작음</td>
-  <td>UC1. V7 데이터로 바로 가능. 오버슛 판단의 실제 근거</td>
+  <td><strong>폴리곤 영역 통계</strong> — 지도에서 임의 영역을 그려 통계</td><td>중</td>
+  <td>자산이 아니라 기능이었습니다. <code>Polygon region</code> <span class="src">p468</span></td>
 </tr>
 <tr>
   <td>8</td>
-  <td>임포트 <strong>진행 큐 + 취소</strong>, KPI 그래프 <strong>SQL 표시</strong></td><td>작음</td>
-  <td>Activity/Log window. SQL은 응답에 이미 있고 표시만 하면 됩니다</td>
+  <td>드릴다운 <strong>다중 탭</strong></td><td>중</td>
+  <td>C5. 재분류됨</td>
+</tr>
+<tr>
+  <td>9</td>
+  <td><strong>Cell locator</strong> · 거리 빈 <strong>40λ 옵션</strong> ·
+      푸트프린트 <strong>3강 기준</strong></td><td>작음</td>
+  <td>UC21 · C4 · UC1. 데이터가 이미 있는 것들</td>
 </tr>
 </table>
 
@@ -235,10 +351,11 @@ KPI Workbench의 Correlation 요소들은 <strong>항상 primary 게이팅</stro
 
 <table>
 <tr><th style="width:230px">항목</th><th>왜 하지 않는가</th></tr>
-<tr><td><strong><code>Weight by</code></strong></td>
+<tr><td><strong><code>Weight by time</code></strong></td>
     <td>시간 가중이 필요한 이유는 Nemo 파일이 <strong>값이 바뀔 때만 샘플을 만들기</strong>
         때문입니다. 우리는 1 Hz 균일이라 <strong>가중 없는 평균이 맞습니다.</strong>
-        넣으면 <em>의미 없는 컨트롤</em>이 됩니다</td></tr>
+        넣으면 <em>의미 없는 컨트롤</em>이 됩니다.
+        <br><strong>거리 가중은 이 표에서 뺐습니다</strong> — C7 정정 참조</td></tr>
 <tr><td><strong>Time: Resample</strong></td>
     <td>같은 이유. 재표본화할 불규칙성이 없습니다</td></tr>
 <tr><td><strong>Sort 노드</strong></td>
@@ -257,15 +374,24 @@ KPI Workbench의 Correlation 요소들은 <strong>항상 primary 게이팅</stro
 
 <div class="warn">
 <p>
-우리가 노드 그래프를 설계하며 본 "스크린샷"은 사실 <strong>이 매뉴얼 p405의 UC27 상태
-흐름도</strong>였습니다 (파일 크기가 정확히 일치합니다). 구조는 정확히 읽어냈지만,
-<strong>그림 한 장에서 의미까지 추측한 부분이 여러 곳에서 틀렸습니다</strong> —
-State Machine의 출력 모양, Combine의 게이팅, <code>Missing neighbour</code>의 판정 방식.
+우리가 노드 그래프를 설계하며 본 "스크린샷"은 <strong>이 매뉴얼 UC27의 완성 노드
+그래프</strong>였습니다 — p425와 내용이 같고 크롭만 다릅니다.
+<span class="tag t-none">정정</span> 이 브리프의 첫 판에서는 <em>"p405의 상태 흐름도"</em>라고
+적었는데, 근거가 <strong>파일 크기가 같다</strong>는 것뿐이었습니다. 이 매뉴얼에는 같은 크기의
+그림이 최소 셋 있고, 픽셀로는 어느 것과도 맞지 않았습니다. <strong>그림을 열어 보고서야</strong>
+정체를 알았습니다.
 </p>
 <p>
-공통점이 있습니다. <strong>틀린 것은 전부 "화면에 보이지 않는 것"이었습니다.</strong>
-노드의 배치와 연결은 그림에 있지만, 노드가 <em>무엇을 출력하는지</em>는 그림에 없습니다.
-스크린샷 기반 분석의 한계가 정확히 거기였고, 앞으로도 같은 경계선을 의심해야 합니다.
+구조 판독은 정확했습니다 — 노드 배치, 연결 방향, 상태 이름, 그리고 정렬 노드를 넣지 않기로
+한 판단까지. <strong>틀린 것은 전부 "화면에 보이지 않는 것"이었습니다</strong> —
+State Machine의 출력 모양, Combine의 게이팅, <code>Missing neighbour</code>의 판정 방식,
+Lee's criteria의 수치.
+</p>
+<p>
+노드가 화면 어디에 놓이는지는 그림에 있지만, 그 노드가 <strong>무엇을 출력하는지</strong>는
+그림에 없습니다. 스크린샷 기반 분석의 한계가 정확히 거기였고, 이번 정정은 그 위에
+하나를 더 얹습니다 — <strong>메타데이터(크기·파일명) 일치를 내용 동일성의 근거로 쓰면
+안 됩니다.</strong> 열어 보는 데 드는 비용이 훨씬 쌉니다.
 </p>
 </div>
 

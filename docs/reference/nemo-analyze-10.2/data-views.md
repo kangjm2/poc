@@ -23,6 +23,14 @@ Base Stations · Maps · Polygons · Data Source Files · Macros · Reports.
 > 자산 종류라 페이지가 없는 것이 자연스럽지만, **Folders(측정 파일 정리)는 세션이
 > 수십 개가 되면 필요해집니다.**
 
+> **2026-09-01 정정 — `Polygons`는 자산이 아니라 분석 도구이기도 합니다.** 위에서
+> Base Stations · Maps · Polygons를 묶어 "우리가 다루지 않는 자산 종류"로 적었는데, 폴리곤은
+> 절반이 틀렸습니다. `.TAB` 임포트(p462)는 자산이지만, Map 메뉴의 **`Polygon region`은
+> *"specify an area of any shape, and run statistics over that area"*** 입니다(p468).
+> `Folder from area`는 그 영역을 지속되는 측정 부분집합으로 만들고, `Global Filters`는
+> 폴리곤 영역을 전역 필터로 받습니다(p467).
+> **우리에겐 임의 영역 선택이 없습니다** — 영역 비닝은 고정 격자입니다.
+
 ---
 
 ## 2. Parameters 뷰에서 바로 나오는 것들 (p48–p60)

@@ -114,15 +114,59 @@ data set are in no particular order"* 로 만들기 때문에 정렬이 필요�
 
 ---
 
-## C7. `Weight by`가 없는 것은 격차가 아닙니다
+## C7. `Weight by` — **시간 가중은 격차가 아니지만, 거리 가중은 격차입니다**
+
+> **2026-09-01 정정.** 이 항목은 처음에 *"`Weight by`가 없는 것은 격차가 아니다"* 로 통째로
+> 닫아 놨습니다. **절반만 맞았습니다.** 두 축을 하나로 묶은 것이 잘못이었습니다.
 
 매뉴얼이 세 곳에서 반복합니다(p353·p375·p378): Nemo 파일은 **시간 기반**이라 값이 바뀔
-때만 샘플이 생기고, 그래서 Average·Count는 **시간 가중이 필수**입니다.
+때만 샘플이 생기고, 그래서 Average·Count는 시간 가중이 필요합니다.
 
-> 우리는 1 Hz 균일 샘플입니다. **가중 없는 평균이 맞고**, `Weight by` 컨트롤은 우리
-> 데이터에서 의미가 없습니다. 격차표에 올리면 안 되는 항목입니다.
+**Appendix 3(p477)이 그 근거를 산수로 보여 줍니다.** Rx Quality가 0/90초, 5/0.5초, 0/10초로
+기록되면 단순 평균은 (0+5+0)/3 = **1.667**이지만, 지속시간 가중 평균은
+(0×90 + 5×0.5 + 0×10)/(90+0.5+10) = **0.025**입니다. 일반식은 `Σ(Sᵢ·dᵢ) / Σdᵢ`.
+
+### 시간 축 — 하지 않습니다 ✅
+
+우리는 1 Hz 균일 샘플이라 모든 `dᵢ`가 같습니다. **가중 없는 평균이 맞고**, 시간 가중
+컨트롤은 우리 데이터에서 아무 일도 하지 않습니다.
+
+### 거리 축 — **해야 합니다** ⚠
+
+같은 p477이 이어서 말하는 문장이 결정적입니다:
+
+> *"It should be noted that the duration can be **in time or in distance**, depending on how the
+> data is to be used. If the samples from the entire measurement route are to have equal weight
+> and for instance **the weighting effect of time spent at traffic lights is to be excluded, the
+> samples should be weighted by distance**."*
+
+**이 근거는 표본 간격의 규칙성과 아무 상관이 없습니다.** "경로의 매 미터가 같은 무게를
+가져야 한다"는 요구이고, 우리에게도 그대로 성립합니다.
+
+그리고 **1 Hz 균일 샘플에서 이 편향은 오히려 최악입니다** — 신호 대기 중인 차량은
+초당 1표본을 꼬박 내보내면서 0미터를 이동합니다. 균일 샘플링은 <strong>시간</strong> 축
+문제를 없애 주지만 <strong>거리</strong> 축 문제는 조금도 줄여 주지 않습니다.
+
+SQL 층에도 두 축이 **별개 프로시저**로 존재합니다(Appendix 6):
+
+| 프로시저 | 가중 | 원문 |
+|---|---|---|
+| `QSR_DISTANCE` | *"a weight that is defined as the **distance** (meters for example) that the value was valid"* | p495–496 |
+| `QSR_TIME` | *"…the **time** (milliseconds for example) that the value was valid"* | p497 |
+| `SR_SAMPLE` | 가중 없음 | p496 |
+
+셋의 입력 8개·반환 5개가 동일합니다. 즉 레퍼런스는 **가중 방식만 다른 같은 통계를 셋 다
+제공**합니다.
+
+> **우리 현재 상태**: 거리 가중 집계가 **어디에도 없습니다.** `AnalysisService.statistics()`는
+> 원시 `sample_kpi` 행에 대한 가중 없는 `percentile_cont`이고,
+> `GeoAnalysisService.distanceBins()`는 빈별 평균이라 **그 화면 안에서만** 편향을 없앱니다.
+> `statistics()` · `distribution()` · 비교 화면의 CDF · 리포트는 전부 정차 편향을 그대로
+> 안고 있습니다.
 >
-> 다만 `Weight by **distance**`는 우리 거리 비닝과 같은 문제의식입니다.
+> **조치**: 우선순위표의 "하지 않음" 행을 둘로 쪼갭니다. 거리 가중 평균·CDF를 만들고,
+> 가중치는 `distanceBins()`가 이미 계산하는 대권거리 구간을 표본별 가중 열로 재사용하면
+> 됩니다.
 
 ---
 
@@ -140,13 +184,60 @@ data set are in no particular order"* 로 만들기 때문에 정렬이 필요�
 
 ---
 
+## C9. 우리 워크벤치를 실제로 묶고 있는 것은 **그래프의 모양** 하나입니다
+
+매뉴얼 뒷부분(p396–504)을 훑고 나서, 서로 달라 보이던 격차 넷이 **같은 제약 하나**에서
+나온다는 것이 드러났습니다.
+
+`KpiGraph.emit()`의 모든 CTE는 예외 없이 `(session_id, seq, ts)`를 키로 잡고, `OUTPUT`은
+**열 하나**를 골라 `sample_kpi`에 실체화합니다. `V8__kpi_graph.sql`의
+`UNIQUE (output_kpi_name)`이 그 계약을 스키마에 못박아 두었습니다. 즉 —
+
+> **그래프 하나 = 표본당 한 행 × 출력 열 하나.**
+
+이 한 문장이 아래 넷을 전부 설명합니다.
+
+| 겉보기 격차 | 실제 원인 |
+|---|---|
+| **이벤트를 캔버스에 올릴 수 없음** | `network_event`는 `(session_id, ts)`이고 **`seq`가 없습니다**. 표본 격자 위의 행이 아니라 키가 맞지 않습니다 |
+| **State Machine이 구간을 못 냄** | 구간 행은 `start_time`·`time_interval`을 갖는 **다른 모양**입니다. 표본당 한 행에 담을 곳이 없습니다 |
+| **`Nth Best`·`Group By` 같은 노드 불가** | 그것들은 **행 수와 열 수를 바꿉니다.** 매뉴얼이 이 부류를 *"dynamic procedures … the actual result set is defined at runtime rather than fixed"* 라 부릅니다(p501) |
+| **지오메트리를 못 읽음** | `sample`의 `latitude`·`longitude`·`speed_kmh`·`serving_pci`를 읽는 소스 노드가 없습니다. 이건 유일하게 **모양 문제가 아니라 그냥 없는 것**입니다 |
+
+### 그래서 우선순위 순서가 틀렸습니다
+
+기존 표는 **① 생성기 핸드오버 지연 → ② 진짜 State Machine → ③ Previous/Current/Next**
+순서였습니다. ②와 ③은 **둘 다 위 제약에 걸립니다**:
+
+- ②의 산출물은 구간 행인데, 실체화할 곳이 없습니다.
+- ③의 대표 용도는 *"드롭 직전의 값"* 인데, **드롭(이벤트)을 캔버스에 올릴 수 없습니다.**
+
+UC27을 보면 순서가 분명해집니다. 그 그래프의 **마지막 노드**가 `Call dropped` 이벤트와의
+상관입니다. 우리 도구로는 **거기서 시작조차 못 합니다** — State Machine을 아무리 잘 만들어도
+상관시킬 상대가 캔버스에 없습니다.
+
+> **따라서 0번 항목이 새로 생깁니다**: *그래프가 낼 수 있는 두 번째 결과 모양을 정하는 것.*
+> KPI를 실체화하는 지금 경로를 두고, **결과 집합을 워크벤치 그리드로 돌려주는 경로**를
+> 하나 더 만들지 여부입니다. 4·5번이 그 결정에 매달려 있으므로 **먼저 정해야 합니다.**
+>
+> 반대로 **지오메트리 소스(`SOURCE_SAMPLE`)는 이 결정과 무관합니다.** 표본당 한 행,
+> 열 하나 — 지금 모양에 정확히 들어맞습니다. `SOURCE_KPI`와 구조가 같아 작은 작업이고,
+> 값은 이미 `sample` 테이블에 있습니다. **지금 바로 할 수 있는 유일한 워크벤치 항목입니다.**
+
+---
+
 ## 우선순위 제안
 
 | | 항목 | 규모 | 근거 |
 |---|---|---|---|
-| 1 | 생성기에 **핸드오버 지연** 도입 → missing handover 조건 발생 | 중 | C1. 레퍼런스 대표 KPI를 재현 가능하게 만드는 전제 |
-| 2 | **진짜 State Machine** (전이 그래프 + 구간 출력 + `time_interval`) | 큼 | C2. 워크벤치의 실제 가치가 여기 있음 |
-| 3 | **Previous / Current / Next Value** 상관 노드 | 중 | C8. 근본 원인 분석의 핵심 조작 |
-| 4 | 드릴다운 **다중 탭** | 중 | C5. 재분류됨 |
-| 5 | 거리 빈에 **40λ 옵션** | 작음 | C4. 이름값을 하려면 |
-| — | `Weight by` | — | **하지 않음.** C7 |
+| **0** | **그래프의 두 번째 결과 모양을 결정** — KPI 실체화 외에 결과 집합 반환 경로를 둘 것인가 | 결정 | **C9. 4·5번이 여기 매달려 있습니다** |
+| 1 | **`SOURCE_SAMPLE` 노드** (`latitude`·`longitude`·`speed_kmh`·`serving_pci`) | 작음 | C9. 0번과 무관하게 지금 가능. 값은 이미 `sample`에 있음 |
+| 2 | **`SOURCE_EVENT` + 시간 상관** — 이벤트를 `(session_id, seq)` 척추에 얹기 | 중 | C9. UC27의 **마지막** 노드. 이것 없이는 State Machine의 산출물을 쓸 데가 없음 |
+| 3 | 생성기에 **핸드오버 지연** 도입 → missing handover 조건 발생 | 중 | C1. 레퍼런스 대표 KPI를 재현 가능하게 만드는 전제 |
+| 4 | **진짜 State Machine** (전이 그래프 + 구간 출력 + `time_interval`) | 큼 | C2. **0번 결정 이후** |
+| 5 | **Previous / Current / Next Value** 상관 노드 | 중 | C8. **2번 이후** — 상관시킬 이벤트가 있어야 의미가 생김 |
+| 6 | **거리 가중 통계** (`statistics`·`distribution`·CDF·리포트) | 중 | C7. 1 Hz 균일이 못 없애는 유일한 편향 |
+| 7 | **폴리곤 영역 통계** — 지도에서 임의 영역을 그려 통계 | 중 | 자산이 아니라 기능. `Polygon region`(p468) |
+| 8 | 드릴다운 **다중 탭** | 중 | C5. 재분류됨 |
+| 9 | 거리 빈에 **40λ 옵션** | 작음 | C4. 이름값을 하려면 |
+| — | `Weight by **time**` | — | **하지 않음.** C7. 우리 표본은 길이가 같음 |

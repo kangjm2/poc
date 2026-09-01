@@ -163,8 +163,13 @@ public class GeoAnalysisService {
     /**
      * The area a cell was MEASURED serving, as a polygon.
      *
-     * cell_ref carries a position and an azimuth but no beamwidth and no range, so a
-     * footprint cannot be drawn from a cell's configuration. It can be drawn from the
+     * cell_ref carries a position and an azimuth but no antenna height and no tilt, so a
+     * DESIGNED footprint cannot be drawn from a cell's configuration here. (The reference
+     * tool draws one from exactly those two inputs - "use estimation from antenna height
+     * and tilt estimates the base station coverage area", Nemo Analyze UG p459 - with a
+     * default beam length and angle configured alongside. Two nullable columns would open
+     * it, and the value would be in the disagreement between designed and measured.)
+     * The MEASURED footprint needs none of that. It can be drawn from the
      * measurement: the outline of the samples the cell actually served. That is a different
      * claim and in some ways a better one - where the cell reached on this drive, not where
      * someone intended it to reach - and it needs nothing the session does not already hold.

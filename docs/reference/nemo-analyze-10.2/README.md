@@ -26,6 +26,7 @@
 | `use-cases.json` | Use Case 31개 인덱스 (번호 · 페이지 · 제목) |
 | `kpi-workbench.md` | **가장 중요.** 노드 요소 전체 명세와 우리 구현과의 차이 |
 | `data-views.md` | 화면·뷰 인벤토리 — 어떤 화면이 존재하는가 |
+| `query-api.md` | **Appendix 5·6·7 전사.** 스칼라 함수 46개 · 저장 프로시저 16개의 signature, `T_FORMAT` 코드 21개, 레지스트리 키, 원문 결함 17건, 그리고 우리 식 언어와의 대조 |
 | `corrections.md` | 매뉴얼이 우리 기존 문서를 반박하는 지점 |
 
 ## 이 레퍼런스가 바꾼 것
@@ -55,9 +56,14 @@ Count should be weighted by time in order to obtain accurate results"*).
 우리는 1 Hz 고정 샘플입니다. 그래서:
 
 - 우리의 **가중 없는 평균이 맞습니다.** 같은 계산을 Nemo에서 하면 틀립니다.
-- 반대로 **우리에겐 `Weight by` 컨트롤이 필요 없습니다.** 없는 것이 격차가 아닙니다.
-- 그들의 `All Values Within Time Range`가 하는 시간 정렬 결합이 우리에겐 `(session_id, seq)`
-  동등 조인입니다 — 훨씬 단순합니다.
+- 반대로 **시간 가중(`Weight by time`)은 우리에게 필요 없습니다.** 없는 것이 격차가 아닙니다.
+  단 **거리 가중은 다릅니다** — 정차 편향은 균일 샘플링이 없애 주지 않고, 오히려 1 Hz에서
+  가장 심합니다. `corrections.md` C7을 보십시오.
+- 그들의 `All Values Within Time Range`가 하는 시간 정렬 결합은,
+  **`sample_kpi`·`sample_neighbour` 안에서라면** 우리에겐 `(session_id, seq)` 동등 조인입니다.
+  **그러나 `network_event`와 `signaling_message`에는 `seq`가 없습니다** — `ts`뿐입니다.
+  그쪽은 진짜 시간 정렬 규칙이 필요하고, 실제로 `ProblemSurvey`가 최근접 타임스탬프
+  상관 서브질의로 처리하고 있습니다. **이 절반은 단순하지 않습니다.**
 
 이 차이를 모르고 그들의 UI를 그대로 베끼면, 우리 데이터에서는 의미 없는 컨트롤을
 만들게 됩니다.

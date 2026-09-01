@@ -49,7 +49,7 @@
 | Base station map overlay | ✅ | 셀 마커 + 방위각 스포크 |
 | **Line from terminal to serving cell** | ✅ | 커서 위치 → 서빙 셀 점선 |
 | Line to *monitored* cells (pilot pollution 표시) | ✅ | **해소.** `sample_neighbour`(V7) 추가 → Mobility 지도에서 커서 시점 모니터드 셀까지 점선. 최강 셀 대비 6 dB 이내면 굵게(경합), 그 밖은 흐리게 |
-| Cell footprint / service area 시각화 | ◐ | **해소(측정 기반).** 셀이 실제로 서빙한 표본의 **볼록 껍질**을 지도에 표시. 설계상 커버리지가 아니며(빔폭·반경 미기록) 볼록이라 오목한 실제 범위는 과대 포함합니다 — 화면에 그렇게 적혀 있습니다 |
+| Cell footprint / service area 시각화 | ◐ | **해소(측정 기반).** 셀이 실제로 서빙한 표본의 **볼록 껍질**을 지도에 표시. 설계상 커버리지가 아니며 볼록이라 오목한 실제 범위는 과대 포함합니다 — 화면에 그렇게 적혀 있습니다. **2026-09-01 정정**: 막고 있는 것은 "빔폭·반경 미기록"이 아니라 **안테나 높이·틸트 미기록**입니다 — 레퍼런스는 그 둘로 커버리지를 추정하고(p459 *"use estimation from antenna height and tilt"*), 기본 빔 길이·각도를 함께 설정합니다. `cell_ref`에 nullable 두 열이면 열립니다 |
 | Playback of individual log files | ◐ | 커서 이동은 되나 자동 재생 없음 |
 | 3D Visualizer (빔 3D) | ⬛ | 범위 외 |
 | Dashboards | ⛔ | |
