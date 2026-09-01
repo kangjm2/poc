@@ -71,13 +71,24 @@ Tools 메뉴의 설명이 지나가듯 밝힙니다:
 <table>
 <tr><th style="width:210px">메뉴 항목</th><th style="width:70px">원문</th><th>우리</th></tr>
 <tr><td><strong>Synchronization</strong> — Reset Source · 처음으로 · 뒤로 재생 · 한 칸씩 · 정지 · 재생 · <strong>Go to timestamp</strong></td><td class="src">p467</td>
-    <td><span class="tag t-diff">2/9</span> 커서 이동과 진행 바만 있습니다. <strong>자동 재생·재생 속도·역방향이 없습니다.</strong> 레퍼런스는 사실상 미디어 플레이어입니다</td></tr>
+    <td><span class="tag t-same">7/9 (③)</span> <s>2/9 — 커서 이동과 진행 바만</s>.
+    ③에서 재생·정지·한 칸씩·<strong>역방향</strong>·재생 속도·Home/End가 생겼습니다.
+    남은 둘은 <code>Reset Source</code>와 <code>Go to timestamp</code>입니다
+    (진행 바 스크럽이 후자를 <em>대략</em> 대신합니다).
+    속도는 배속이 아니라 <strong>초당 표본 수</strong>(1·4·16·64/s)입니다 — 걸음이 항상 한 표본이라
+    어느 속도에서도 표본을 건너뛰지 않습니다</td></tr>
 <tr><td><strong>Global Filters</strong></td><td class="src">p467</td>
     <td><span class="tag t-none">없음</span> <em>"applied to <strong>all operations</strong> performed with Nemo Analyze"</em>. 우리 필터는 전부 화면 단위입니다</td></tr>
 <tr><td><strong>Polygon region</strong></td><td class="src">p468</td>
-    <td><span class="tag t-none">없음</span> <em>"specify an area of <strong>any shape</strong>, and run statistics over that area"</em>. 우리 영역 비닝은 <strong>고정 격자</strong>입니다</td></tr>
+    <td><span class="tag t-same">✅ ⑤</span> <s>없음 — 우리 영역 비닝은 고정 격자</s>.
+    이제 지도에 도형을 그리면 그 안의 통계가 나오고, 함께 나오는 것이 <strong>통과 목록</strong>입니다
+    (같은 도로를 세 번 지났으면 한 장소의 세 번의 통과).
+    포함 판정은 even-odd ray casting에 bbox 선필터이고, PostGIS 없이 SQL 조건 하나로 내려갑니다</td></tr>
 <tr><td><strong>Delta plotting</strong></td><td class="src">p469</td>
-    <td><span class="tag t-none">없음</span> 같은 경로의 <strong>두 측정 그룹을 지도 위에서 차분</strong>. 우리 비교는 통계·CDF까지이고 <strong>공간 비교가 없습니다</strong></td></tr>
+    <td><span class="tag t-same">✅ ⑤</span> <s>없음 — 우리 비교는 통계·CDF까지</s>.
+    이제 두 주행을 <strong>하나의 격자</strong>에 담아 타일마다 차이를 냅니다.
+    한쪽만 지나간 타일은 0이 아니라 <code>null</code>이고, 색과 라벨은
+    <code>verdict()</code> 한 곳에서 <em>함께</em> 정해집니다 — 빨간 타일에 "좋아졌음"이 붙을 수 없습니다</td></tr>
 <tr><td><strong>Fill GPS gaps</strong></td><td class="src">p465</td>
     <td><span class="tag t-none">없음</span> 터널 등의 결측 구간에 인공 GPS 점을 생성. <strong>최소 간격 50 m</strong>이고, 원본과 <code>_gps</code> 접미사가 붙은 사본 <strong>두 파일을 로드</strong>합니다</td></tr>
 <tr><td>Area binning · Distance binning</td><td class="src">p469</td><td><span class="tag t-same">있음</span></td></tr>
@@ -102,9 +113,17 @@ Tools 메뉴의 설명이 지나가듯 밝힙니다:
 <div class="ours">
 <h5>우리 구현</h5>
 <p>
-<strong>프론트엔드에 단축키가 전혀 없습니다.</strong> 다만 레퍼런스도 분석 쪽은 비어 있으니
-"업계 표준을 못 따라간 것"은 아닙니다. 커서 이동(←/→)과 워크북 전환 정도가
-<strong>레퍼런스보다 나아질 수 있는</strong> 작은 자리입니다.
+<s>프론트엔드에 단축키가 전혀 없습니다.</s> <strong>③에서 키맵이 생겼습니다.</strong>
+레퍼런스가 16개이고 그중 분석 기능은 0개인데, 우리는 <strong>분석 조작에</strong> 키를 뒀습니다 —
+17개 — 표본 이동(←/→/PgUp/PgDn/Home/End), 재생·속도·역방향,
+커서 기준 <strong>구간 자르기</strong>(<code>[</code> <code>]</code> <code>\</code>),
+지도 재구성(F), Escape, 도움말(?). 이 문단이 "나아질 수 있는 자리"라고 꼽았던 바로 그 자리입니다.
+</p>
+<p>
+같이 정한 규칙이 둘 있습니다. 하나, <strong>키 표와 도움말이 같은 표</strong>입니다
+(<code>view/keymap.ts</code>) — 문서와 동작이 어긋날 자리가 없습니다.
+둘, Escape에 <strong>우선순위 사다리</strong>가 있습니다(모달 → 드릴다운 → 알림) —
+한 번 누를 때 무엇이 닫히는지가 화면마다 달라지지 않습니다.
 </p>
 </div>
 
@@ -237,17 +256,36 @@ calculated using <strong>linear math</strong>"</em> 토글이 있습니다 <span
 
 <h2>4. 이 문서에서 남은 일로 확인된 것</h2>
 
+<p class="note">이 표가 쓰인 뒤 백로그 ①–⑧이 진행되어 <strong>8개 중 5개가 닫혔고, 1개는 "하지 않기로" 판정됐습니다.</strong>
+지운 것이 아니라 <strong>무엇이 됐는지</strong>를 남깁니다 — 이 표는 판단의 기록이고,
+판단이 무엇으로 이어졌는지가 그 기록의 절반입니다.
+전체 대조는 <a href="../use-case-coverage.md">Use Case 31개 대조표</a>.</p>
+
 <table>
-<tr><th style="width:250px">항목</th><th style="width:70px">규모</th><th>왜</th></tr>
+<tr><th style="width:250px">항목</th><th style="width:70px">규모</th><th>왜 · 지금</th></tr>
 <tr><td><strong>식 언어에 함수 도입</strong> (허용 목록)</td><td>작음</td>
-    <td>확장점이 0개인 것이 근본. <code>log10</code>·<code>power</code>·코드북·정밀도 비교를 한꺼번에 엽니다</td></tr>
-<tr><td><strong>폴리곤 영역 통계</strong></td><td>중</td><td><code>Polygon region</code>. 자산이 아니라 기능이었습니다</td></tr>
-<tr><td><strong>전역 필터</strong></td><td>중</td><td>모든 조작에 걸리는 필터. 우리는 화면 단위뿐</td></tr>
-<tr><td><strong>Delta plotting</strong> (공간 차분 비교)</td><td>중</td><td>우리 비교는 통계까지이고 지도 위 차분이 없습니다</td></tr>
-<tr><td>재생 트랜스포트 (자동 재생·속도·역방향)</td><td>작음</td><td>9개 중 2개만 있습니다</td></tr>
-<tr><td>dB 파라미터 <strong>선형 평균</strong> 옵션</td><td>작음</td><td>평균에만 해당. 레퍼런스는 토글로 둡니다</td></tr>
-<tr><td>KPI 그래프의 <strong>생성 SQL 표시</strong></td><td>매우 작음</td><td><code>Database Browser</code>의 값어치. 응답에 이미 있습니다</td></tr>
-<tr><td>폴더 통째로 임포트 · 단축키</td><td>작음</td><td>둘 다 없음. 단축키는 레퍼런스도 분석 기능엔 없습니다</td></tr>
+    <td>확장점이 0개인 것이 근본. <code>log10</code>·<code>power</code>·코드북·정밀도 비교를 한꺼번에 엽니다.
+    <strong>여전히 남음</strong></td></tr>
+<tr><td><s>폴리곤 영역 통계</s></td><td>중</td><td><code>Polygon region</code>. 자산이 아니라 기능이었습니다 —
+    <strong>✅ ⑤에서 완료.</strong> 지도에 도형을 그리면 그 안의 통계와 <em>통과 목록</em>이 나옵니다
+    (같은 도로를 세 번 지났으면 하나의 장소, 세 번의 통과)</td></tr>
+<tr><td><strong>전역 필터</strong></td><td>중</td><td>모든 조작에 걸리는 필터. 우리는 화면 단위뿐.
+    <strong>여전히 남음</strong> — 폴리곤이 그 첫 입력이 될 수 있습니다</td></tr>
+<tr><td><s>Delta plotting (공간 차분 비교)</s></td><td>중</td><td>우리 비교는 통계까지이고 지도 위 차분이 없었습니다 —
+    <strong>✅ ⑤에서 완료.</strong> 두 주행을 <em>하나의 격자</em>에 담아 타일별 차이.
+    한쪽만 지나간 타일은 0이 아니라 <code>null</code>입니다</td></tr>
+<tr><td><s>재생 트랜스포트 (자동 재생·속도·역방향)</s></td><td>작음</td><td>9개 중 2개만 있었습니다 —
+    <strong>✅ ③에서 완료.</strong> 스텝·속도(1·4·16·64/s)·역방향·Home/End.
+    걸음은 <em>항상 한 표본</em>이라 어느 속도에서도 건너뛰지 않습니다</td></tr>
+<tr><td><s>dB 파라미터 선형 평균 옵션</s></td><td>작음</td><td>평균에만 해당. 레퍼런스는 토글로 둡니다 —
+    <strong>✅ ⑦에서 완료.</strong> <code>[Sample, linear dB]</code>라는 <em>이름</em>으로.
+    실측 −80.93 → −65.53이고 중앙값은 불변입니다(순서통계량)</td></tr>
+<tr><td>KPI 그래프의 <strong>생성 SQL 표시</strong></td><td>매우 작음</td><td><code>Database Browser</code>의 값어치. 응답에 이미 있습니다.
+    <strong>하지 않기로 판정</strong> — 셋 중 둘이 "읽지 않겠다"고 했고, 그 밑의 진짜 요구는
+    ⑥의 <em>노드 미리보기</em>가 더 잘 답합니다</td></tr>
+<tr><td><s>폴더 통째로 임포트 · 단축키</s></td><td>작음</td><td>둘 다 없었습니다 —
+    <strong>✅ ⑧·③에서 완료.</strong> 파일 여러 개를 필드 한 번으로, 그리고 키맵 17개.
+    단축키는 레퍼런스도 분석 기능엔 없어서 <em>우리가 앞선 자리</em>입니다</td></tr>
 </table>
 
 <footer>

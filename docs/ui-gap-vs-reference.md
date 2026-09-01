@@ -184,6 +184,10 @@ Nemo Tools ──Field-To-Lab Conversion──▶ UXM 5G Wireless Test Platform 
 
 ### (b) 실제로 남은 UI·분석 작업
 
+> **2026-09-01 갱신.** 이 표가 쓰인 뒤 UI/UX 백로그 ①–⑧이 전부 진행됐습니다.
+> 닫힌 줄은 지우지 않고 취소선과 **무엇이 닫았는지**를 남깁니다.
+> 유즈케이스 31개 전부에 대한 현재 상태는 [`docs/use-case-coverage.md`](use-case-coverage.md).
+
 | 항목 | 규모 |
 |---|---|
 | ~~KPI Workbench **노드 그래프** 빌더 (§7.3)~~ | ✅ **완료.** 캔버스·노드·엣지·CTE 컴파일러 |
@@ -193,7 +197,7 @@ Nemo Tools ──Field-To-Lab Conversion──▶ UXM 5G Wireless Test Platform 
 | 대시보드 / 추세 분석 (§1.2, §1.3) | 큼 — **세션 간 집계 모델**. 둘 다 이것 하나에 막혀 있고, 만들면 벤치마킹 리포트·NPS도 같은 모델 위에 올라갑니다 |
 | 리포트 템플릿 (§1.4) | 중 |
 | 페인별 **Tools** 도크 (줌·마커 등) (§2) | 중 — Layers는 완료, Tools만 남음 |
-| Activity/Log 탭, 전역 필터 표시 (§2) | 작음 |
+| ~~Activity 탭~~ / Log 탭, 전역 필터 표시 (§2) | 작음 — **Activity는 ⑧에서 완료**(진행 중인 잡 + 취소). Log window와 전역 필터는 남음 |
 | `5G Physical Layer` 탭 (§3) | 작음 — 값은 이미 있고, **구성 워크북으로 사용자가 직접 만들 수 있습니다** |
 | RACH `maximum preamble`·`preamble response` 2필드 (§3) | 작음 |
 | **`Missing handover` / `Missing neighbour` 원인** — 생성기에 **핸드오버 지연**을 넣어 조건이 발생하게 한 뒤 검출기 추가 | 중 — **(a)에서 이동.** 레퍼런스 대표 KPI를 우리 데이터에서 재현하는 전제 |
@@ -204,8 +208,8 @@ Nemo Tools ──Field-To-Lab Conversion──▶ UXM 5G Wireless Test Platform 
 | 푸트프린트 포함 기준을 **3강 안에 든 셀**로 | 작음 — *신규.* UC1의 기준. V7 데이터로 바로 가능하고, 오버슛 판단의 실제 근거가 됩니다 |
 | 거리 빈에 **40λ 옵션** | 작음 — *신규.* 지금 이름값을 못 하고 있습니다(p55) |
 | 파라미터 **★ 즐겨찾기**, 사용자 KPI의 **출처 표시** | 작음 — *신규.* 레퍼런스는 사용자 KPI를 `User` 가지에 모읍니다(p83). 우리는 카테고리를 사용자가 입력해 기본 KPI와 섞입니다 |
-| 임포트 **진행 큐 + 취소**, KPI 그래프 **생성 SQL 표시** | 작음 — *신규.* Activity/Log window(p213). SQL은 `validate` 응답에 **이미 있고 화면에만 없습니다** |
-| **거리 가중 통계** — `statistics` · `distribution` · CDF · 리포트 | 중 — *신규.* 1 Hz 균일이 없애 주지 못하는 유일한 편향. 가중치는 `GeoAnalysisService.distanceBins()`가 이미 계산하는 대권거리 구간을 재사용 |
+| ~~임포트 **진행 큐 + 취소**~~, KPI 그래프 **생성 SQL 표시** | ✅ **진행 큐·취소는 ⑧에서 완료** — `POST /api/import/jobs/{id}/cancel`이 요청을 남기면 적재 루프가 다음 배치에서 보고 멈추고, **실패와 같은 롤백**을 타므로 절반 남은 세션이 생기지 않습니다. SQL 표시는 **하지 않기로 판정** — 그 밑의 요구는 ⑥의 노드 미리보기가 더 잘 답합니다 |
+| ~~**거리 가중 통계** — `statistics` · `distribution` · CDF · 리포트~~ | ✅ **⑦에서 완료.** 가중치는 `RouteContinuity.travelledMetres`에서 오고, 화면에는 `[Distance]`·`[Sample]`이라는 **이름**으로 나옵니다. dB 파라미터의 선형 평균도 같은 자리(`AggregationBasis`)에서 골라집니다 |
 | 기성 워크북을 **복사해 고치기**, 레이아웃 프리셋 | 작음 — *신규.* 내장 탭의 지식을 사용자 출발점으로(p215) |
 | **워크벤치가 상태 이름을 범례에 넘기지 않음** | 작음 — 화면은 넘긴다고 적어 놓고 코드가 없습니다. 문구를 내리거나 실제로 기록해야 합니다 |
 

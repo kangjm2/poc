@@ -20,14 +20,14 @@
 | 매뉴얼 기재 기능 | 상태 | 비고 |
 |---|---|---|
 | Database engine | ✅ | PostgreSQL. **Nemo Analyze도 PostgreSQL을 씁니다**(flyer `5992-2047` 확인) |
-| Organizing measurement data into subsets | ◐ | 세션 단위만. 명명된 collection/폴더 없음 |
+| Organizing measurement data into subsets | ◐ | 세션 단위만. 명명된 collection/폴더는 여전히 없습니다. **2026-09-01(⑧)**: 대신 **찾기**가 생겼습니다 — 이름·기간·장비·사업자·기술로 좁히고, 선택지는 데이터에서 옵니다(아무것도 맞지 않는 값을 고를 수 없음). 폴더는 "정리"이고 찾기는 "도달"인데, 세션이 늘 때 먼저 막히는 쪽은 도달이었습니다 |
 | Joining separate measurement files into a joined measurement | ⛔ | 여러 세션 병합 미지원 |
-| Database filtering (technology, time, operator) | ⛔ | **미구현** — §3.1 참조 |
+| Database filtering (technology, time, operator) | ◐ | **2026-09-01(⑧) 해소 — 측정 선택 범위 안에서.** 이 세 축 그대로(+장비·이름) 서버가 필터링합니다 — 새 엔드포인트가 아니라 **기존 `GET /api/sessions`에 붙은 선택 파라미터**라, 아무것도 넘기지 않으면 예전 그대로의 목록입니다. 선택지는 `GET /api/sessions/facets`가 데이터에서 만들어 줍니다. 남은 차이는 **적용 범위**입니다 — 레퍼런스는 DB 전체에 걸리는 필터이고 우리 것은 측정 파일을 고르는 자리에만 걸립니다. 전역 필터는 §3.1과 백로그의 미해결 항목으로 남습니다 |
 | Advanced data filtering and global filters | ⛔ | **미구현** — 경쟁사 공통 기능이기도 함 |
 | Custom SQL queries | ◐ | REST API만. 사용자 SQL 창구 없음 |
 | ODBC connectivity to third-party databases | ⛔ | |
 | Log file manager (원본 로그 검색·회수) | ⛔ | 원본 파일 보관 안 함 |
-| Automatable file upload / scheduled execution | ⛔ | 수동 업로드만 |
+| Automatable file upload / scheduled execution | ⛔ | 수동 업로드만. **2026-09-01(⑧)**: 파일 여러 개를 필드 한 번으로 올리는 것까지는 됩니다만, 그것은 *사람이 고르는* 쪽이고 **트리거·스케줄은 여전히 없습니다** |
 | 측정 파일 자동 압축(HDD 90% 절감) | ⛔ | 원시 행 저장. §3.3 참조 |
 
 ### 1.2 시각화
@@ -44,13 +44,13 @@
 | Synchronized workbooks, pages, data views | ✅ | 공유 시간 커서 + 워크북 탭 |
 | Maps / grids / line graphs | ✅ | |
 | Bar graphs, pie charts, surface grids, color grids, spreadsheets | ◐ | 바 차트(서빙 셀별 · **모니터드 셋별** · **거리 프로파일**)·파이 차트(원인별). surface/color grid는 아직 |
-| **Area binning** | ✅ | 50/150/500 m |
+| **Area binning** | ✅ | 50/150/500 m. **2026-09-01(⑤)**: 고정 격자에 더해 **지도에 그린 임의 도형**(`Polygon region` 대응)과 두 주행의 **공간 차분**까지. 도형 결과는 통계 + **통과 목록**입니다 — 같은 사거리를 세 번 지났으면 한 장소의 세 번의 통과 |
 | **Distance binning** | ◐ | **기능은 해소.** 툴바 `Distance bins` → 이동 거리 기준 프로파일(50/100/250 m). 정차가 평균을 끌어당기지 않습니다. **단 "Lee's criteria"는 아닙니다** — 매뉴얼 p55의 실제 기준은 **40λ**로 n78에서 3.4 m이고 우리 최소 빈은 두 자릿수 큽니다. 빈 좌표도 다릅니다(레퍼런스는 **첫 이벤트**, 우리는 빈 내 평균). 상세는 [briefs ②](briefs/02-analysis-and-drilldown.html) |
 | Base station map overlay | ✅ | 셀 마커 + 방위각 스포크 |
 | **Line from terminal to serving cell** | ✅ | 커서 위치 → 서빙 셀 점선 |
 | Line to *monitored* cells (pilot pollution 표시) | ✅ | **해소.** `sample_neighbour`(V7) 추가 → Mobility 지도에서 커서 시점 모니터드 셀까지 점선. 최강 셀 대비 6 dB 이내면 굵게(경합), 그 밖은 흐리게 |
 | Cell footprint / service area 시각화 | ◐ | **해소(측정 기반).** 셀이 실제로 서빙한 표본의 **볼록 껍질**을 지도에 표시. 설계상 커버리지가 아니며 볼록이라 오목한 실제 범위는 과대 포함합니다 — 화면에 그렇게 적혀 있습니다. **2026-09-01 정정**: 막고 있는 것은 "빔폭·반경 미기록"이 아니라 **안테나 높이·틸트 미기록**입니다 — 레퍼런스는 그 둘로 커버리지를 추정하고(p459 *"use estimation from antenna height and tilt"*), 기본 빔 길이·각도를 함께 설정합니다. `cell_ref`에 nullable 두 열이면 열립니다 |
-| Playback of individual log files | ◐ | 커서 이동은 되나 자동 재생 없음 |
+| Playback of individual log files | ✅ | **2026-09-01(③) 해소.** 재생·정지·한 걸음·역방향·속도(1·4·16·64/s)·Home/End·진행 바 스크럽. 속도는 배속이 아니라 **초당 표본 수**이고 걸음은 항상 한 표본이라, 어느 속도에서도 표본을 건너뛰지 않습니다(전에는 주행 길이와 무관하게 240스텝이라 긴 주행에서 표본을 건너뛰었습니다) |
 | 3D Visualizer (빔 3D) | ⬛ | 범위 외 |
 | Dashboards | ⛔ | |
 

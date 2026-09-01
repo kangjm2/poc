@@ -209,14 +209,27 @@ is <strong>not possible without a server connection</strong>."
 
 <h2>4. 이 문서에서 남은 일로 확인된 것</h2>
 
+<p class="note">이 표가 쓰인 뒤 백로그 ①–⑧이 진행되어 <strong>6개 중 1개가 절반 닫혔습니다.</strong>
+지운 것이 아니라 <strong>무엇이 됐는지</strong>를 남깁니다.
+전체 대조는 <a href="../use-case-coverage.md">Use Case 31개 대조표</a>.</p>
+
 <table>
-<tr><th style="width:250px">항목</th><th style="width:70px">규모</th><th>왜</th></tr>
-<tr><td><strong>기성 워크북을 복사해 고치기</strong></td><td>작음</td><td>내장 탭의 지식을 사용자가 출발점으로 쓸 수 있게. 워크북 저장은 이미 있음</td></tr>
-<tr><td>워크북 <strong>레이아웃 프리셋</strong> (2×2 등)</td><td>작음</td><td>패널을 하나씩 쌓는 것보다 빠름</td></tr>
-<tr><td>리포트 <strong>구성 선택</strong></td><td>중간</td><td>템플릿 디자이너는 과하지만, 포함할 섹션을 고르는 것만으로도 큼</td></tr>
-<tr><td>실행 중 질의 <strong>취소</strong></td><td>작음</td><td><a href="01-workspace-and-views.html">①</a>의 Activity 항목과 같은 문제</td></tr>
-<tr><td>임포트 <strong>트리거</strong> → 리포트 자동 생성</td><td>중간</td><td>UC25. 우리 구조가 오히려 유리 — 트리거만 없음</td></tr>
-<tr><td>워크북을 <strong>PDF/이미지</strong>로</td><td>작음</td><td>지금은 리포트만 내보낼 수 있음</td></tr>
+<tr><th style="width:250px">항목</th><th style="width:70px">규모</th><th>왜 · 지금</th></tr>
+<tr><td><strong>기성 워크북을 복사해 고치기</strong></td><td>작음</td><td>내장 탭의 지식을 사용자가 출발점으로 쓸 수 있게. 워크북 저장은 이미 있음.
+    <strong>여전히 남음</strong></td></tr>
+<tr><td>워크북 <strong>레이아웃 프리셋</strong> (2×2 등)</td><td>작음</td><td>패널을 하나씩 쌓는 것보다 빠름.
+    <strong>여전히 남음</strong></td></tr>
+<tr><td>리포트 <strong>구성 선택</strong></td><td>중간</td><td>템플릿 디자이너는 과하지만, 포함할 섹션을 고르는 것만으로도 큼.
+    <strong>여전히 남음</strong></td></tr>
+<tr><td>실행 중 질의 <strong>취소</strong></td><td>작음</td><td><a href="01-workspace-and-views.html">①</a>의 Activity 항목과 같은 문제 —
+    <strong>◐ 절반.</strong> ⑧이 <em>임포트</em>는 멈출 수 있게 했습니다
+    (<code>POST /api/import/jobs/{id}/cancel</code>, 실패와 같은 롤백).
+    <em>질의</em>는 아직입니다 — 임포트는 우리가 쓰는 루프라 배치마다 물어볼 자리가 있었지만,
+    질의는 JDBC 안에서 도는 한 문장이라 취소할 자리를 <strong>따로 만들어야</strong> 합니다</td></tr>
+<tr><td>임포트 <strong>트리거</strong> → 리포트 자동 생성</td><td>중간</td><td>UC25. 우리 구조가 오히려 유리 — 트리거만 없음.
+    <strong>여전히 남음</strong> (⑧의 여러 파일 임포트는 <em>사람이 고르는</em> 쪽이고, 트리거는 아닙니다)</td></tr>
+<tr><td>워크북을 <strong>PDF/이미지</strong>로</td><td>작음</td><td>지금은 리포트만 내보낼 수 있음.
+    <strong>여전히 남음</strong></td></tr>
 </table>
 
 <footer>

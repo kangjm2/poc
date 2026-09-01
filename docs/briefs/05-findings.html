@@ -284,24 +284,33 @@ UC27이 그것을 그림으로 보여 줍니다 — 그 그래프의 <strong>마
 
 <p>기준은 <strong>"이걸 안 하면 다음 구현을 잘못 만든다"</strong>의 정도입니다.</p>
 
+<p class="note">이 순위표가 쓰인 뒤 백로그 ①–⑧이 진행되어 <strong>0·1·2·6·7번이 닫혔습니다.</strong>
+순서가 맞았는지가 여기서 드러납니다 — 0번 결정이 먼저 필요하다고 본 판단은 맞았고,
+그 결정은 ⑥에서 <em>세 번째</em> 모양(발행하지 않는 미리보기)으로 내려졌습니다.
+전체 대조는 <a href="../use-case-coverage.md">Use Case 31개 대조표</a>.</p>
+
 <table>
-<tr><th style="width:45px">순위</th><th style="width:280px">항목</th><th style="width:60px">규모</th><th>근거</th></tr>
+<tr><th style="width:45px">순위</th><th style="width:280px">항목</th><th style="width:60px">규모</th><th>근거 · 지금</th></tr>
 <tr>
   <td><strong>0</strong></td>
-  <td><strong>그래프의 두 번째 결과 모양을 결정</strong> — KPI 실체화 외에 결과 집합을
+  <td><s>그래프의 두 번째 결과 모양을 결정</s> — KPI 실체화 외에 결과 집합을
       돌려주는 경로를 둘 것인가</td><td>결정</td>
-  <td><strong>C9.</strong> 4·5번이 여기 매달려 있습니다. 코드가 아니라 <em>결정</em>이 먼저입니다</td>
+  <td><strong>C9. ✅ ⑥에서 결정됨</strong> — 두 번째 경로를 <em>영구적으로</em> 두는 대신
+      <strong>노드 미리보기</strong>를 뒀습니다. 그래프 전체를 그대로 컴파일하고
+      <em>마지막 SELECT만</em> 돌려보므로, 미리보기가 보는 것은 컴파일러가 보는 그 노드입니다
+      (두 번째 코드 경로가 생기지 않음). 없앤 우회로가 컸습니다 —
+      전에는 <strong>추측할 때마다</strong> 이름을 짓고 발행해 공용 카탈로그를 건드려야 했습니다</td>
 </tr>
 <tr>
   <td><strong>1</strong></td>
-  <td><code>SOURCE_SAMPLE</code> 노드 — 위경도 · 속도 · 서빙 PCI</td><td>작음</td>
-  <td>C9. 0번과 <strong>무관하게 지금 가능.</strong> 값은 이미 <code>sample</code>에 있고
-      <code>SOURCE_KPI</code>와 구조가 같습니다</td>
+  <td><s><code>SOURCE_SAMPLE</code> 노드 — 위경도 · 속도 · 서빙 PCI</s></td><td>작음</td>
+  <td>C9. <strong>✅ ⑥에서 완료</strong> — 캔버스에서 표본 자체까지 내려갑니다</td>
 </tr>
 <tr>
   <td><strong>2</strong></td>
-  <td><code>SOURCE_EVENT</code> + 시간 상관 — 이벤트를 표본 척추에 얹기</td><td>중</td>
-  <td>C9. UC27의 <strong>마지막</strong> 노드. 이것 없이는 State Machine의 산출물을 쓸 데가 없습니다</td>
+  <td><s><code>SOURCE_EVENT</code> + 시간 상관 — 이벤트를 표본 척추에 얹기</s></td><td>중</td>
+  <td>C9. UC27의 <strong>마지막</strong> 노드 — <strong>✅ ⑥에서 완료.</strong>
+      State Machine의 산출물을 쓸 자리가 이제 있습니다</td>
 </tr>
 <tr>
   <td>3</td>
@@ -320,13 +329,19 @@ UC27이 그것을 그림으로 보여 줍니다 — 그 그래프의 <strong>마
 </tr>
 <tr>
   <td>6</td>
-  <td><strong>거리 가중 통계</strong> — 통계 · 분포 · CDF · 리포트</td><td>중</td>
-  <td>C7. 1 Hz 균일이 <strong>없애 주지 못하는</strong> 유일한 편향</td>
+  <td><s>거리 가중 통계 — 통계 · 분포 · CDF · 리포트</s></td><td>중</td>
+  <td>C7. 1 Hz 균일이 <strong>없애 주지 못하는</strong> 유일한 편향 —
+      <strong>✅ ⑦에서 완료.</strong> 화면에 <code>[Distance]</code>·<code>[Sample]</code>이라는
+      <em>이름</em>으로 나옵니다. C7이 "두 축을 하나로 묶은 것이 잘못"이라고 정정한 그 두 축이
+      실제로 따로 골라집니다 — 가중 기준과 dB 평균 방식</td>
 </tr>
 <tr>
   <td>7</td>
-  <td><strong>폴리곤 영역 통계</strong> — 지도에서 임의 영역을 그려 통계</td><td>중</td>
-  <td>자산이 아니라 기능이었습니다. <code>Polygon region</code> <span class="src">p468</span></td>
+  <td><s>폴리곤 영역 통계 — 지도에서 임의 영역을 그려 통계</s></td><td>중</td>
+  <td>자산이 아니라 기능이었습니다. <code>Polygon region</code> <span class="src">p468</span> —
+      <strong>✅ ⑤에서 완료</strong>, 그리고 예상 밖의 절반이 하나 더 붙었습니다:
+      영역 안의 통계만이 아니라 <strong>통과 목록</strong>. 같은 사거리를 세 번 지났으면
+      한 장소의 세 번의 통과입니다</td>
 </tr>
 <tr>
   <td>8</td>
