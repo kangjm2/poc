@@ -32,21 +32,24 @@
 
 ### 1.2 시각화
 
-> **2026-08-31 갱신**: 셀별 바 차트와 원인별 파이 차트를 추가했습니다. 근거는
-> [`ui-gap-vs-reference.md`](ui-gap-vs-reference.md) — 레퍼런스 워크북의 두 페인 중
+> **2026-09-01 갱신**: 거리 비닝, 셀 푸트프린트(측정 기반), 이웃 셀 연결선이 추가되어
+> 이 절의 ⛔가 4개에서 1개로 줄었습니다. 근거와 요소 단위 대조는
+> [`ui-gap-vs-reference.md`](ui-gap-vs-reference.md).
+>
+> 앞선 갱신(2026-08-31): 셀별 바 차트와 원인별 파이 차트 — 레퍼런스 워크북의 두 페인 중
 > 하나가 바 차트이고, 문제 조사 화면의 진입점이 파이입니다.
 
 | 매뉴얼 기재 기능 | 상태 | 비고 |
 |---|---|---|
 | Synchronized workbooks, pages, data views | ✅ | 공유 시간 커서 + 워크북 탭 |
 | Maps / grids / line graphs | ✅ | |
-| Bar graphs, pie charts, surface grids, color grids, spreadsheets | ◐ | 바 차트(서빙 셀별 + **모니터드 셋별**)·파이 차트(원인별). surface/color grid는 아직 |
+| Bar graphs, pie charts, surface grids, color grids, spreadsheets | ◐ | 바 차트(서빙 셀별 · **모니터드 셋별** · **거리 프로파일**)·파이 차트(원인별). surface/color grid는 아직 |
 | **Area binning** | ✅ | 50/150/500 m |
-| **Distance binning** | ⛔ | 거리 기반(Lee's criteria) 집계 없음 |
+| **Distance binning** | ✅ | **해소.** 툴바 `Distance bins` → 이동 거리 기준 프로파일(50/100/250 m). 정차가 평균을 끌어당기지 않습니다 |
 | Base station map overlay | ✅ | 셀 마커 + 방위각 스포크 |
 | **Line from terminal to serving cell** | ✅ | 커서 위치 → 서빙 셀 점선 |
 | Line to *monitored* cells (pilot pollution 표시) | ✅ | **해소.** `sample_neighbour`(V7) 추가 → Mobility 지도에서 커서 시점 모니터드 셀까지 점선. 최강 셀 대비 6 dB 이내면 굵게(경합), 그 밖은 흐리게 |
-| Cell footprint / service area 시각화 | ⛔ | |
+| Cell footprint / service area 시각화 | ◐ | **해소(측정 기반).** 셀이 실제로 서빙한 표본의 **볼록 껍질**을 지도에 표시. 설계상 커버리지가 아니며(빔폭·반경 미기록) 볼록이라 오목한 실제 범위는 과대 포함합니다 — 화면에 그렇게 적혀 있습니다 |
 | Playback of individual log files | ◐ | 커서 이동은 되나 자동 재생 없음 |
 | 3D Visualizer (빔 3D) | ⬛ | 범위 외 |
 | Dashboards | ⛔ | |

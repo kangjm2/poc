@@ -6,6 +6,7 @@ import type {
   Threshold, TrackPoint, UeProfile,
   MonitoredSet, NeighbourBreakdown, PollutionSpan,
   GraphRequest, GraphValidation, StoredGraph,
+  DistanceBin, CellFootprint, Workbook, WorkbookRequest,
 } from './types'
 
 const BASE = '/api'
@@ -179,6 +180,32 @@ export const api = {
       + (to == null ? '' : `${from == null ? '?' : '&'}toSeq=${to}`)),
 
   pilotPollution: (id: number) => get<PollutionSpan[]>(`/sessions/${id}/pilot-pollution`),
+
+  distanceBins: (id: number, kpi: string, stepMeters: number) =>
+    get<DistanceBin[]>(`/sessions/${id}/distance-bins?kpi=${kpi}&stepMeters=${stepMeters}`),
+
+  cellFootprints: (id: number) =>
+    get<CellFootprint[]>(`/sessions/${id}/cell-footprints`),
+
+  workbooks: () => get<Workbook[]>('/workbooks'),
+
+  saveWorkbook: async (body: WorkbookRequest): Promise<Workbook> => {
+    const res = await fetch(`${BASE}/workbooks`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    })
+    if (!res.ok) {
+      let detail = res.statusText
+      try { detail = (await res.json()).message ?? detail } catch { /* no JSON body */ }
+      throw new Error(detail)
+    }
+    return res.json() as Promise<Workbook>
+  },
+
+  deleteWorkbook: async (id: number): Promise<void> => {
+    const res = await fetch(`${BASE}/workbooks/${id}`, { method: 'DELETE' })
+    if (!res.ok) throw new Error(`${res.status}: ${res.statusText}`)
+  },
 
   kpiGraphs: () => get<StoredGraph[]>('/kpi-definitions/graphs'),
 

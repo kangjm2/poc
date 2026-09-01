@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
-import type { AreaBin, CellRef, MonitoredCell, TrackPoint } from '../api/types'
+import type { AreaBin, CellFootprint, CellRef, MonitoredCell, TrackPoint } from '../api/types'
 
 interface Props {
   track: TrackPoint[]
@@ -18,6 +18,12 @@ interface Props {
    * becomes visible on the map rather than inferred from a table.
    */
   monitored?: MonitoredCell[] | null
+  /**
+   * Where each cell was measured serving. Drawn as a translucent polygon behind the route,
+   * so "which cell owns this street" is answered by looking rather than by clicking through
+   * samples one at a time.
+   */
+  footprints?: CellFootprint[] | null
 }
 
 /**
@@ -27,7 +33,7 @@ interface Props {
  */
 export function RouteMap({
   track, cells, cursorSeq, onCursorChange, kpiName, bins, showServingLine = true,
-  monitored = null,
+  monitored = null, footprints = null,
 }: Props) {
   const hostRef = useRef<HTMLDivElement>(null)
   const mapRef = useRef<L.Map | null>(null)
@@ -36,6 +42,7 @@ export function RouteMap({
   const binLayer = useRef<L.LayerGroup | null>(null)
   const servingLine = useRef<L.Polyline | null>(null)
   const monitoredLines = useRef<L.LayerGroup | null>(null)
+  const footprintLayer = useRef<L.LayerGroup | null>(null)
   const cursorMarker = useRef<L.CircleMarker | null>(null)
   const [basemapFailed, setBasemapFailed] = useState(false)
 
@@ -148,6 +155,31 @@ export function RouteMap({
       }
     }
   }, [cells])
+
+  // Cell footprints, on their own effect so toggling them does not redraw the route.
+  //
+  // Drawn UNDER everything else and only as an outline plus a faint fill: a footprint is
+  // context for the route, and a solid polygon would hide the very samples it was derived
+  // from. Colour is per cell rather than per value - these are identities, not measurements.
+  useEffect(() => {
+    const map = mapRef.current
+    if (!map) return
+    if (footprintLayer.current) { footprintLayer.current.remove(); footprintLayer.current = null }
+    if (!footprints || footprints.length === 0) return
+    const layer = L.layerGroup().addTo(map)
+    footprintLayer.current = layer
+    footprints.forEach((f, i) => {
+      const hue = (i * 67) % 360
+      L.polygon(f.hull as [number, number][], {
+        color: `hsl(${hue} 55% 40%)`, weight: 1.5, opacity: 0.85,
+        fillColor: `hsl(${hue} 55% 50%)`, fillOpacity: 0.10,
+      })
+        .bindTooltip(`PCI ${f.pci}${f.band ? ` \u00b7 ${f.band}` : ''} \u2014 served `
+                     + `${f.sampleCount} samples, mean RSRP ${f.avgRsrp} dBm`)
+        .addTo(layer)
+    })
+    layer.eachLayer((l) => (l as L.Polygon).bringToBack?.())
+  }, [footprints])
 
   useEffect(() => {
     const map = mapRef.current

@@ -560,6 +560,110 @@ const outNode = wbPos.find((n) => n.label === 'Output')
 check('그래프가 위에서 아래로 흐름', srcNode.y < outNode.y, `${srcNode.y} < ${outNode.y}`)
 await page.screenshot({ path: `${OUT}/27-kpi-workbench.png`, fullPage: true })
 
+// ------------------------------------------------- distance bins / footprints
+await page.locator('.mode-tabs button', { hasText: 'Analysis' }).click()
+await page.waitForTimeout(800)
+await page.locator('.toolbar select').first().selectOption({ label: fadeSession })
+await page.locator('.workbook-tabs button', { hasText: 'Overview' }).click()
+await page.waitForTimeout(1200)
+// Sets its own KPI rather than inheriting whatever an earlier check left selected. The
+// fronthaul section selects a CUS counter, and this session carries none - so the profile
+// correctly showed zero bins and the check failed on its own setup, not on the feature.
+await page.locator('.tree .kpi', { hasText: 'RSRP (NR SpCell)' }).click()
+await page.waitForTimeout(1800)
+
+await page.selectOption('.toolbar .group:has(label:text-is("Distance bins")) select', '100')
+await page.waitForTimeout(2000)
+const distBars = await page.locator('.panel:has(.title:text-matches("Distance profile")) svg rect')
+  .count()
+check('거리 구간 프로파일', distBars >= 10, `${distBars} bins`)
+
+// The bins must cover the route the field-to-lab screen measured. A profile that stopped
+// short would be averaging over a drive it had silently truncated.
+const distMeta = await page.locator('.panel:has(.title:text-matches("Distance profile")) .meta')
+  .innerText()
+const profileKm = Number((distMeta.match(/([\d.]+) km/) ?? [])[1])
+const f2l = await (await page.request.get(`${API_BASE}/api/sessions/1/field-to-lab`)).json()
+check('거리 축이 실제 주행거리와 일치',
+  Math.abs(profileKm - f2l.route.distanceKm) < 0.15,
+  `profile ${profileKm} km vs route ${f2l.route.distanceKm.toFixed(2)} km`)
+
+await page.selectOption('.toolbar .group:has(label:text-is("Distance bins")) select', '0')
+await page.waitForTimeout(800)
+check('거리 비닝을 끄면 패널이 사라짐',
+  await page.locator('.panel:has(.title:text-matches("Distance profile"))').count() === 0)
+
+await page.locator('.toolbar .group:has(label:text-is("Footprints")) button').click()
+await page.waitForTimeout(2500)
+const polys = await page.locator('.leaflet-overlay-pane path[fill-opacity="0.1"]').count()
+check('셀 커버리지 폴리곤', polys >= 3, `${polys} polygons`)
+await page.screenshot({ path: `${OUT}/28-footprints.png` })
+await page.locator('.toolbar .group:has(label:text-is("Footprints")) button').click()
+await page.waitForTimeout(1200)
+check('푸트프린트를 끄면 폴리곤이 사라짐',
+  await page.locator('.leaflet-overlay-pane path[fill-opacity="0.1"]').count() === 0)
+
+// ------------------------------------------------------- composed workbooks
+const tabsBefore = await page.locator('.workbook-tabs button').count()
+await page.locator('.workbook-tabs button', { hasText: /^\+$/ }).click()
+await page.waitForTimeout(2000)
+check('워크북 탭 추가(+)',
+  await page.locator('.workbook-tabs button').count() === tabsBefore + 1)
+
+const PROBE = 'UI check workbook'
+await page.locator('.panel header input').first().fill(PROBE)
+await page.locator('button', { hasText: '+ Chart pane' }).click()
+await page.waitForTimeout(800)
+
+const layerSelect = page.locator('.dock-section:has(h3:text-is("Layers")) select').first()
+await layerSelect.selectOption({ label: 'RSRP (NR SpCell)' })
+await page.waitForTimeout(1500)
+await layerSelect.selectOption({ label: 'SS-SINR' })
+await page.waitForTimeout(2000)
+const traces = await page.locator('svg[aria-label^="Composed pane"] path').count()
+check('페인에 여러 KPI를 겹쳐 그림', traces === 2, `${traces} traces`)
+
+// Unticking hides the trace WITHOUT forgetting the layer. Asserting both halves: a
+// checkbox that removed the layer would also have dropped the trace count.
+await page.locator('.dock-section:has(h3:text-is("Layers")) input[type=checkbox]').first()
+  .click()
+await page.waitForTimeout(1200)
+const tracesAfter = await page.locator('svg[aria-label^="Composed pane"] path').count()
+const layersAfter = await page.locator('.dock-section:has(h3:text-is("Layers")) input[type=checkbox]')
+  .count()
+check('레이어 체크 해제는 숨기기이지 삭제가 아님',
+  tracesAfter === 1 && layersAfter === 2, `${tracesAfter} traces, ${layersAfter} layers`)
+
+await page.locator('button', { hasText: /^Save$/ }).click()
+await page.waitForTimeout(2000)
+await page.screenshot({ path: `${OUT}/29-composed-workbook.png`, fullPage: true })
+
+// Server-side, so it must survive a reload - that is the whole reason it is not in
+// localStorage.
+await page.reload({ waitUntil: 'networkidle' })
+await page.waitForTimeout(2500)
+check('구성한 워크북이 새로고침을 견딤',
+  await page.locator(`.workbook-tabs button:text-is("${PROBE}")`).count() === 1)
+
+// The name surviving proves only that a row was written. What the user actually composed
+// is the panes and their layers, so those are what this has to look for - a save that
+// stored the workbook and silently dropped every pane still passed the name check.
+await page.locator('.workbook-tabs button', { hasText: PROBE }).click()
+await page.waitForTimeout(2000)
+const panesBack = await page.locator('.dock-section:has(h3:text-is("Layers"))').count()
+const layersBack = await page.locator('.dock-section:has(h3:text-is("Layers")) input[type=checkbox]')
+  .count()
+const hiddenBack = await page.locator('.dock-section:has(h3:text-is("Layers")) input[type=checkbox]:not(:checked)')
+  .count()
+check('페인·레이어·표시여부가 함께 살아남음',
+  panesBack === 1 && layersBack === 2 && hiddenBack === 1,
+  `${panesBack} pane, ${layersBack} layers, ${hiddenBack} hidden`)
+
+// Cleaned up so a second run starts where the first did.
+const books = await (await page.request.get(`${API_BASE}/api/workbooks`)).json()
+for (const b of books) await page.request.delete(`${API_BASE}/api/workbooks/${b.id}`)
+check('체크가 만든 워크북을 정리', books.length >= 1, `removed ${books.length}`)
+
 check('앱 코드 콘솔 오류 없음', appErrors.length === 0, appErrors.slice(0, 3).join(' | '))
 const tileFailures = errors.length - appErrors.length
 if (tileFailures > 0) console.log(`  (note: ${tileFailures} basemap tile fetches failed - network egress, not app code)`)

@@ -101,8 +101,18 @@ GET /api/sessions/{id}/track?kpi=RSRP&maxPoints=4000
 | `sample` | 시각 + 위치 (seq 단위) | `(session_id, seq)`·`(session_id, ts)` 인덱스, `ts` BRIN |
 | `sample_kpi` | KPI 값 | **HASH(session_id) 8-파티션**, `(session_id, seq, kpi_name)` PK |
 | `cell_ref` | 세션에 등장한 셀 | PCI·ARFCN·밴드·GSCN·방위각 |
+| `sample_neighbour` | **모니터드 셋** — 표본별 검출된 이웃 셀 | **HASH(session_id) 8-파티션**, `(session_id, seq, arfcn, pci)` PK |
 | `network_event` | 핸드오버·RACH·결함 등 | 심각도 포함 |
 | `signaling_message` | L3/RRC·M-plane 메시지 | 방향·프로토콜·본문 |
+
+`sample_neighbour`에는 **`is_serving` 열이 없습니다.** 어느 셀이 서빙이었는지는 이미
+`sample.serving_pci`가 기록하고 있고, 같은 사실의 사본 두 개는 서로 어긋날 수 있습니다.
+지도와 모순되는 모니터드 셋은 모니터드 셋이 없는 것보다 나쁘므로, 서빙 여부는 조인으로
+**유도**합니다.
+
+행이 없다는 것은 "약했다"가 아니라 **"검출되지 않았다"**입니다. 단말은 잡히는 셀을
+보고하고, 보고 문턱 아래 셀은 행을 만들지 않습니다. 그래서 표본당 행 수가 변하고, 그
+변화 자체가 측정입니다 — 깊은 페이드에서는 모니터드 셋이 서빙 셀 하나로 줄어듭니다.
 
 `sample_kpi`는 **좁은 세로형**(`session_id, seq, ts, kpi_name, value`)입니다. KPI마다
 열을 만드는 가로형이면 KPI를 추가할 때마다 스키마가 바뀌고, 참조 도구가 수천 종을
@@ -116,8 +126,25 @@ GET /api/sessions/{id}/track?kpi=RSRP&maxPoints=4000
 
 | 테이블 | 역할 |
 |---|---|
-| `kpi_definition` | 이름·표시명·단위·분류·기술·**방향**·출처(UE/DU/FRONTHAUL/SCANNER)·소수 자릿수 |
+| `kpi_definition` | 이름·표시명·단위·분류·기술·**방향**·출처(UE/DU/FRONTHAUL/SCANNER)·소수 자릿수·`expression` |
 | `kpi_threshold` | 색상 구간 사다리 — 경계·색상·라벨·심각도, `(kpi_name, ordinal)` 유니크 |
+| `kpi_graph` | **KPI Workbench** 그래프 문서 (JSONB) — 출력 KPI당 하나 |
+
+KPI를 만드는 방법이 **둘**이고, 둘 다 값을 `sample_kpi`에 **실체화**합니다.
+
+| | 정의 | 표현 가능한 것 |
+|---|---|---|
+| 파생 KPI | `kpi_definition.expression` 한 줄 수식 | 표본별 산술 |
+| **KPI 그래프** | `kpi_graph.spec` 노드 문서 | 여러 소스의 결합·조건·상태 분류·**이웃 셀 소스** |
+
+실체화를 고른 이유는 같습니다: 읽을 때 계산하면 트랙·시리즈·스냅샷·분포·통계·열화·
+영역 빈·셀 분석·내보내기 두 종·리포트가 **전부** "어떤 KPI는 행이 아니다"를 배워야
+합니다. 실체화하면 만들어진 KPI가 측정된 KPI와 하류에서 구분되지 않습니다.
+
+그래프가 **행 집합**의 데이터플로인 이유는 레퍼런스 워크벤치 화면에서 판독했습니다 —
+Output 노드가 `Column count: 19`를 보고합니다. 값 하나가 아니라 이름 붙은 열을 가진
+표가 흐른다는 뜻이고, 그래서 수식으로는 표현할 수 없습니다. 노드 하나가 CTE 하나로
+컴파일됩니다.
 
 `direction`은 **세 값**입니다: `HIGHER_IS_BETTER` · `LOWER_IS_BETTER` · `NEUTRAL`.
 세 번째가 필요한 이유는 §4.4에 있습니다.
@@ -136,7 +163,27 @@ GET /api/sessions/{id}/track?kpi=RSRP&maxPoints=4000
 에뮬레이트된 것과 실물인 것을 **런 레코드가 함께 보존**합니다. 채널 모델만 있고
 DU 구성이 없으면 그 런은 재현 불가능하기 때문입니다.
 
-### 3.4 임포트 도메인
+### 3.4 워크북 도메인
+
+| 테이블 | 역할 |
+|---|---|
+| `workbook` | 사용자가 구성한 탭 |
+| `workbook_pane` | 그 탭의 페인 스택 — `CHART` 또는 `MAP` |
+| `workbook_layer` | 페인 위의 KPI와 **표시 여부**(`visible`) |
+
+**내장 탭은 데이터가 아니라 코드입니다.** 브링업 시퀀스·드릴다운 파이·임포트 폼처럼
+페인이 아닌 것을 담고 있어서, 행으로 만들면 화면마다 페인 종류를 발명해야 하고 얻는
+것이 없습니다. 이 테이블은 **추가되는 절반** — 레퍼런스에는 있고 우리에겐 없던 `+` —
+을 담습니다.
+
+`visible`이 소속과 별개인 것은 의도적입니다. 레퍼런스에서 레이어 체크를 풀면 트레이스가
+숨을 뿐 잊히지 않으므로, 비교 계열을 켰다 껐다 하는 데 체크 한 번이면 됩니다. 둘을
+합치면 "잠깐 숨기기"가 파괴적인 동작이 됩니다.
+
+브라우저가 아니라 **서버**에 둡니다. 문제를 쫓으며 만든 워크북은 동료에게 보낼 가치가
+있고, 사이트 데이터를 지웠다고 사라져서는 안 됩니다.
+
+### 3.5 임포트 도메인
 
 `import_job` — 파일명·상태·읽은 행·적재 샘플/KPI 수·메시지.
 
@@ -245,7 +292,12 @@ API는 호출자가 보낸 라벨도 그대로 저장하므로, 경계와 라벨
 
 | 메서드 | 경로 | 용도 |
 |---|---|---|
-| GET | `/sessions/{id}/bins?kpi&sizeMeters` | 영역 비닝 |
+| GET | `/sessions/{id}/bins?kpi&sizeMeters` | 영역 비닝 — "여기 신호가 어떤가" |
+| GET | `/sessions/{id}/distance-bins?kpi&stepMeters` | **거리 비닝** — "도로 단위로 무엇을 봤나". 신호등에 선 정차가 평균을 끌어당기지 않습니다 |
+| GET | `/sessions/{id}/cell-footprints?minSamples` | **셀별 측정 서빙 영역**(볼록 껍질) |
+| GET | `/sessions/{id}/monitored-set?seq` | 커서 시점 모니터드 셋 |
+| GET | `/sessions/{id}/neighbour-breakdown` | 드라이브 전체 셀 검출 요약 (p95·검출률·서빙률) |
+| GET | `/sessions/{id}/pilot-pollution` | 경합 셀 구간 |
 | GET | `/sessions/{id}/coverage-issues?weakRsrpDbm&poorSinrDb&overshootKm` | 커버리지 문제 자동 탐지 (기본 -105 dBm · 0 dB · 3 km) |
 | GET | `/sessions/{id}/export.csv` | 전 KPI 피벗 CSV (스트리밍) |
 | GET | `/sessions/{id}/export.geojson?kpi` | 지리 데이터 |
@@ -282,11 +334,17 @@ API는 호출자가 보낸 라벨도 그대로 저장하므로, 경계와 라벨
 
 세 검사기가 **서로 다른 실패 계열**을 담당합니다. 어느 하나도 나머지를 대신하지 못합니다.
 
-| 검사기 | 잡는 것 | 규모 |
+| 검사기 | 잡는 것 | 규모 (2026-09-01) |
 |---|---|---|
-| `scripts/verify-ui.mjs` | 개별 동작 회귀 | 30개 |
-| `scripts/verify-scenarios.mjs` | 여정 회귀 — 단계 간 상태가 이어짐 | 77단계 / 11 시나리오 |
+| `scripts/verify-ui.mjs` | 개별 동작 회귀 | 86개 |
+| `scripts/verify-scenarios.mjs` | 여정 회귀 — 단계 간 상태가 이어짐 | 95단계 / 13 시나리오 |
 | `tools/uxtest/api-surface.mjs` | **로직은 있는데 뷰가 없는** 격차 | 엔드포인트 · 클라이언트 · KPI 도달성 |
+| `mvn test` | SQL을 조립하는 코드와 기하 | 25개 단위 테스트 |
+
+단위 테스트가 **딱 두 곳**에만 있는 것은 의도적입니다. 나머지 코드는 값을 파라미터로
+바인딩하므로 다른 질의를 실행하도록 유도될 수 없지만, `KpiGraph`는 사용자 입력이 질의의
+**모양**을 정하고 `convexHull`은 사용자가 커버리지 주장으로 읽을 도형을 만듭니다. 둘 다
+주석으로 "안전하다"고 말하는 것으로는 부족합니다.
 
 세 번째가 왜 별도인지는 실제 사례가 답합니다: 임계값 저장 엔드포인트는 유니크 인덱스
 위반으로 **한 번도 동작한 적이 없었지만**, 호출하는 뷰가 없어 아무도 몰랐습니다.
