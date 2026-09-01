@@ -710,6 +710,138 @@ scenario('S11 · Unknown columns become KPIs instead of being dropped')
   await page.waitForTimeout(1000)
 }
 
+// ─── S12 · The monitored set agrees with the map and the KPIs ────────────────
+scenario('S12 · The monitored set is consistent with everything else')
+{
+  // The failure this guards is not "the panel is empty" but "the panel disagrees". A
+  // monitored set that contradicts the serving cell, the RSRP trace or the map teaches an
+  // engineer to stop trusting the tool, which is worse than not shipping the panel.
+  const cityId = sessions.find((s) => s.name === CITY_A).id
+  const seq = 500
+  const ms = await apiGet(`/api/sessions/${cityId}/monitored-set?seq=${seq}`)
+  const snap = await apiGet(`/api/sessions/${cityId}/snapshot?seq=${seq}`)
+  const flat = Object.values(snap.byCategory).flat()
+
+  step('the monitored set has cells', ms.cells.length >= 2, `${ms.cells.length} cells`)
+
+  const serving = ms.cells.filter((c) => c.serving)
+  step('exactly one cell is the serving cell', serving.length === 1)
+  step('it is the one `sample` records as serving', serving[0]?.pci === ms.servingPci,
+    `${serving[0]?.pci} vs ${ms.servingPci}`)
+
+  // No neighbour may be stronger than the cell the terminal is actually using. This is
+  // the invariant that caught the tunnel attenuating only the serving cell.
+  const strongest = Math.max(...ms.cells.map((c) => c.rsrp))
+  step('no neighbour is stronger than the serving cell',
+    serving[0] != null && serving[0].rsrp >= strongest,
+    `serving ${serving[0]?.rsrp} vs best ${strongest}`)
+
+  // The serving row and the RSRP KPI are the same measurement, so they must be the same
+  // number - not merely close.
+  const rsrpKpi = flat.find((v) => v.kpi === 'RSRP')
+  step('serving RSRP equals the RSRP KPI exactly',
+    rsrpKpi != null && Math.abs(rsrpKpi.value - serving[0].rsrp) < 1e-9,
+    `${serving[0]?.rsrp} vs ${rsrpKpi?.value}`)
+
+  // Every reported cell must be a cell this session actually knows about, or the map
+  // cannot draw a line to it.
+  const refs = await apiGet(`/api/sessions/${cityId}/cells`)
+  const known = new Set(refs.map((c) => `${c.arfcn}/${c.pci}`))
+  step('every monitored cell is a known cell',
+    ms.cells.every((c) => known.has(`${c.arfcn}/${c.pci}`)),
+    ms.cells.map((c) => c.pci).join(','))
+
+  // Pilot pollution must mean competing USABLE cells. Firing it inside a fade would send
+  // an engineer to retune antennas where the real problem is that nothing reaches.
+  const spans = await apiGet(`/api/sessions/${cityId}/pilot-pollution`)
+  step('pilot pollution never reports a coverage hole',
+    spans.every((sp) => sp.meanBestRsrp >= -110),
+    spans.length ? spans.map((sp) => sp.meanBestRsrp).join(', ') : 'no stretches')
+
+  // Inside the deep fade the set must SHRINK rather than stay full - a fade that left the
+  // neighbour count untouched would mean the fade was applied to the serving cell alone.
+  const inFade = await apiGet(`/api/sessions/${cityId}/monitored-set?seq=575`)
+  step('the monitored set shrinks inside the deep fade',
+    inFade.cells.length < ms.cells.length,
+    `${ms.cells.length} outside -> ${inFade.cells.length} inside`)
+}
+
+// ─── S13 · A graph KPI behaves like any other KPI ────────────────────────────
+scenario('S13 · A workbench graph produces a first-class KPI')
+{
+  // The point of materialising a graph's values into sample_kpi is that everything
+  // downstream treats it as an ordinary KPI. That claim is only worth making if the
+  // downstream paths are actually exercised, so this walks them.
+  const cityId = sessions.find((s) => s.name === CITY_A).id
+  const spec = {
+    nodes: [
+      { id: 1, kind: 'SOURCE_KPI', x: 40, y: 24, kpiName: 'RSRP', as: 'SERVING' },
+      { id: 2, kind: 'SOURCE_NEIGHBOUR', x: 270, y: 24, rank: 1, metric: 'RSRP',
+        excludeServing: true, as: 'BEST_NBR' },
+      { id: 3, kind: 'COMBINE', x: 40, y: 126 },
+      { id: 4, kind: 'EXPRESSION', x: 40, y: 228,
+        expression: 'SERVING - BEST_NBR', as: 'MARGIN' },
+      { id: 5, kind: 'OUTPUT', x: 40, y: 330, column: 'MARGIN' },
+    ],
+    edges: [{ from: 1, to: 3 }, { from: 2, to: 3 }, { from: 3, to: 4 }, { from: 4, to: 5 }],
+  }
+  const output = {
+    name: 'S13_MARGIN', displayName: 'S13 handover margin', unit: 'dB',
+    category: 'Workbench', technology: '5G NR', direction: 'NEUTRAL', source: 'UE',
+    decimals: 1, description: 'scenario check', expression: null,
+  }
+
+  const post = (path, body) => page.request.post(`${API}${path}`, { data: body })
+
+  // A graph is invalid while it is being drawn, so validate must report the reason
+  // rather than fail the request.
+  const bad = await (await post('/api/kpi-definitions/graphs/validate',
+    { name: 'x', output: null, spec: { nodes: spec.nodes, edges: [] } })).json()
+  step('an unwired graph reports why, not a 500',
+    bad.ok === false && /input/i.test(bad.error ?? ''), bad.error ?? '')
+
+  const good = await (await post('/api/kpi-definitions/graphs/validate',
+    { name: 'x', output: null, spec })).json()
+  step('a wired graph validates', good.ok === true, good.error ?? '')
+  step('it reports reading the monitored set', good.readsNeighbours === true)
+
+  const saved = await (await post('/api/kpi-definitions/graphs',
+    { name: 'S13 margin', output, spec })).json()
+  step('saving computes values', saved.valuesComputed > 0, `${saved.valuesComputed} values`)
+
+  // Arithmetically right, checked against an independent recomputation from the
+  // monitored set. A graph that computed something else entirely would still have
+  // produced values above.
+  const ms = await apiGet(`/api/sessions/${cityId}/monitored-set?seq=500`)
+  const srv = ms.cells.find((c) => c.serving)
+  const nbr = ms.cells.filter((c) => !c.serving).sort((a, b) => b.rsrp - a.rsrp)[0]
+  const snap = await apiGet(`/api/sessions/${cityId}/snapshot?seq=500`)
+  const got = Object.values(snap.byCategory).flat().find((v) => v.kpi === 'S13_MARGIN')
+  step('the value equals serving minus best neighbour',
+    got != null && Math.abs(got.value - (srv.rsrp - nbr.rsrp)) < 0.05,
+    `${srv.rsrp} - ${nbr.rsrp} = ${(srv.rsrp - nbr.rsrp).toFixed(1)}, got ${got?.value}`)
+
+  // The downstream paths that materialising was supposed to buy.
+  const stats = await apiGet(`/api/sessions/${cityId}/statistics?kpi=S13_MARGIN`)
+  step('statistics work on it', stats.count > 0, `n=${stats.count}`)
+  const dist = await apiGet(`/api/sessions/${cityId}/distribution?kpi=S13_MARGIN`)
+  step('it gets a colour scale like any KPI', Array.isArray(dist.bins) && dist.bins.length >= 2,
+    `${dist.bins.length} bins`)
+  const track = await apiGet(`/api/sessions/${cityId}/track?kpi=S13_MARGIN`)
+  step('the map can colour the route by it', track.length > 0, `${track.length} points`)
+
+  // An input a graph reads cannot be deleted out from under it.
+  const del = await page.request.delete(`${API}/api/kpi-definitions/S13_MARGIN`)
+  step('the graph KPI itself is deletable only through the graph', !del.ok())
+
+  // Clean up so the scenario is idempotent - a second run must not trip over its own
+  // leftovers, which is how a checker starts reporting failures that are its own fault.
+  await page.request.delete(`${API}/api/kpi-definitions/graphs/${saved.id}`)
+  const after = await apiGet('/api/kpi-definitions/graphs')
+  step('cleanup leaves no graph behind',
+    !after.some((g) => g.outputKpiName === 'S13_MARGIN'), `${after.length} graphs remain`)
+}
+
 // ─── wrap-up ─────────────────────────────────────────────────────────────────
 const appErrors = errors.filter((e) =>
   !/tile\.openstreetmap\.org|ERR_CONNECTION|Failed to load resource|ERR_TIMED_OUT/.test(e))

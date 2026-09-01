@@ -270,6 +270,15 @@ public class KpiController {
             throw new IllegalArgumentException(
                     def.getName() + " is used by KPI graph(s): " + String.join(", ", byGraphs));
         }
+        // A KPI a graph DEFINES is deleted by deleting that graph. The foreign key cascades,
+        // so allowing it here quietly destroyed the canvas the author had built - they would
+        // have lost a graph by tidying up what looked like a stray KPI row.
+        String owner = graphs.graphDefining(def.getName());
+        if (owner != null) {
+            throw new IllegalArgumentException(
+                    def.getName() + " is defined by the KPI graph '" + owner
+                    + "'. Delete that graph instead, which removes this KPI with it.");
+        }
         int removed = jdbc.update("DELETE FROM sample_kpi WHERE kpi_name = ?", def.getName());
         repo.delete(def);
         return java.util.Map.of("name", def.getName(), "removedValues", removed);

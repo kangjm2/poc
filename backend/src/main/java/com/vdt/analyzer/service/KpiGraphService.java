@@ -172,6 +172,21 @@ public class KpiGraphService {
         defs.deleteById(g.outputKpiName());
     }
 
+    /**
+     * The graph that DEFINES this KPI, if one does.
+     *
+     * Distinct from {@link #graphsReading}: that answers "what breaks if this input goes
+     * away", this answers "is this KPI something a graph owns". The FK cascades, so
+     * deleting such a KPI from the KPI screen silently took the whole graph with it - the
+     * author would lose a canvas they had built by tidying up what looked like one row.
+     * The graph is the definition, so it is the thing to delete.
+     */
+    public String graphDefining(String kpiName) {
+        List<String> found = jdbc.queryForList(
+                "SELECT name FROM kpi_graph WHERE output_kpi_name = ?", String.class, kpiName);
+        return found.isEmpty() ? null : found.get(0);
+    }
+
     /** Which stored graphs read this KPI, so it cannot be deleted out from under them. */
     public List<String> graphsReading(String kpiName) {
         List<String> out = new ArrayList<>();

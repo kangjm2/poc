@@ -48,6 +48,18 @@ public final class KpiGraph {
     /** Column and state names: letters, digits, underscore, and nothing else. */
     private static final Pattern IDENT = Pattern.compile("[A-Za-z_][A-Za-z0-9_]{0,59}");
 
+    /**
+     * Names this compiler emits itself, which a user column may therefore not take.
+     *
+     * Every CTE carries session_id, seq and ts as its key, and the neighbour source uses rn
+     * for its ranking. A user column called session_id compiled to a CTE selecting that name
+     * twice - which the pattern above happily allowed, so the editor reported the graph
+     * VALID and saving it then failed with an opaque 500. Rejecting the name is the honest
+     * outcome: the editor can say what is wrong while the graph is being drawn.
+     */
+    private static final Set<String> RESERVED =
+            Set.of("session_id", "seq", "ts", "value", "rn");
+
     /** How many nodes a graph may hold, so a malformed document cannot build a huge query. */
     private static final int MAX_NODES = 60;
 
@@ -95,7 +107,6 @@ public final class KpiGraph {
      *
      * @param spec       the document as submitted
      * @param knownKpis  every KPI name a source may read
-     * @param sessionParam SQL placeholder text for the session filter; the caller binds it
      */
     public static Compiled compile(Spec spec, Set<String> knownKpis) {
         if (spec == null || spec.nodes() == null || spec.nodes().isEmpty()) {
@@ -250,24 +261,21 @@ public final class KpiGraph {
             }
             case COMBINE -> {
                 requireInputs(n, in, 1, 8);
-                // The reference calls this "All Values Within Time Range". A FULL join, not
-                // an inner one: a sample where only some inputs have a value is still a
-                // sample, and dropping it would silently shorten the series. What the
-                // absent input contributes is NULL, which downstream arithmetic propagates
-                // and the final NOT NULL filter removes - absence stays absence rather than
-                // becoming a substituted number.
+                // The reference calls this "All Values Within Time Range". A sample where
+                // only some inputs have a value is still a sample, and dropping it would
+                // silently shorten the series. What an absent input contributes is NULL,
+                // which downstream arithmetic propagates and the final NOT NULL filter
+                // removes - absence stays absence rather than becoming a substituted number.
+                //
+                // Every input is joined to a KEY SPINE - the union of all their samples -
+                // rather than chained onto the first one. Chaining was wrong in a way that
+                // only appeared with three or more inputs: with a FULL JOIN, a row the first
+                // input does not have leaves its key NULL, and the third input's ON clause
+                // then compares against NULL and drops the row. A Filter upstream of the
+                // first input was enough to lose most of the other two, silently. Measured
+                // on the seed: 594 rows where 3300 were correct.
                 List<String> cols = new ArrayList<>();
-                StringBuilder b = new StringBuilder(cte + " AS (SELECT ");
-                StringBuilder from = new StringBuilder();
                 for (int i = 0; i < in.size(); i++) {
-                    String alias = "i" + i;
-                    if (i == 0) {
-                        from.append("n_").append(in.get(i)).append(" ").append(alias);
-                    } else {
-                        from.append(" FULL JOIN n_").append(in.get(i)).append(" ").append(alias)
-                            .append(" ON ").append(alias).append(".session_id = i0.session_id AND ")
-                            .append(alias).append(".seq = i0.seq");
-                    }
                     for (String c : columns.get(in.get(i))) {
                         if (cols.contains(c)) {
                             throw new IllegalArgumentException(
@@ -277,24 +285,31 @@ public final class KpiGraph {
                         cols.add(c);
                     }
                 }
-                List<String> keyParts = new ArrayList<>();
-                for (int i = 0; i < in.size(); i++) keyParts.add("i" + i + ".%s");
-                b.append("coalesce(")
-                 .append(String.join(", ", keyParts).formatted(
-                         (Object[]) nCopies("session_id", in.size())))
-                 .append(") AS session_id, coalesce(")
-                 .append(String.join(", ", keyParts).formatted(
-                         (Object[]) nCopies("seq", in.size())))
-                 .append(") AS seq, coalesce(")
-                 .append(String.join(", ", keyParts).formatted(
-                         (Object[]) nCopies("ts", in.size())))
-                 .append(") AS ts");
+
+                StringBuilder spine = new StringBuilder();
+                for (int i = 0; i < in.size(); i++) {
+                    if (i > 0) spine.append(" UNION ALL ");
+                    spine.append("SELECT session_id, seq, ts FROM n_").append(in.get(i));
+                }
+
+                StringBuilder b = new StringBuilder(cte + " AS (SELECT k.session_id, k.seq, k.ts");
                 for (int i = 0; i < in.size(); i++) {
                     for (String c : columns.get(in.get(i))) {
                         b.append(", i").append(i).append('.').append(quote(c));
                     }
                 }
-                b.append(" FROM ").append(from).append(')');
+                // min(ts) rather than any input's: one (session, seq) is one instant, and
+                // grouping guarantees the spine has exactly one row per sample even if two
+                // inputs disagree about the timestamp by a rounding.
+                b.append(" FROM (SELECT session_id, seq, min(ts) AS ts FROM (")
+                 .append(spine)
+                 .append(") u GROUP BY session_id, seq) k");
+                for (int i = 0; i < in.size(); i++) {
+                    b.append(" LEFT JOIN n_").append(in.get(i)).append(" i").append(i)
+                     .append(" ON i").append(i).append(".session_id = k.session_id AND i")
+                     .append(i).append(".seq = k.seq");
+                }
+                b.append(')');
                 columns.put(n.id(), List.copyOf(cols));
                 return b.toString();
             }
@@ -361,12 +376,6 @@ public final class KpiGraph {
         throw new IllegalStateException("Unhandled node kind " + n.kind());
     }
 
-    private static String[] nCopies(String s, int n) {
-        String[] out = new String[n];
-        java.util.Arrays.fill(out, s);
-        return out;
-    }
-
     private static void requireInputs(Node n, List<Integer> in, int min, int max) {
         if (in.size() < min || in.size() > max) {
             throw new IllegalArgumentException(
@@ -395,6 +404,11 @@ public final class KpiGraph {
             throw new IllegalArgumentException(
                     "Invalid " + what + " '" + raw + "'. Use letters, digits and underscore, "
                     + "starting with a letter, up to 60 characters.");
+        }
+        if (RESERVED.contains(raw.toLowerCase())) {
+            throw new IllegalArgumentException(
+                    "'" + raw + "' is reserved - every row set already carries it. "
+                    + "Choose another " + what + ".");
         }
         return raw;
     }

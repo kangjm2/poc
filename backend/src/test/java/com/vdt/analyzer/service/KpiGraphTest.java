@@ -87,9 +87,14 @@ class KpiGraphTest {
 
         assertAll(
                 () -> assertEquals(Set.of("RSRP", "SINR"), c.referencedKpis()),
-                // FULL, not INNER: a sample where only one input has a value is still a
-                // sample. An inner join here would silently shorten every series.
-                () -> assertTrue(c.sql().contains("FULL JOIN"), c.sql()),
+                // A sample where only one input has a value is still a sample, so no input
+                // may gate another. Asserted on the structure that guarantees it - a key
+                // spine every input hangs off - rather than on the join keyword: the first
+                // implementation used FULL JOIN and still lost rows, because it chained
+                // them onto the first input instead of onto a spine.
+                () -> assertTrue(c.sql().contains("GROUP BY session_id, seq"), c.sql()),
+                () -> assertTrue(c.sql().contains("i0.session_id = k.session_id"), c.sql()),
+                () -> assertTrue(c.sql().contains("i1.session_id = k.session_id"), c.sql()),
                 () -> assertTrue(c.sql().contains("\"RSRP\" - \"SINR\"")),
                 () -> assertEquals("MARGIN", c.outputColumn()));
     }
@@ -280,6 +285,50 @@ class KpiGraphTest {
                 () -> assertTrue(sql.contains("WHERE")),
                 () -> assertTrue(sql.contains("AND")),
                 () -> assertTrue(sql.contains("(-1 * 110.0)"), sql));
+    }
+
+    @Test
+    void combineJoinsEveryInputToAKeySpineNotToTheFirstOne() {
+        // The three-input case, which the two-input tests could not reach. With a FULL JOIN
+        // chained onto the first input, a row that input does not have leaves its key NULL,
+        // and the third input's ON clause then compares against NULL and drops the row. A
+        // Filter upstream of the first input was enough to lose most of the other two,
+        // silently: 594 rows on the seed where 3300 were correct.
+        var spec = new KpiGraph.Spec(
+                List.of(source(1, "RSRP"), source(2, "SINR"), source(3, "DL_BLER"),
+                        combine(4), expr(5, "SINR + DL_BLER", "BOTH"), output(6, "BOTH")),
+                List.of(new KpiGraph.Edge(1, 4), new KpiGraph.Edge(2, 4),
+                        new KpiGraph.Edge(3, 4), new KpiGraph.Edge(4, 5),
+                        new KpiGraph.Edge(5, 6)));
+
+        String sql = KpiGraph.compile(spec, KNOWN).sql();
+
+        assertAll(
+                // No input may be joined to another input - only to the spine.
+                () -> assertFalse(sql.contains("i0.session_id AND"), sql),
+                () -> assertTrue(sql.contains("i0.session_id = k.session_id"), sql),
+                () -> assertTrue(sql.contains("i1.session_id = k.session_id"), sql),
+                () -> assertTrue(sql.contains("i2.session_id = k.session_id"), sql),
+                // The spine is the union of every input's samples, grouped to one row each.
+                () -> assertTrue(sql.contains("UNION ALL"), sql),
+                () -> assertTrue(sql.contains("GROUP BY session_id, seq"), sql));
+    }
+
+    @Test
+    void rejectsAnAliasThatCollidesWithTheCompilersOwnColumns() {
+        // Every CTE already carries session_id, seq and ts, and the neighbour source uses
+        // rn. These passed the identifier pattern, so the editor called such a graph VALID
+        // and saving it then failed with an opaque 500 from Postgres.
+        for (String reserved : List.of("session_id", "seq", "ts", "value", "rn",
+                                       "SESSION_ID", "Seq")) {
+            var spec = new KpiGraph.Spec(
+                    List.of(source(1, "RSRP"), expr(2, "RSRP + 1", reserved),
+                            output(3, reserved)),
+                    List.of(new KpiGraph.Edge(1, 2), new KpiGraph.Edge(2, 3)));
+            var e = assertThrows(IllegalArgumentException.class,
+                    () -> KpiGraph.compile(spec, KNOWN), "should be reserved: " + reserved);
+            assertTrue(e.getMessage().contains("reserved"), e.getMessage());
+        }
     }
 
     @Test
