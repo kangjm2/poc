@@ -40,12 +40,12 @@
 |---|---|---|
 | Synchronized workbooks, pages, data views | ✅ | 공유 시간 커서 + 워크북 탭 |
 | Maps / grids / line graphs | ✅ | |
-| Bar graphs, pie charts, surface grids, color grids, spreadsheets | ◐ | **바 차트(셀별)·파이 차트(원인별) 추가.** surface/color grid는 아직 |
+| Bar graphs, pie charts, surface grids, color grids, spreadsheets | ◐ | 바 차트(서빙 셀별 + **모니터드 셋별**)·파이 차트(원인별). surface/color grid는 아직 |
 | **Area binning** | ✅ | 50/150/500 m |
 | **Distance binning** | ⛔ | 거리 기반(Lee's criteria) 집계 없음 |
 | Base station map overlay | ✅ | 셀 마커 + 방위각 스포크 |
 | **Line from terminal to serving cell** | ✅ | 커서 위치 → 서빙 셀 점선 |
-| Line to *monitored* cells (pilot pollution 표시) | ⛔ | 이웃 셀 측정값이 스키마에 없음 |
+| Line to *monitored* cells (pilot pollution 표시) | ✅ | **해소.** `sample_neighbour`(V7) 추가 → Mobility 지도에서 커서 시점 모니터드 셀까지 점선. 최강 셀 대비 6 dB 이내면 굵게(경합), 그 밖은 흐리게 |
 | Cell footprint / service area 시각화 | ⛔ | |
 | Playback of individual log files | ◐ | 커서 이동은 되나 자동 재생 없음 |
 | 3D Visualizer (빔 3D) | ⬛ | 범위 외 |
@@ -57,10 +57,10 @@
 |---|---|---|
 | Parameter statistics and benchmarking | ✅ | min/max/avg/p05/p50/p95 + CDF |
 | 세션 간 벤치마킹 비교 | ✅ | 판정(BETTER/WORSE) 포함 |
-| **KPI Workbench (SQL 없이 커스텀 KPI 생성)** | ◐ | **수식 기반 파생 KPI**만 구현 — `+ - * / ( )`와 KPI 이름의 산술식. 레퍼런스의 **노드 그래프 편집기(Union·정렬·State Machine)는 미구현**이며, 조건·시간창·상태 기계가 필요한 KPI는 여전히 만들 수 없습니다 |
+| **KPI Workbench (SQL 없이 커스텀 KPI 생성)** | ✅ | **해소.** 노드 그래프 편집기 구현(`Import` 화면). 노드: KPI 소스 · **이웃 셀 소스**(N번째 강한 셀) · Combine · Expression · Filter · State machine · Output. 각 노드는 CTE 하나로 컴파일되며 결과는 `sample_kpi`에 실체화되어 다른 KPI와 완전히 동일하게 취급됩니다. **정렬 노드는 의도적으로 없음** — 우리 행 집합은 `seq` 키라 항상 정렬돼 있고, 아무 일도 하지 않는 컨트롤은 없느니만 못합니다 |
 | Automated problem survey with drill-down | ✅ | **원인 분류 7종 → 파이 → 사례 그리드 → 시각 이동** 3단 연쇄 구현. 원인은 전부 기존 검출기에서 유도하며 근거 없는 원인은 만들지 않음 |
 | Automated detection of common GSM/UMTS/LTE/5G NR problems | ◐ | weak coverage / interference / overshoot 3종 |
-| 5G Advanced Analytics (pilot pollution, overspilling, weak coverage, bad quality, NSA neighbor list) | ◐ | weak coverage + bad quality 상당. **pilot pollution·overspilling·neighbor list는 이웃 셀 데이터 부재로 불가** |
+| 5G Advanced Analytics (pilot pollution, overspilling, weak coverage, bad quality, NSA neighbor list) | ◐ | weak coverage + bad quality + **pilot pollution**(경합 셀 구간 검출) + **overspilling 단서**(검출률 대비 서빙률이 낮은 셀). NSA neighbor list는 설정된 이웃 목록이 측정에 없어 여전히 불가 |
 | Trend analysis | ⛔ | 세션 간 추세 없음 |
 | Advanced cell reference info (drift from antenna main lobe) | ⛔ | |
 | Root cause analysis | ◐ | 원인 라벨과 검출 근거(`Detected by`)를 함께 제시. L3 메시지까지 자동 연결하는 단계는 아직 |
