@@ -26,6 +26,7 @@
 | `use-cases.json` | Use Case 31개 인덱스 (번호 · 페이지 · 제목) |
 | `kpi-workbench.md` | **가장 중요.** 노드 요소 전체 명세와 우리 구현과의 차이 |
 | `data-views.md` | 화면·뷰 인벤토리 — 어떤 화면이 존재하는가 |
+| `query-api.md` | **Appendix 5·6·7 전사.** 스칼라 함수 46개 · 저장 프로시저 16개의 signature, `T_FORMAT` 코드 21개, 레지스트리 키, 원문 결함 17건, 그리고 우리 식 언어와의 대조 |
 | `corrections.md` | 매뉴얼이 우리 기존 문서를 반박하는 지점 |
 
 ## 이 레퍼런스가 바꾼 것

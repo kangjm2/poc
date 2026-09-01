@@ -225,53 +225,119 @@ p332의 <em>"with three or more tables the task becomes impossible"</em>을 우�
 </p>
 </div>
 
+<h3>C9. 워크벤치를 실제로 묶고 있는 것은 <strong>그래프의 모양</strong> 하나입니다
+  <span class="tag t-diff">구조적 발견</span></h3>
+
+<p>
+매뉴얼 뒷부분(p396–504)까지 훑고 나서, 서로 달라 보이던 격차 넷이 <strong>같은 제약
+하나</strong>에서 나온다는 것이 드러났습니다.
+</p>
+
+<p>
+<code>KpiGraph</code>의 모든 CTE는 예외 없이 <code>(session_id, seq, ts)</code>를 키로 잡고,
+<code>OUTPUT</code>은 <strong>열 하나</strong>를 골라 <code>sample_kpi</code>에 실체화합니다.
+<code>V8</code>의 <code>UNIQUE (output_kpi_name)</code>이 그 계약을 스키마에 못박았습니다.
+</p>
+
+<blockquote><strong>그래프 하나 = 표본당 한 행 × 출력 열 하나.</strong></blockquote>
+
+<table>
+<tr><th style="width:250px">겉보기 격차</th><th>실제 원인</th></tr>
+<tr><td><strong>이벤트를 캔버스에 못 올림</strong></td>
+    <td><code>network_event</code>는 <code>(session_id, ts)</code>이고 <strong><code>seq</code>가
+        없습니다.</strong> 표본 격자 위의 행이 아니라 키가 맞지 않습니다</td></tr>
+<tr><td><strong>State Machine이 구간을 못 냄</strong></td>
+    <td>구간 행은 <code>start_time</code>·<code>time_interval</code>을 갖는 <strong>다른
+        모양</strong>입니다. 표본당 한 행에 담을 곳이 없습니다</td></tr>
+<tr><td><strong>Nth Best · Group By 불가</strong></td>
+    <td>행 수와 열 수를 <strong>바꾸는</strong> 노드들입니다. 매뉴얼은 이 부류를
+        <em>"dynamic procedures … the actual result set is defined at runtime rather than
+        fixed"</em> 라 부릅니다 <span class="src">p501</span></td></tr>
+<tr><td><strong>지오메트리를 못 읽음</strong></td>
+    <td><code>sample</code>의 위경도·속도·서빙 PCI를 읽는 소스 노드가 없습니다.
+        이건 유일하게 <strong>모양 문제가 아니라 그냥 없는 것</strong></td></tr>
+</table>
+
+<div class="warn">
+<h5>그래서 우리가 공표한 우선순위 순서가 틀렸습니다</h5>
+<p>
+기존 순서는 <strong>① 생성기 핸드오버 지연 → ② 진짜 State Machine → ③ Previous/Current/Next</strong>
+였습니다. <strong>②와 ③은 둘 다 위 제약에 걸립니다</strong> — ②의 산출물인 구간 행은
+실체화할 곳이 없고, ③의 대표 용도인 <em>"드롭 직전의 값"</em>은
+<strong>드롭(이벤트)을 캔버스에 올릴 수 없어</strong> 성립하지 않습니다.
+</p>
+<p>
+UC27이 그것을 그림으로 보여 줍니다 — 그 그래프의 <strong>마지막 노드</strong>가
+<code>Call dropped</code> 이벤트와의 상관입니다.
+<strong>우리는 거기서 시작조차 못 합니다.</strong> State Machine을 아무리 잘 만들어도
+상관시킬 상대가 캔버스에 없습니다.
+</p>
+<p>
+<strong>0번 항목이 새로 생깁니다</strong> — 그래프가 낼 수 있는 <strong>두 번째 결과 모양</strong>을
+정하는 결정. 반대로 <code>SOURCE_SAMPLE</code>(지오메트리 소스)은 이 결정과 <strong>무관</strong>합니다.
+표본당 한 행, 열 하나 — 지금 모양에 정확히 맞고 값은 이미 <code>sample</code>에 있습니다.
+<strong>지금 바로 할 수 있는 유일한 워크벤치 항목입니다.</strong>
+</p>
+</div>
+
 <h2>3. 다음 우선순위</h2>
 
 <p>기준은 <strong>"이걸 안 하면 다음 구현을 잘못 만든다"</strong>의 정도입니다.</p>
 
 <table>
-<tr><th style="width:45px">순위</th><th style="width:270px">항목</th><th style="width:60px">규모</th><th>근거</th></tr>
+<tr><th style="width:45px">순위</th><th style="width:280px">항목</th><th style="width:60px">규모</th><th>근거</th></tr>
+<tr>
+  <td><strong>0</strong></td>
+  <td><strong>그래프의 두 번째 결과 모양을 결정</strong> — KPI 실체화 외에 결과 집합을
+      돌려주는 경로를 둘 것인가</td><td>결정</td>
+  <td><strong>C9.</strong> 4·5번이 여기 매달려 있습니다. 코드가 아니라 <em>결정</em>이 먼저입니다</td>
+</tr>
 <tr>
   <td><strong>1</strong></td>
-  <td>시드 생성기에 <strong>핸드오버 지연</strong> 도입</td><td>중</td>
-  <td>C1. 레퍼런스 대표 KPI를 우리 데이터에서 재현 가능하게 만드는 <strong>전제</strong>.
-      이게 없으면 State Machine을 만들어도 시연할 데이터가 없습니다</td>
+  <td><code>SOURCE_SAMPLE</code> 노드 — 위경도 · 속도 · 서빙 PCI</td><td>작음</td>
+  <td>C9. 0번과 <strong>무관하게 지금 가능.</strong> 값은 이미 <code>sample</code>에 있고
+      <code>SOURCE_KPI</code>와 구조가 같습니다</td>
 </tr>
 <tr>
   <td><strong>2</strong></td>
-  <td><strong>진짜 State Machine</strong> — 전이 그래프 + 구간 출력 + <code>time_interval</code></td><td>큼</td>
-  <td>C2 · C6. 워크벤치의 실제 값어치가 여기 있습니다</td>
+  <td><code>SOURCE_EVENT</code> + 시간 상관 — 이벤트를 표본 척추에 얹기</td><td>중</td>
+  <td>C9. UC27의 <strong>마지막</strong> 노드. 이것 없이는 State Machine의 산출물을 쓸 데가 없습니다</td>
 </tr>
 <tr>
-  <td><strong>3</strong></td>
-  <td><strong>Previous / Current / Next Value</strong> 상관 노드</td><td>중</td>
-  <td>C6. "드롭 <strong>직전</strong>의 값" — 근본 원인 분석의 핵심 질문</td>
+  <td>3</td>
+  <td>시드 생성기에 <strong>핸드오버 지연</strong> 도입</td><td>중</td>
+  <td>C1. 레퍼런스 대표 KPI를 우리 데이터에서 재현하는 전제</td>
 </tr>
 <tr>
   <td>4</td>
-  <td>드릴다운 <strong>다중 탭</strong> (조각 색 유지)</td><td>중</td>
-  <td>C5. 재분류됨. 여러 원인 동시 비교</td>
+  <td><strong>진짜 State Machine</strong> — 전이 그래프 + 구간 출력 + <code>time_interval</code></td><td>큼</td>
+  <td>C2. <strong>0번 결정 이후</strong></td>
 </tr>
 <tr>
   <td>5</td>
-  <td><strong>Cell locator</strong></td><td>중</td>
-  <td>UC21. 우리는 정답(<code>cell_ref</code> 좌표)을 알고 있어
-      <strong>오차를 검증할 수 있는</strong> 형태로 만들 수 있습니다</td>
+  <td><strong>Previous / Current / Next Value</strong> 상관 노드</td><td>중</td>
+  <td>C8. <strong>2번 이후</strong> — 상관시킬 이벤트가 있어야 의미가 생깁니다</td>
 </tr>
 <tr>
   <td>6</td>
-  <td>거리 빈에 <strong>40λ 옵션</strong></td><td>작음</td>
-  <td>C4. 이름값을 하려면. 변환 함수는 이미 있음</td>
+  <td><strong>거리 가중 통계</strong> — 통계 · 분포 · CDF · 리포트</td><td>중</td>
+  <td>C7. 1 Hz 균일이 <strong>없애 주지 못하는</strong> 유일한 편향</td>
 </tr>
 <tr>
   <td>7</td>
-  <td>푸트프린트 포함 기준을 <strong>3강 안</strong>으로</td><td>작음</td>
-  <td>UC1. V7 데이터로 바로 가능. 오버슛 판단의 실제 근거</td>
+  <td><strong>폴리곤 영역 통계</strong> — 지도에서 임의 영역을 그려 통계</td><td>중</td>
+  <td>자산이 아니라 기능이었습니다. <code>Polygon region</code> <span class="src">p468</span></td>
 </tr>
 <tr>
   <td>8</td>
-  <td>임포트 <strong>진행 큐 + 취소</strong>, KPI 그래프 <strong>SQL 표시</strong></td><td>작음</td>
-  <td>Activity/Log window. SQL은 응답에 이미 있고 표시만 하면 됩니다</td>
+  <td>드릴다운 <strong>다중 탭</strong></td><td>중</td>
+  <td>C5. 재분류됨</td>
+</tr>
+<tr>
+  <td>9</td>
+  <td><strong>Cell locator</strong> · 거리 빈 <strong>40λ 옵션</strong> ·
+      푸트프린트 <strong>3강 기준</strong></td><td>작음</td>
+  <td>UC21 · C4 · UC1. 데이터가 이미 있는 것들</td>
 </tr>
 </table>
 
