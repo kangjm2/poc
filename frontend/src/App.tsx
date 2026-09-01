@@ -2,7 +2,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { api } from './api/client'
 import type {
   AreaBin, CellRef, CoverageIssue, Degradation, Distribution, EventType, KpiDefinition,
-  CellFootprint, MonitoredSet, NeighbourBar, NetworkEvent, SeqRange, Series, SessionSummary,
+  AreaStats, CellFootprint, MonitoredSet, NeighbourBar, NetworkEvent, SeqRange, Series,
+  SessionSummary,
   SignalingMessage, Snapshot, TrackPoint, Workbook,
 } from './api/types'
 import { RouteMap } from './components/RouteMap'
@@ -17,6 +18,8 @@ import { MonitoredSetDock, MonitoredSetPage } from './components/MonitoredSetPan
 import { ComposedWorkbook } from './components/ComposedWorkbook'
 import { DistanceProfile } from './components/DistanceProfile'
 import { ProblemSurveyPanel } from './components/ProblemSurveyPanel'
+import { AreaStatsPanel } from './components/AreaStatsPanel'
+import { SpatialDiffPanel } from './components/SpatialDiffPanel'
 import { FieldToLabPanel } from './components/FieldToLabPanel'
 import { StatisticsPanel } from './components/StatisticsPanel'
 import { LabView } from './components/LabView'
@@ -48,6 +51,7 @@ const WORKBOOKS = [
   { id: 'coverage', label: 'Coverage Issues' },
   { id: 'statistics', label: 'Statistics' },
   { id: 'fieldtolab', label: 'Field-to-Lab' },
+  { id: 'spatialdiff', label: 'Compare on the Ground' },
 ] as const
 type BuiltInId = (typeof WORKBOOKS)[number]['id']
 /**
@@ -110,6 +114,9 @@ export function App() {
   /** One bin shown alone on the map, the rest muted. */
   const [isolate, setIsolate] = useState<string | null>(null)
   const [pciBars, setPciBars] = useState<NeighbourBar[]>([])
+  /** A shape is a question being asked now, so it lives in state and is not persisted. */
+  const [drawingArea, setDrawingArea] = useState(false)
+  const [areaStats, setAreaStats] = useState<AreaStats | null>(null)
   const [footprints, setFootprints] = useState<CellFootprint[] | null>(null)
   const [workbooks, setWorkbooks] = useState<Workbook[]>([])
   const [issues, setIssues] = useState<CoverageIssue[]>([])
@@ -522,6 +529,19 @@ export function App() {
   // whichever sample happened to survive thinning rather than to its own.
   const jumpToSeq = (seq: number) => moveCursor(seq)
 
+  /**
+   * A finished shape becomes a question immediately.
+   *
+   * The shape itself is not kept: what the user wanted was the answer, and keeping the
+   * ring would mean deciding what happens to it when the drive changes - a shape drawn on
+   * one route applied to another selects arbitrary ground.
+   */
+  const askAboutArea = useCallback((rings: [number, number][] | null) => {
+    setDrawingArea(false)
+    if (rings == null || sessionId == null) return
+    api.areaStatistics(sessionId, kpi, rings).then(setAreaStats).catch(fail)
+  }, [sessionId, kpi, fail])
+
   const chart = (name: string, filled = false) => {
     const s = seriesFor(name)
     return s ? (
@@ -562,6 +582,11 @@ export function App() {
       )
     }
     switch (workbook) {
+      case 'spatialdiff':
+        return (
+          <SpatialDiffPanel sessionId={sessionId} sessions={sessions} kpi={kpi}
+                            cursorSeq={cursorSeq} onPick={moveCursor} />
+        )
       case 'overview':
         return (
           <>
@@ -570,7 +595,12 @@ export function App() {
                       onCursorChange={moveCursor} kpiName={activeDef?.displayName ?? kpi}
                       bins={bins} footprints={footprints}
                       colorBy={colorBy} isolate={isolate}
+                      drawingArea={drawingArea} onAreaDrawn={askAboutArea}
                       events={events} eventTypes={eventTypes} />
+            {areaStats && (
+              <AreaStatsPanel data={areaStats} onClose={() => setAreaStats(null)}
+                              onPick={moveCursor} />
+            )}
             {distanceStep > 0 && (
               <DistanceProfile sessionId={sessionId} kpiName={kpi} stepMeters={distanceStep}
                                cursorSeq={cursorSeq} onJump={moveCursor} />
@@ -767,6 +797,13 @@ export function App() {
                       onChange={(e) => { setKpi(e.target.value); e.currentTarget.blur() }}>
                 {defs.map((d) => <option key={d.name} value={d.name}>{d.displayName}</option>)}
               </select>
+            </div>
+            <div className="group">
+              <button className={drawingArea ? 'on' : undefined}
+                      title="Draw an area on the map and get its statistics"
+                      onClick={() => { setDrawingArea((v) => !v); setAreaStats(null) }}>
+                {drawingArea ? 'Drawing…' : 'Ask an area'}
+              </button>
             </div>
             <div className="group">
               <label>Colour by</label>

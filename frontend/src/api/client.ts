@@ -4,7 +4,7 @@ import type {
   SeqRange, Series, SessionSummary, SignalingMessage, Snapshot, Statistics, TestRun,
   RunBringUp, CellBreakdown, ProblemSurvey, DerivedKpiResult, FieldToLab,
   Threshold, TrackPoint, UeProfile,
-  MonitoredSet, NeighbourBreakdown, PollutionSpan,
+  MonitoredSet, NeighbourBreakdown, PollutionSpan, AreaStats, SpatialDiff,
   GraphRequest, GraphValidation, StoredGraph,
   DistanceBin, CellFootprint, Workbook, WorkbookRequest, EventType,
 } from './types'
@@ -183,6 +183,15 @@ export const api = {
       + (to == null ? '' : `${from == null ? '?' : '&'}toSeq=${to}`)),
 
   pilotPollution: (id: number) => get<PollutionSpan[]>(`/sessions/${id}/pilot-pollution`),
+
+  /** The polygon travels as "lat,lon;lat,lon;..." - a question being asked, not a stored object. */
+  areaStatistics: (id: number, kpi: string, polygon: [number, number][]) =>
+    get<AreaStats>(`/sessions/${id}/area-statistics?kpi=${encodeURIComponent(kpi)}`
+      + `&polygon=${encodeURIComponent(polygon.map(([a, b]) => `${a},${b}`).join(';'))}`),
+
+  spatialDiff: (id: number, other: number, kpi: string, sizeMeters: number) =>
+    get<SpatialDiff>(`/sessions/${id}/spatial-diff?other=${other}`
+      + `&kpi=${encodeURIComponent(kpi)}&sizeMeters=${sizeMeters}`),
 
   distanceBins: (id: number, kpi: string, stepMeters: number) =>
     get<DistanceBin[]>(`/sessions/${id}/distance-bins?kpi=${kpi}&stepMeters=${stepMeters}`),

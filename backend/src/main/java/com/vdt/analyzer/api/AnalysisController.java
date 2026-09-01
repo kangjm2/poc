@@ -5,9 +5,11 @@ import com.vdt.analyzer.domain.CellRef;
 import com.vdt.analyzer.domain.SignalingMessage;
 import com.vdt.analyzer.repo.CellRefRepo;
 import com.vdt.analyzer.repo.MessageRepo;
+import com.vdt.analyzer.service.AreaStatsService;
 import com.vdt.analyzer.service.AnalysisService;
 import com.vdt.analyzer.service.EventTypeCatalog;
 import com.vdt.analyzer.service.FieldToLabService;
+import com.vdt.analyzer.service.SpatialDiffService;
 import com.vdt.analyzer.service.MonitoredSetService;
 import com.vdt.analyzer.service.ProblemSurvey;
 import org.springframework.web.bind.annotation.*;
@@ -26,11 +28,14 @@ public class AnalysisController {
     private final FieldToLabService fieldToLab;
     private final MonitoredSetService monitored;
     private final EventTypeCatalog eventTypes;
+    private final AreaStatsService areaStats;
+    private final SpatialDiffService spatialDiff;
 
     public AnalysisController(AnalysisService analysis, CellRefRepo cells,
                               MessageRepo messages,
                               ProblemSurvey problems, FieldToLabService fieldToLab,
-                              MonitoredSetService monitored, EventTypeCatalog eventTypes) {
+                              MonitoredSetService monitored, EventTypeCatalog eventTypes,
+                              AreaStatsService areaStats, SpatialDiffService spatialDiff) {
         this.analysis = analysis;
         this.cells = cells;
         this.messages = messages;
@@ -38,6 +43,8 @@ public class AnalysisController {
         this.fieldToLab = fieldToLab;
         this.monitored = monitored;
         this.eventTypes = eventTypes;
+        this.areaStats = areaStats;
+        this.spatialDiff = spatialDiff;
     }
 
     @GetMapping("/sessions")
@@ -121,6 +128,28 @@ public class AnalysisController {
                                  @RequestParam(required = false) Integer fromSeq,
                                  @RequestParam(required = false) Integer toSeq) {
         return analysis.statistics(id, kpi, fromSeq, toSeq);
+    }
+
+    /**
+     * Statistics for the samples inside a shape drawn on the map.
+     *
+     * The polygon is a query parameter rather than a stored object on purpose: a shape is
+     * a question being asked right now, not a thing the workspace owns, and giving it an
+     * id would mean a lifecycle - naming, listing, deleting - for something the user
+     * draws and discards in the same minute.
+     */
+    @GetMapping("/sessions/{id}/area-statistics")
+    public AreaStatsService.AreaStats areaStatistics(
+            @PathVariable long id, @RequestParam String kpi, @RequestParam String polygon) {
+        return areaStats.inArea(id, kpi, polygon);
+    }
+
+    /** Per-tile difference between two drives on one shared grid. */
+    @GetMapping("/sessions/{id}/spatial-diff")
+    public SpatialDiffService.SpatialDiff spatialDiff(
+            @PathVariable long id, @RequestParam long other, @RequestParam String kpi,
+            @RequestParam(defaultValue = "150") double sizeMeters) {
+        return spatialDiff.diff(id, other, kpi, sizeMeters);
     }
 
     @GetMapping("/sessions/{id}/degradations")
