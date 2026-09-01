@@ -5,7 +5,7 @@
 
 | 검사기 | 지금 | 최초 기록 시점 |
 |---|---|---|
-| `scripts/verify-ui.mjs` | **85/85** | 15 → 30 |
+| `scripts/verify-ui.mjs` | **86/86** | 15 → 30 |
 | `scripts/verify-scenarios.mjs` | **95/95 단계 / 13 시나리오** | 75 / 8 |
 | `tools/uxtest/api-surface.mjs` | 격차 없음 (엔드포인트 43 · 클라이언트 51 · KPI 18/18 도달) | 엔드포인트 14 |
 | `mvn test` | **25개** (`KpiGraphTest` 19 · `ConvexHullTest` 6) | 없었음 |
@@ -58,7 +58,7 @@ CQI 1 (CRITICAL) · BLER 60% (CRITICAL) · TX power 21.5 dBm (WARNING)
 
 ## 3. 브라우저 검증 (`node scripts/verify-ui.mjs`)
 
-실제 Chromium을 구동합니다. 당시 15개 항목, **현재 85개** — 아래 표는 최초 15개입니다.
+실제 Chromium을 구동합니다. 당시 15개 항목, **현재 86개** — 아래 표는 최초 15개입니다.
 
 이후 추가된 계열: 자동 스케일 · 임포트 왕복 · 랩 브링업(RACH 도크·서빙 셀 식별·게이지) ·
 모니터드 셋(도크·커서 막대·파일럿 오염·지도 연결선) · KPI Workbench(캔버스·검증 리포트·
@@ -126,7 +126,7 @@ CQI 1 (CRITICAL) · BLER 60% (CRITICAL) · TX power 21.5 dBm (WARNING)
 
 ## 8. 시나리오 단위 E2E 검증 (2026-08-30 추가)
 
-개별 동작 확인(위 30개)과 별개로, 8개 사용자 시나리오를 여정 전체로 걷는 검증을
-추가했습니다: `scripts/verify-scenarios.mjs`, 49단계 전부 통과. 시나리오 정의·결과·
-검증이 잡아낸 결함(결함 창-페이드 중첩, 커서 디시메이션 단절, 비교의 거짓 SAME 등)은
-`docs/scenario-verification.md`에 기록했습니다.
+개별 동작 확인과 별개로, 사용자 시나리오를 여정 전체로 걷는 검증을 추가했습니다:
+`scripts/verify-scenarios.mjs`. 추가 당시 8개 시나리오 49단계, **현재 13개 시나리오
+95단계** 전부 통과. 시나리오 정의·결과·검증이 잡아낸 결함(결함 창-페이드 중첩, 커서
+디시메이션 단절, 비교의 거짓 SAME 등)은 `docs/scenario-verification.md`에 기록했습니다.

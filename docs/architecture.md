@@ -336,7 +336,7 @@ API는 호출자가 보낸 라벨도 그대로 저장하므로, 경계와 라벨
 
 | 검사기 | 잡는 것 | 규모 (2026-09-01) |
 |---|---|---|
-| `scripts/verify-ui.mjs` | 개별 동작 회귀 | 85개 |
+| `scripts/verify-ui.mjs` | 개별 동작 회귀 | 86개 |
 | `scripts/verify-scenarios.mjs` | 여정 회귀 — 단계 간 상태가 이어짐 | 95단계 / 13 시나리오 |
 | `tools/uxtest/api-surface.mjs` | **로직은 있는데 뷰가 없는** 격차 | 엔드포인트 · 클라이언트 · KPI 도달성 |
 | `mvn test` | SQL을 조립하는 코드와 기하 | 25개 단위 테스트 |
