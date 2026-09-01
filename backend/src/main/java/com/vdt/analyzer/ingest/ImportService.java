@@ -61,8 +61,8 @@ public class ImportService {
 
     @Transactional
     public ImportResult importCsv(MultipartFile file, String sessionName, String device,
-                                  String operator, String technology, char delimiter,
-                                  boolean createUnknownColumns) {
+                                  String operator, String technology, String description,
+                                  char delimiter, boolean createUnknownColumns) {
         long jobId = jobLog.start(file.getOriginalFilename());
         try (BufferedReader reader = new BufferedReader(
                 new InputStreamReader(file.getInputStream(), StandardCharsets.UTF_8))) {
@@ -89,7 +89,7 @@ public class ImportService {
             }
 
             long sessionId = createSession(sessionName, device, operator, technology,
-                    file.getOriginalFilename());
+                    description, file.getOriginalFilename());
 
             Counters counters = loadRows(reader, delimiter, layout, sessionId,
                     new HashSet<>(created));
@@ -366,18 +366,44 @@ public class ImportService {
 
     // ----------------------------------------------------------------- records
 
+    /**
+     * @param description free text the importer types, e.g. which build or which run this
+     *                    was. Ends up in the note bar, and is the only place a session can
+     *                    say anything the filename does not.
+     */
     private long createSession(String name, String device, String operator,
-                               String technology, String filename) {
+                               String technology, String description, String filename) {
+        String sessionName = name == null || name.isBlank() ? "Imported " + filename : name;
+
+        // The name is the only handle the session picker offers, so two sessions sharing
+        // one is not a cosmetic problem: the next person opens whichever the dropdown
+        // happens to list first and analyses the wrong drive without anything looking
+        // wrong. Auto-disambiguating to "... (2)" would produce exactly the pair of
+        // near-identical names that causes it, so this refuses instead and says which
+        // session already holds the name.
+        List<Long> clash = jdbc.queryForList(
+                "SELECT id FROM measurement_session WHERE lower(name) = lower(?) ORDER BY id",
+                Long.class, sessionName);
+        if (!clash.isEmpty()) {
+            throw new IllegalArgumentException(
+                    "A session named \"" + sessionName + "\" already exists (id "
+                    + clash.get(0) + "). Give this import a different name, or delete"
+                    + " the existing session first.");
+        }
+
+        String notes = description == null || description.isBlank()
+                ? "Imported from " + filename
+                : description.trim() + " (imported from " + filename + ")";
         jdbc.update("""
                 INSERT INTO measurement_session (name, device, operator, technology,
                     started_at, ended_at, notes)
                 VALUES (?,?,?,?, now(), now(), ?)
                 """,
-                name == null || name.isBlank() ? "Imported " + filename : name,
+                sessionName,
                 device == null ? "unknown" : device,
                 operator == null ? "unknown" : operator,
                 technology == null ? "unknown" : technology,
-                "Imported from " + filename);
+                notes);
         Long id = jdbc.queryForObject("SELECT max(id) FROM measurement_session", Long.class);
         return id == null ? 0 : id;
     }

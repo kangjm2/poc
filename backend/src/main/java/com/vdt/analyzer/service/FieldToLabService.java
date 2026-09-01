@@ -23,7 +23,6 @@ import java.util.List;
 public class FieldToLabService {
 
     private static final double C = 299_792_458.0;      // m/s
-    private static final double EARTH_R_M = 6_371_000.0;
 
     /** One carrier the drive saw, as the reference's carrier table lists them. */
     public record Carrier(String band, Integer arfcn, Double centreFreqMhz,
@@ -76,17 +75,28 @@ public class FieldToLabService {
         // Distance along the route by great-circle steps between consecutive samples.
         // Computed in SQL because the route can hold millions of points and only the
         // total is wanted.
+        //
+        // Shares RouteContinuity with the map and the distance profile. This screen is
+        // the one that hands a number to the lab - it becomes the channel model's
+        // description and the drive it claims to replay - so a rejected fix inflating it
+        // is the most expensive place for the three to disagree. They did disagree once:
+        // a single bad fix reported this 4.4 km drive as 17.8 km here while the profile
+        // said 4.4, and the cross-screen check in verify-ui.mjs is what caught it.
         Double distanceM = jdbc.query("""
-                SELECT sum(2 * %f * asin(sqrt(
-                         power(sin(radians(lat2 - lat1) / 2), 2)
-                         + cos(radians(lat1)) * cos(radians(lat2))
-                           * power(sin(radians(lon2 - lon1) / 2), 2)))) AS m
-                FROM (SELECT latitude AS lat1, longitude AS lon1,
-                             lead(latitude) OVER (ORDER BY seq) AS lat2,
-                             lead(longitude) OVER (ORDER BY seq) AS lon2
-                      FROM sample WHERE session_id = ?) steps
-                WHERE lat2 IS NOT NULL
-                """.formatted(EARTH_R_M),
+                WITH steps AS (
+                    SELECT seq, ts, latitude, longitude,
+                           %1$s AS step_m,
+                           %2$s AS dt_s
+                    FROM sample WHERE session_id = ?
+                ),
+                classified AS (
+                    SELECT step_m, %3$s AS brk FROM steps
+                )
+                SELECT sum(%4$s) AS m FROM classified
+                """.formatted(RouteContinuity.STEP_METRES,
+                              RouteContinuity.SECONDS_SINCE_PREV,
+                              RouteContinuity.classify("step_m", "dt_s"),
+                              RouteContinuity.travelledMetres("step_m", "brk")),
                 (rs, i) -> (Double) rs.getObject("m"), sessionId)
                 .stream().findFirst().orElse(null);
 

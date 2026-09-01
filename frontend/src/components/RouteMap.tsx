@@ -89,9 +89,17 @@ export function RouteMap({
     const layer = routeLayer.current
     if (!map || !layer || track.length === 0) return
     layer.clearLayers()
+
+    // A rejected fix must not frame the map either. Leaving it in fitBounds squashes the
+    // entire real drive into a few pixels so the outlier can stay on screen - the map
+    // ends up unreadable in order to show the one position we have already decided not
+    // to believe. Excluding it here is the same judgement the distance query makes.
+    const believable = track.filter((p) => p.breakBefore !== 2)
+    const frame = (believable.length > 1 ? believable : track)
+      .map((p) => [p.latitude, p.longitude] as [number, number])
+
     if (bins && bins.length > 0) {
-      const b = L.latLngBounds(track.map((p) => [p.latitude, p.longitude] as [number, number]))
-      map.fitBounds(b, { padding: [18, 18] })
+      map.fitBounds(L.latLngBounds(frame), { padding: [18, 18] })
       return
     }
 
@@ -101,14 +109,21 @@ export function RouteMap({
     // every sample: on an eight-hour drive that is thousands of objects and the map
     // takes tens of seconds to appear. The colour only changes where the KPI crosses
     // a bin boundary, so a run is the natural unit and there are usually a few dozen.
+    //
+    // A run also ends at a discontinuity. Carrying a coloured line across one would
+    // state that we measured ground we have nothing from (a gap) or that the vehicle
+    // went somewhere it did not (a bad fix) - the map's only two ways of asserting
+    // something false. The server classifies these; see RouteContinuity.
     let runStart = 0
     for (let i = 1; i <= track.length; i++) {
-      const endOfRun = i === track.length || track[i].color !== track[runStart].color
+      const broken = i < track.length && track[i].breakBefore > 0
+      const endOfRun = i === track.length || broken || track[i].color !== track[runStart].color
       if (!endOfRun) continue
 
       const head = track[runStart]
-      // Extend one sample past the run so adjacent runs join without a visible gap.
-      const end = Math.min(i, track.length - 1)
+      // Extend one sample past the run so adjacent runs join without a visible gap -
+      // but never across a break, which is the one place the gap is the point.
+      const end = broken ? i - 1 : Math.min(i, track.length - 1)
       const coords = track.slice(runStart, end + 1)
         .map((p) => [p.latitude, p.longitude] as [number, number])
 
@@ -127,8 +142,42 @@ export function RouteMap({
       runStart = i
     }
 
-    const bounds = L.latLngBounds(track.map((p) => [p.latitude, p.longitude] as [number, number]))
-    map.fitBounds(bounds, { padding: [18, 18] })
+    // Then draw the breaks themselves. Omitting them entirely would leave the route
+    // looking as though it simply ended and resumed elsewhere, which is a different
+    // false impression. A thin dashed line says "the vehicle went this way and we have
+    // nothing from it" - visibly not a measurement, and it cannot be mistaken for one
+    // because it carries no bin colour and its own tooltip says so.
+    for (let i = 1; i < track.length; i++) {
+      const kind = track[i].breakBefore
+      if (!kind) continue
+      const a = track[i - 1]
+      const b = track[i]
+      const seconds = Math.round(
+        (new Date(b.ts).getTime() - new Date(a.ts).getTime()) / 1000,
+      )
+      const gap = kind === 1
+      L.polyline(
+        [[a.latitude, a.longitude], [b.latitude, b.longitude]],
+        {
+          className: gap ? 'route-gap' : 'route-glitch',
+          color: gap ? '#8a8a95' : '#b00020',
+          weight: 2,
+          opacity: 0.85,
+          dashArray: gap ? '5 7' : '2 4',
+        },
+      )
+        .bindTooltip(
+          gap
+            ? `No measurement<br/>${seconds}s with no position fix`
+                + `<br/>seq ${a.seq} \u2192 ${b.seq}`
+            : `Implausible position fix<br/>excluded from distance travelled`
+                + `<br/>seq ${a.seq} \u2192 ${b.seq}`,
+          { sticky: true },
+        )
+        .addTo(layer)
+    }
+
+    map.fitBounds(L.latLngBounds(frame), { padding: [18, 18] })
   }, [track, kpiName, onCursorChange, bins])
 
   useEffect(() => {

@@ -34,7 +34,15 @@ public class DriveTestGenerator {
     public record Neighbour(int pci, int arfcn, double rsrp, double rsrq) {}
 
     /** One generated sample: position plus every KPI at that instant. */
-    public record Point(int seq, double lat, double lon, double speedKmh, int servingPci,
+    /**
+     * @param seq        row index, always contiguous - this is what every query keys on.
+     * @param tOffsetSec seconds since the session started. NOT the same as seq once a
+     *                   stretch has no position fix: the rows are gone but the clock
+     *                   kept running, which is exactly what a real logger produces and
+     *                   what makes the hole visible downstream.
+     */
+    public record Point(int seq, int tOffsetSec,
+                        double lat, double lon, double speedKmh, int servingPci,
                         double rsrp, double rsrq, double sinr, double dlThroughput,
                         double ulThroughput, double bler, double cqi, double mcs,
                         double rank, double txPower,
@@ -73,6 +81,8 @@ public class DriveTestGenerator {
     private final double rsrpBias;
     private final double sinrBias;
     private final int[] tunnel;
+    private final int[] gpsOutage;
+    private final int gpsGlitchAt;
 
     /**
      * @param rsrpBias dB applied to every cell alike, so it shifts coverage without
@@ -83,11 +93,29 @@ public class DriveTestGenerator {
      */
     public DriveTestGenerator(long seed, List<Site> sites, List<double[]> waypoints,
                               int sampleCount, double rsrpBias, double sinrBias, int[] tunnel) {
+        this(seed, sites, waypoints, sampleCount, rsrpBias, sinrBias, tunnel, null, -1);
+    }
+
+    /**
+     * @param gpsOutage   {startIndex, endIndex} of a stretch with no position fix, or
+     *                    null. No sample is emitted there at all - a row without a fix
+     *                    cannot be stored (sample.latitude is NOT NULL) and the importer
+     *                    drops it too, so the honest shape is an absence. The clock keeps
+     *                    running across it, which is what makes the hole detectable.
+     * @param gpsGlitchAt index of a single wildly wrong fix, or -1. One bad fix is the
+     *                    other way route data lies: the line darts out and back, and the
+     *                    excursion silently joins the distance travelled.
+     */
+    public DriveTestGenerator(long seed, List<Site> sites, List<double[]> waypoints,
+                              int sampleCount, double rsrpBias, double sinrBias, int[] tunnel,
+                              int[] gpsOutage, int gpsGlitchAt) {
         this.random = new Random(seed);
         this.sites = sites;
         this.rsrpBias = rsrpBias;
         this.sinrBias = sinrBias;
         this.tunnel = tunnel;
+        this.gpsOutage = gpsOutage;
+        this.gpsGlitchAt = gpsGlitchAt;
         this.route = interpolate(waypoints, sampleCount);
     }
 
@@ -207,7 +235,22 @@ public class DriveTestGenerator {
                 monitored = new ArrayList<>(monitored.subList(0, MAX_MONITORED));
             }
 
-            out.add(new Point(i, pos[0], pos[1], round(clamp(speed, 0, 120), 1), bestPci,
+            // No fix for this stretch: emit nothing. seq stays contiguous over the rows
+            // that DO exist, while tOffsetSec keeps the real elapsed time, so the hole
+            // shows up as a jump in the clock rather than as a jump in the row index -
+            // the same shape ImportService produces from a log with dropped fixes.
+            if (gpsOutage != null && i >= gpsOutage[0] && i <= gpsOutage[1]) continue;
+
+            double lat = pos[0];
+            double lon = pos[1];
+            if (i == gpsGlitchAt) {
+                // A receiver that briefly resolved to the wrong place. Far enough that no
+                // vehicle could have covered it in one second, which is the whole point.
+                lat += 0.05;
+                lon += 0.08;
+            }
+
+            out.add(new Point(out.size(), i, lat, lon, round(clamp(speed, 0, 120), 1), bestPci,
                     round(rsrp, 1), round(rsrq, 1), round(sinr, 1), round(dl, 1), round(ul, 1),
                     round(bler, 2), cqi, mcs, rank, round(tx, 1),
                     round(prb, 1), activeUes, round(harq, 2), List.copyOf(monitored)));

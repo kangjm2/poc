@@ -104,8 +104,13 @@ public class DataSeeder implements SmartInitializingSingleton {
 
         seedSession("Oulu city centre - build 1.4.2", "OnePlus 13R", "Operator A", "5G NR SA",
                 "Urban city", "1.4.2", base, "Oulu, Finland",
+                // The tunnel is also where the position fix is lost, which is what a
+                // tunnel actually does. The single bad fix later on is the other way route
+                // data lies. Both are here so the checks that must catch them have
+                // something to catch: on clean data those assertions would pass whatever
+                // the code did.
                 new DriveTestGenerator(20260824L, CITY_SITES, CITY_ROUTE, 1200, 0.0, 0.0,
-                        new int[]{540, 610}),
+                        new int[]{540, 610}, new int[]{560, 585}, 900),
                 "Baseline run. Contains a deep fade stretch through the underpass.");
 
         seedSession("Oulu city centre - build 1.5.0", "OnePlus 13R", "Operator A", "5G NR SA",
@@ -154,7 +159,7 @@ public class DataSeeder implements SmartInitializingSingleton {
         s.setScenario(scenario);
         s.setBuildLabel(build);
         s.setStartedAt(start);
-        s.setEndedAt(start.plusSeconds(points.size()));
+        s.setEndedAt(start.plusSeconds(points.get(points.size() - 1).tOffsetSec() + 1));
         s.setLocationName(location);
         s.setNotes(notes);
         MeasurementSession saved = sessions.saveAndFlush(s);
@@ -179,7 +184,7 @@ public class DataSeeder implements SmartInitializingSingleton {
         List<Object[]> sampleRows = new ArrayList<>(points.size());
         List<Object[]> kpiRows = new ArrayList<>(points.size() * 10);
         for (Point p : points) {
-            java.sql.Timestamp ts = java.sql.Timestamp.from(start.plusSeconds(p.seq()));
+            java.sql.Timestamp ts = java.sql.Timestamp.from(start.plusSeconds(p.tOffsetSec()));
             sampleRows.add(new Object[]{sid, ts, p.seq(), p.lat(), p.lon(),
                     p.speedKmh(), p.servingPci()});
             addKpi(kpiRows, sid, p.seq(), ts, "RSRP", p.rsrp());
@@ -229,7 +234,7 @@ public class DataSeeder implements SmartInitializingSingleton {
         s.setScenario("Fronthaul injection");
         s.setBuildLabel("1.5.0");
         s.setStartedAt(start);
-        s.setEndedAt(start.plusSeconds(points.size()));
+        s.setEndedAt(start.plusSeconds(points.get(points.size() - 1).tOffsetSec() + 1));
         s.setLocationName("Lab (replay of Oulu city centre)");
         s.setNotes("Emulated UE injected at the O-RAN 7.2x fronthaul; the O-DU is real "
                 + "hardware. Contains a fronthaul timing-window fault around 09:30.");
@@ -242,7 +247,7 @@ public class DataSeeder implements SmartInitializingSingleton {
         List<Object[]> sampleRows = new ArrayList<>(points.size());
         List<Object[]> kpiRows = new ArrayList<>(points.size() * 15);
         for (Point p : points) {
-            java.sql.Timestamp ts = java.sql.Timestamp.from(start.plusSeconds(p.seq()));
+            java.sql.Timestamp ts = java.sql.Timestamp.from(start.plusSeconds(p.tOffsetSec()));
             sampleRows.add(new Object[]{sid, ts, p.seq(), p.lat(), p.lon(),
                     p.speedKmh(), p.servingPci()});
 
@@ -328,7 +333,7 @@ public class DataSeeder implements SmartInitializingSingleton {
     private void seedMonitoredSet(long sid, Instant start, List<Point> points) {
         List<Object[]> rows = new ArrayList<>(points.size() * 5);
         for (Point p : points) {
-            java.sql.Timestamp ts = java.sql.Timestamp.from(start.plusSeconds(p.seq()));
+            java.sql.Timestamp ts = java.sql.Timestamp.from(start.plusSeconds(p.tOffsetSec()));
             for (DriveTestGenerator.Neighbour n : p.monitoredSet()) {
                 rows.add(new Object[]{sid, p.seq(), ts, n.arfcn(), n.pci(), n.rsrp(), n.rsrq()});
             }
@@ -342,7 +347,7 @@ public class DataSeeder implements SmartInitializingSingleton {
         int previousPci = points.get(0).servingPci();
         boolean inDrop = false;
         for (Point p : points) {
-            Instant ts = start.plusSeconds(p.seq());
+            Instant ts = start.plusSeconds(p.tOffsetSec());
 
             if (p.servingPci() != previousPci) {
                 addEvent(sid, ts, "HANDOVER", "INFO",

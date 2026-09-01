@@ -98,24 +98,41 @@ public class AnalysisService {
 
         List<KpiThreshold> scale = autoScale.effective(sessionId, def);
         String binExpr = KpiSql.binOrdinalExpr(scale, "k.value");
+        // Continuity is classified on the FULL sample sequence, before decimation, because
+        // a stride that skips the sample either side of a gap would hide the gap entirely -
+        // the line would close back up and the break would never reach the screen. The two
+        // rows bracketing every break are then pinned into the output regardless of stride.
         String sql = """
-                WITH classified AS (
-                    SELECT s.seq, s.ts, s.latitude, s.longitude, s.speed_kmh, s.serving_pci,
-                           k.value, %s AS bin_ordinal
-                    FROM sample s
+                WITH geo AS (
+                    SELECT seq, ts, latitude, longitude, speed_kmh, serving_pci,
+                           %2$s AS step_m,
+                           %3$s AS dt_s
+                    FROM sample WHERE session_id = ?
+                ),
+                broken AS (
+                    SELECT *, %4$s AS brk FROM geo
+                ),
+                classified AS (
+                    SELECT b.*, k.value, %1$s AS bin_ordinal
+                    FROM broken b
                     LEFT JOIN sample_kpi k
-                           ON k.session_id = s.session_id AND k.seq = s.seq AND k.kpi_name = ?
-                    WHERE s.session_id = ?
+                           ON k.session_id = ? AND k.seq = b.seq AND k.kpi_name = ?
                 ),
                 marked AS (
-                    SELECT *, lag(bin_ordinal) OVER (ORDER BY seq) AS prev_bin
+                    SELECT *, lag(bin_ordinal) OVER (ORDER BY seq) AS prev_bin,
+                              lead(brk) OVER (ORDER BY seq) AS next_brk
                     FROM classified
                 )
-                SELECT seq, ts, latitude, longitude, speed_kmh, serving_pci, value, bin_ordinal
+                SELECT seq, ts, latitude, longitude, speed_kmh, serving_pci, value,
+                       bin_ordinal, brk
                 FROM marked
                 WHERE prev_bin IS DISTINCT FROM bin_ordinal OR seq %% ? = 0
+                   OR brk > 0 OR next_brk > 0
                 ORDER BY seq
-                """.formatted(binExpr);
+                """.formatted(binExpr,
+                              RouteContinuity.STEP_METRES,
+                              RouteContinuity.SECONDS_SINCE_PREV,
+                              RouteContinuity.classify("step_m", "dt_s"));
 
         Map<Integer, KpiThreshold> byOrdinal = new HashMap<>();
         for (KpiThreshold t : scale) byOrdinal.put(t.getOrdinal(), t);
@@ -127,8 +144,9 @@ public class AnalysisService {
                     rs.getDouble("latitude"), rs.getDouble("longitude"), v,
                     bin == null ? "#999999" : bin.getColor(),
                     bin == null ? "no data" : bin.getLabel(),
-                    (Integer) rs.getObject("serving_pci"), (Double) rs.getObject("speed_kmh"));
-        }, kpiName, sessionId, stride);
+                    (Integer) rs.getObject("serving_pci"), (Double) rs.getObject("speed_kmh"),
+                    rs.getInt("brk"));
+        }, sessionId, sessionId, kpiName, stride);
     }
 
     // ----------------------------------------------------------------- series

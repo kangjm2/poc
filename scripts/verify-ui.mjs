@@ -36,7 +36,10 @@ const errors = []
 page.on('pageerror', (e) => errors.push(String(e)))
 page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()) })
 
-await page.goto(BASE, { waitUntil: 'networkidle' })
+// Not networkidle: the blocked basemap keeps fetches pending, so the wait is at the
+// mercy of how long the proxy takes to give up - it timed out outright during repeated
+// container rebuilds. The explicit waits below are what this actually depends on.
+await page.goto(BASE, { waitUntil: 'domcontentloaded' })
 await page.waitForSelector('.statusbar', { timeout: 15000 })
 await page.waitForTimeout(2500) // let map tiles settle
 
@@ -61,6 +64,66 @@ check('색상 범례에 건수·비율 포함', legendRows >= 5 && legendStats.l
 // 3. route is drawn as coloured segments
 const segments = await page.locator('path.leaflet-interactive').count()
 check('지도 경로 색상 세그먼트 렌더링', segments > 100, `${segments} segments`)
+
+// 3b. the route must not assert coverage it does not have.
+//
+// Session 1 carries a 26 s stretch with no position fix and one implausible fix;
+// session 2 is the same route with neither. Asserting only "a gap path exists" would
+// pass on a build that drew a break everywhere, so both halves are checked: the
+// session WITH the defects shows them, the session WITHOUT shows none. The pair is
+// what makes this discriminating rather than decorative.
+const breakPaths = () => page.evaluate(() => ({
+  gap: document.querySelectorAll('path.route-gap').length,
+  glitch: document.querySelectorAll('path.route-glitch').length,
+}))
+const brk1 = await breakPaths()
+check('결측 구간을 이어 그리지 않음', brk1.gap >= 1, `${brk1.gap} gap paths`)
+check('신뢰할 수 없는 위치 고정을 경로에서 분리', brk1.glitch >= 1, `${brk1.glitch} glitch paths`)
+
+// The rejected fix must not frame the map either: with it in fitBounds the whole real
+// drive collapses to a few pixels. The route bbox has to stay a sane fraction of the
+// map, which it cannot be if an 8 km outlier is inside the bounds.
+const framing = await page.evaluate(() => {
+  // The app's own .map div, not Leaflet's .leaflet-container: that class is not
+  // present in this build at all (the basemap is blocked here and the panel renders
+  // as .map.no-basemap), so keying on it made this check fail on healthy code.
+  const paths = [...document.querySelectorAll('.leaflet-overlay-pane path[stroke-width="6"]')]
+  if (!paths.length) return null
+  const container = paths[0].closest('.map')
+  if (!container) return null
+  const box = container.getBoundingClientRect()
+  const rects = paths.map((p) => p.getBoundingClientRect())
+  const w = Math.max(...rects.map((r) => r.right)) - Math.min(...rects.map((r) => r.left))
+  const h = Math.max(...rects.map((r) => r.bottom)) - Math.min(...rects.map((r) => r.top))
+  // fitBounds fills the LIMITING axis and leaves slack on the other, so the larger
+  // ratio is the one that says whether the route was framed. Taking the smaller one
+  // measures the panel's aspect ratio instead of the framing (this panel is wide, so
+  // a correctly framed route still only spans ~17% of its width).
+  return { fill: Math.max(w / box.width, h / box.height) }
+})
+check('경로가 이상치에 눌려 찌그러지지 않음', framing != null && framing.fill > 0.4,
+  framing ? `route fills ${(framing.fill * 100).toFixed(0)}% of the map` : 'no route')
+
+await page.locator('.toolbar select').first().selectOption({ index: 1 })
+await page.waitForTimeout(2200)
+const brk2 = await breakPaths()
+check('결함 없는 세션에는 끊김을 그리지 않음', brk2.gap === 0 && brk2.glitch === 0,
+  `clean session: ${brk2.gap} gaps, ${brk2.glitch} glitches`)
+await page.locator('.toolbar select').first().selectOption({ index: 0 })
+await page.waitForTimeout(2200)
+
+// 3c. and the same judgement must reach the distance axis. A single bad fix adds an
+// out-and-back excursion; unguarded it inflated this 4.4 km drive to 17.8 km, so the
+// two same-route sessions are compared against each other rather than against a
+// hardcoded number.
+const distOf = async (id) => {
+  const r = await page.request.get(`${API_BASE}/api/sessions/${id}/distance-bins?kpi=RSRP&stepMetres=250`)
+  const bins = await r.json()
+  return Math.max(...bins.map((b) => b.toMetres))
+}
+const [d1, d2] = [await distOf(1), await distOf(2)]
+check('이상치가 주행 거리를 부풀리지 않음', Math.abs(d1 - d2) / d2 < 0.15,
+  `${(d1 / 1000).toFixed(2)} km vs ${(d2 / 1000).toFixed(2)} km on the same route`)
 
 await page.screenshot({ path: `${OUT}/01-overview.png`, fullPage: false })
 
@@ -640,7 +703,7 @@ await page.screenshot({ path: `${OUT}/29-composed-workbook.png`, fullPage: true 
 
 // Server-side, so it must survive a reload - that is the whole reason it is not in
 // localStorage.
-await page.reload({ waitUntil: 'networkidle' })
+await page.reload({ waitUntil: 'domcontentloaded' })
 await page.waitForTimeout(2500)
 check('구성한 워크북이 새로고침을 견딤',
   await page.locator(`.workbook-tabs button:text-is("${PROBE}")`).count() === 1)

@@ -119,21 +119,23 @@ public class GeoAnalysisService {
             throw new IllegalArgumentException("Bin step must be between 5 and 20000 metres");
         }
 
-        return jdbc.query("""
+        // The step formula and the rule for which steps count are shared with the map
+        // (RouteContinuity), so a stretch the map refuses to draw as travelled road
+        // cannot still be adding to the distance axis here.
+        String sql = """
                 WITH steps AS (
                     SELECT seq, latitude, longitude,
-                           coalesce(2 * 6371000 * asin(sqrt(
-                             power(sin(radians(latitude - lag(latitude) OVER (ORDER BY seq)) / 2), 2)
-                             + cos(radians(lag(latitude) OVER (ORDER BY seq)))
-                               * cos(radians(latitude))
-                               * power(sin(radians(longitude - lag(longitude) OVER (ORDER BY seq)) / 2), 2)
-                           )), 0) AS step_m
+                           %1$s AS step_m,
+                           %2$s AS dt_s
                     FROM sample WHERE session_id = ?
+                ),
+                classified AS (
+                    SELECT seq, latitude, longitude, step_m, %3$s AS brk FROM steps
                 ),
                 travelled AS (
                     SELECT seq, latitude, longitude,
-                           sum(step_m) OVER (ORDER BY seq ROWS UNBOUNDED PRECEDING) AS d
-                    FROM steps
+                           sum(%4$s) OVER (ORDER BY seq ROWS UNBOUNDED PRECEDING) AS d
+                    FROM classified
                 )
                 SELECT floor(t.d / ?) AS bucket,
                        count(*) AS n,
@@ -145,7 +147,11 @@ public class GeoAnalysisService {
                 WHERE k.kpi_name = ?
                 GROUP BY bucket
                 ORDER BY bucket
-                """, (rs, i) -> {
+                """.formatted(RouteContinuity.STEP_METRES,
+                              RouteContinuity.SECONDS_SINCE_PREV,
+                              RouteContinuity.classify("step_m", "dt_s"),
+                              RouteContinuity.travelledMetres("step_m", "brk"));
+        return jdbc.query(sql, (rs, i) -> {
             double bucket = rs.getDouble("bucket");
             double avg = rs.getDouble("avg_v");
             Optional<KpiThreshold> bin = catalog.binFor(scale, avg);
