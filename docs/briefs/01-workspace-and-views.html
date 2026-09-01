@@ -46,7 +46,9 @@ Nemo Analyze에서 <strong>화면을 여는 방법은 하나뿐입니다</strong
 <tr><td>Binary Logs</td><td>단말 바이너리 로그 (UC4)</td><td><span class="tag t-out">범위 외</span></td></tr>
 <tr><td>Base Stations</td><td>BTS 파일. 맵에 드래그해 경로와 연결</td><td><span class="tag t-none">없음</span></td></tr>
 <tr><td>Maps</td><td>MapInfo/live map 자산</td><td><span class="tag t-out">자산 종류 없음</span></td></tr>
-<tr><td><strong>Polygons</strong></td><td><strong>자산이자 분석 도구.</strong> <code>.TAB</code> 임포트는 자산이지만, <code>Draw polygon</code> → <code>Polygon region</code>은 <em>"specify an area of any shape, and <strong>run statistics over that area</strong>"</em>(p468)</td><td><span class="tag t-none">분석 쪽이 없음</span></td></tr>
+<tr><td><strong>Polygons</strong></td><td><strong>자산이자 분석 도구.</strong> <code>.TAB</code> 임포트는 자산이지만, <code>Draw polygon</code> → <code>Polygon region</code>은 <em>"specify an area of any shape, and <strong>run statistics over that area</strong>"</em>(p468)</td><td><span class="tag t-same">✅ ⑤ — 분석 쪽이 생김</span> <s>분석 쪽이 없음</s>.
+    <code>.TAB</code> 임포트(자산 쪽)는 여전히 없지만, <em>"any shape 위의 통계"</em>는 있습니다.
+    자산이 아니라 <strong>기능</strong>이 본체였다는 이 표의 판단이 맞았습니다</td></tr>
 <tr><td>Data Source Files</td><td>외부 데이터 소스</td><td><span class="tag t-none">없음</span></td></tr>
 <tr><td>Macros · Reports</td><td>매크로, 리포트 템플릿</td><td><span class="tag t-diff">리포트만</span></td></tr>
 </table>
@@ -97,12 +99,16 @@ Nemo Analyze에서 <strong>화면을 여는 방법은 하나뿐입니다</strong
   <td><code>Analyze Local Database</code>(DB 연결명) 아래
       <code>All Measurements (10)</code>, <code>Dropped calls (5 files, 21 hours)</code>,
       <code>May 2016 (1 files, 3 mins)</code> — <strong>파일 수와 총 측정 시간</strong>이 함께</td>
-  <td><span class="tag t-none">없음</span> 세션은 드롭다운 하나</td>
+  <td><span class="tag t-diff">◐ ⑧ — 폴더는 없고 <em>찾기</em>가 생김</span>
+      <s>세션은 드롭다운 하나</s>. 이름·기간·장비·사업자·기술로 좁히고,
+      선택지는 <strong>데이터에서</strong> 옵니다(아무것도 맞지 않는 값을 고를 수 없음).
+      폴더는 "정리", 찾기는 "도달"인데 급한 쪽은 도달이었습니다</td>
 </tr>
 <tr>
   <td><strong>Measurements</strong></td>
   <td>검색창 + 파일 목록. 일부 항목은 <strong>펼칠 수 있음</strong>(한 드라이브 안의 여러 장치)</td>
-  <td><span class="tag t-diff">드롭다운</span></td>
+  <td><span class="tag t-diff">드롭다운 + 찾기(⑧)</span> 한 드라이브 안의 여러 장치를
+      <strong>펼치는</strong> 쪽은 아직 없습니다</td>
 </tr>
 <tr>
   <td><strong>Parameters</strong></td>
@@ -192,8 +198,12 @@ KPI</strong>(예: 임계가 정확히 −100인데 −100이 다량 존재)에�
 <tr><td>Spreadsheet grid (셀 서식·필터·<strong>수식</strong>)</td><td class="src">p180–189</td><td><span class="tag t-none">없음</span></td></tr>
 <tr><td>Indoor / IBWC maps</td><td class="src">p192–199</td><td><span class="tag t-out">실내 범위 외</span></td></tr>
 <tr><td>Numerical data views</td><td class="src">p200</td><td><span class="tag t-same">우측 Numerical Data</span></td></tr>
-<tr><td>Timeline view (+ Highlight Parameter, <strong>Range selection</strong>)</td><td class="src">p203–208</td><td><span class="tag t-diff">진행 바가 부분 대응</span></td></tr>
-<tr><td><strong>Activity</strong> — 업로드·변환 큐 진행 + <strong>Cancel All</strong></td><td class="src">p213</td><td><span class="tag t-diff">Import history(이력만)</span></td></tr>
+<tr><td>Timeline view (+ Highlight Parameter, <strong>Range selection</strong>)</td><td class="src">p203–208</td><td><span class="tag t-diff">진행 바 + 재생 트랜스포트(③)</span>
+    스크럽·재생·역방향·속도는 생겼고, <code>Range selection</code>과
+    <code>Highlight Parameter</code>는 여전히 없습니다</td></tr>
+<tr><td><strong>Activity</strong> — 업로드·변환 큐 진행 + <strong>Cancel All</strong></td><td class="src">p213</td><td><span class="tag t-same">✅ ⑧ — 진행 + 취소</span> <s>Import history(이력만)</s>.
+    진행 중인 잡이 읽은 행 수와 함께 보이고 멈출 수 있습니다.
+    멈춘 임포트는 실패와 <strong>같은 롤백</strong>을 타므로 절반 남은 세션이 생기지 않습니다</td></tr>
 <tr><td><strong>Log window</strong> — 오류 메시지와 <strong>처리 중인 SQL</strong></td><td class="src">p213</td><td><span class="tag t-none">없음</span></td></tr>
 <tr><td>Info views · Network Parameters · Measurement Settings · Properties · Query clipboard</td><td class="src">p202–212</td><td><span class="tag t-none">없음</span></td></tr>
 </table>
@@ -315,15 +325,31 @@ Statistics 탭의 범위 필터, 지도의 임계 색상. 화면을 옮기면 �
 
 <h2>5. 이 문서에서 남은 일로 확인된 것</h2>
 
+<p class="note">이 표가 쓰인 뒤 백로그 ①–⑧이 진행되어 <strong>7개 중 1개가 닫혔고, 1개가 절반, 1개는 "하지 않기로" 판정됐습니다.</strong>
+지운 것이 아니라 <strong>무엇이 됐는지</strong>를 남깁니다.
+전체 대조는 <a href="../use-case-coverage.md">Use Case 31개 대조표</a>.</p>
+
 <table>
-<tr><th style="width:220px">항목</th><th style="width:70px">규모</th><th>왜</th></tr>
-<tr><td>임포트 <strong>진행 큐 + 취소</strong></td><td>작음</td><td>Activity의 없는 절반. 대용량 임포트 중 사용자가 할 일이 없음</td></tr>
-<tr><td>KPI 그래프의 <strong>생성 SQL 표시</strong></td><td>매우 작음</td><td>응답에 이미 있음. 표시만 하면 됨</td></tr>
-<tr><td>임계 <strong>포함 방향</strong> 선택</td><td>작음</td><td>양자화된 KPI에서 구간 개수가 갈림</td></tr>
-<tr><td>파라미터 <strong>★ 즐겨찾기</strong></td><td>매우 작음</td><td>매일 보는 것은 대여섯 개인데 매번 검색해야 함</td></tr>
-<tr><td>사용자 KPI의 <strong>출처 표시</strong> (User 분류)</td><td>작음</td><td>직접 만든 KPI가 기본 제공 KPI와 구별되지 않음</td></tr>
-<tr><td>세션 <strong>폴더</strong></td><td>중간</td><td>세션 수가 늘면 필요. 지금은 아님</td></tr>
-<tr><td><strong>color grid · surface</strong> 그래프</td><td>중간</td><td>두 파라미터 상관을 보는 유일한 뷰 (UC8)</td></tr>
+<tr><th style="width:220px">항목</th><th style="width:70px">규모</th><th>왜 · 지금</th></tr>
+<tr><td><s>임포트 진행 큐 + 취소</s></td><td>작음</td><td>Activity의 없는 절반이었습니다 —
+    <strong>✅ ⑧에서 완료.</strong> 진행 중인 잡이 행 수와 함께 보이고,
+    <code>POST /api/import/jobs/{id}/cancel</code>이 <em>요청</em>을 남기면 적재 루프가 다음 배치에서
+    그것을 보고 멈춥니다. 멈춘 임포트는 실패와 <em>같은 롤백</em>을 타므로 절반 남은 세션이 생기지 않습니다</td></tr>
+<tr><td>KPI 그래프의 <strong>생성 SQL 표시</strong></td><td>매우 작음</td><td>응답에 이미 있음. 표시만 하면 됨.
+    <strong>하지 않기로 판정</strong> — 그 밑의 진짜 요구("이 숫자가 어디서 왔나")는
+    ⑥의 <em>노드 미리보기</em>가 더 잘 답합니다 (<a href="06-menus-and-query-api.html">⑥ 브리프</a>)</td></tr>
+<tr><td>임계 <strong>포함 방향</strong> 선택</td><td>작음</td><td>양자화된 KPI에서 구간 개수가 갈림.
+    <strong>여전히 남음</strong> — 규칙은 <code>KpiSql</code>에 하한 포함·상한 배제로 <em>한 자리</em>에 고정돼 있고,
+    고르게 만드는 일은 그 한 자리를 여는 일입니다</td></tr>
+<tr><td>파라미터 <strong>★ 즐겨찾기</strong></td><td>매우 작음</td><td>매일 보는 것은 대여섯 개인데 매번 검색해야 함.
+    <strong>여전히 남음</strong></td></tr>
+<tr><td>사용자 KPI의 <strong>출처 표시</strong> (User 분류)</td><td>작음</td><td>직접 만든 KPI가 기본 제공 KPI와 구별되지 않음.
+    <strong>여전히 남음</strong></td></tr>
+<tr><td>세션 <strong>폴더</strong></td><td>중간</td><td>세션 수가 늘면 필요 —
+    <strong>◐ ⑧이 압력의 절반을 덜었습니다.</strong> 폴더는 없지만 세션 <em>찾기</em>가 생겼습니다
+    (이름·날짜·기술로 좁히기). 폴더는 "정리"이고 찾기는 "도달"인데, 급한 쪽은 도달이었습니다</td></tr>
+<tr><td><strong>color grid · surface</strong> 그래프</td><td>중간</td><td>두 파라미터 상관을 보는 유일한 뷰 (UC8).
+    <strong>여전히 남음</strong></td></tr>
 </table>
 
 <footer>
