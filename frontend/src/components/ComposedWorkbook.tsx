@@ -197,6 +197,7 @@ export function ComposedWorkbook({
             <div style={{ flex: 1, minWidth: 0 }}>
               {pane.kind === 'MAP' ? (
                 <RouteMap track={track} cells={cells} cursorSeq={cursorSeq}
+                          frameKey={String(sessionId)}
                           onCursorChange={onCursorChange}
                           kpiName={visible[0]
                             ? (defs.find((d) => d.name === visible[0].kpiName)?.displayName

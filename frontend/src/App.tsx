@@ -21,6 +21,9 @@ import { StatisticsPanel } from './components/StatisticsPanel'
 import { LabView } from './components/LabView'
 import { ImportView } from './components/ImportView'
 import { LegendEditor } from './components/LegendEditor'
+import { KeySheet } from './components/KeySheet'
+import { bindingFor, isTypingTarget } from './view/keymap'
+import { PRIORITY, dismissTop, useDismissable } from './view/dismiss'
 
 /**
  * Workbook pages. Existing users switch screen sets from a tab strip along the
@@ -48,6 +51,28 @@ type BuiltInId = (typeof WORKBOOKS)[number]['id']
  * built-ins hold panels that are not panes - a bring-up sequence, an import form - and
  * flattening them into pane rows would have meant inventing a pane type per screen.
  */
+/**
+ * Playback rates, in samples per second.
+ *
+ * The step is always one sample, so the ladder is what makes a long drive watchable:
+ * 1174 samples take 20 minutes at 1/s and 18 seconds at 64/s, and 7200 samples take
+ * under two minutes at the top rate - while every sample is still visited.
+ *
+ * The cursor moving 64 times a second does NOT mean 64 requests a second: the two
+ * per-cursor fetches are debounced separately (see CURSOR_FETCH_MS), which is what lets
+ * the rate ladder be about watching rather than about the server.
+ */
+const RATES = [1, 4, 16, 64]
+
+/**
+ * How often the cursor's server fetches may fire, in ms.
+ *
+ * 125 ms is 8 per second, which is exactly what the old 250 ms tick produced with its two
+ * uncancelled requests per move. Holding an arrow key repeats at roughly 30/s and the top
+ * playback rate is 64/s; without this, either would multiply the request rate by eight.
+ */
+const CURSOR_FETCH_MS = 125
+
 type WorkbookId = BuiltInId | `wb:${number}`
 
 export function App() {
@@ -88,6 +113,20 @@ export function App() {
   // Session-independent, so it is fetched once rather than per drive.
   const [eventTypes, setEventTypes] = useState<Map<string, EventType>>(new Map())
   const [playing, setPlaying] = useState(false)
+  /**
+   * Playback in samples per second, and which way.
+   *
+   * The old loop always took 240 steps whatever the drive length - a reasonable way to
+   * say "a minute end to end", but it made the STEP a function of the drive: on a
+   * two-hour run it advanced 30 samples a tick, so 29 of every 30 samples could not be
+   * reached by playing at all. The step is now always one sample and the RATE is what
+   * changes, so no speed can skip a sample.
+   */
+  const [rate, setRate] = useState(RATES[1])
+  const [reverse, setReverse] = useState(false)
+  const [keySheet, setKeySheet] = useState(false)
+  /** Bumped to ask the map for a deliberate re-frame. */
+  const [refitToken, setRefitToken] = useState(0)
   const [error, setError] = useState<string | null>(null)
 
   // A sub-selection of the drive. Statistics, the legend and the degradation list
@@ -161,19 +200,33 @@ export function App() {
     api.series(sessionId, ['FH_RX_LATE', 'FH_RX_ON_TIME']).then(setFhSeries).catch(fail)
   }, [sessionId, workbook, fail])
 
-  useEffect(() => {
-    if (sessionId == null) return
-    api.snapshot(sessionId, cursorSeq).then(setSnapshot).catch(() => { /* seq may be out of range */ })
-  }, [sessionId, cursorSeq, scaleVersion])
-
+  /**
+   * The two fetches that follow the cursor, debounced together.
+   *
+   * This is what lets the cursor move at 64 samples a second without the server seeing
+   * 128 requests a second. The cursor itself is not throttled - the map, the charts and
+   * the status bar follow every sample, because they are drawn from data already in the
+   * browser. Only the two round trips are rate-limited, so "how fast does it play" and
+   * "how hard does it hit the server" stopped being the same question.
+   *
+   * `live` on BOTH: a debounce shortens the queue, it does not order it. Two responses
+   * can still overtake each other, and an out-of-order snapshot leaves the CURRENT clock
+   * and the Numerical Data grid describing a moment the cursor has already left - which
+   * is a screen that is confidently wrong, the thing item ① existed to remove.
+   */
   useEffect(() => {
     if (sessionId == null) { setMonitored(null); return }
     let live = true
-    api.monitoredSet(sessionId, cursorSeq)
-      .then((d) => { if (live) setMonitored(d) })
-      .catch(() => { if (live) setMonitored(null) })
-    return () => { live = false }
-  }, [sessionId, cursorSeq])
+    const timer = setTimeout(() => {
+      api.snapshot(sessionId, cursorSeq)
+        .then((d) => { if (live) setSnapshot(d) })
+        .catch(() => { /* seq may be out of range */ })
+      api.monitoredSet(sessionId, cursorSeq)
+        .then((d) => { if (live) setMonitored(d) })
+        .catch(() => { if (live) setMonitored(null) })
+    }, CURSOR_FETCH_MS)
+    return () => { live = false; clearTimeout(timer) }
+  }, [sessionId, cursorSeq, scaleVersion])
 
   useEffect(() => {
     if (sessionId == null || binSize === 0) { setBins(null); return }
@@ -206,19 +259,127 @@ export function App() {
     ?? (extraSeries?.kpi === name ? extraSeries : null)
   const maxSeq = Math.max(0, (session?.sampleCount ?? 1) - 1)
 
+  /**
+   * The one writer of the time cursor.
+   *
+   * There were fifteen call sites setting it directly and none of them clamped, so a
+   * panel could ask for a seq the drive does not have and the status bar would print it.
+   * Clamping HERE rather than in a corrective effect matters: a corrective effect runs
+   * after the session-change reset in the same flush and undoes it, parking the cursor on
+   * the last sample of the new drive instead of the first.
+   */
+  const moveCursor = useCallback((next: number) => {
+    // `sampleCount == null` means the session has not loaded, which is not the same fact
+    // as "this drive has one sample" - and `maxSeq` is 0 in both. Clamping on the
+    // conflated value silently accepts any seq on a one-sample drive.
+    const count = session?.sampleCount
+    if (count == null) { setCursorSeq(Math.max(0, next)); return }
+    setCursorSeq(Math.max(0, Math.min(count - 1, next)))
+  }, [session])
+
   // Playback: the cursor sweeps the drive so the engineer can watch the grid,
   // charts and map move together, the way the run originally unfolded.
+  //
+  // One sample per tick at every rate. The old loop divided the drive into 240 steps
+  // regardless of its length, which reads as "a minute end to end" but means the step
+  // grows with the drive: at 7200 samples it moved 30 at a time and 29 of every 30
+  // samples were unreachable by playing. Rate changes the tick period instead.
   useEffect(() => {
-    if (!playing) return
-    const stepSize = Math.max(1, Math.round(maxSeq / 240))
+    if (!playing || maxSeq === 0) return
     const timer = setInterval(() => {
       setCursorSeq((s) => {
-        if (s + stepSize >= maxSeq) { setPlaying(false); return maxSeq }
-        return s + stepSize
+        const next = reverse ? s - 1 : s + 1
+        if (next < 0 || next > maxSeq) { setPlaying(false); return s }
+        return next
       })
-    }, 250)
+    }, 1000 / rate)
     return () => clearInterval(timer)
-  }, [playing, maxSeq])
+  }, [playing, maxSeq, rate, reverse])
+
+  // Pressing play at the end used to be a silent no-op: the loop set `playing` true, the
+  // first tick found itself at maxSeq and turned it straight off again, so the button
+  // flickered and nothing moved.
+  const togglePlay = useCallback(() => {
+    setPlaying((p) => {
+      if (p) return false
+      if (!reverse && cursorSeq >= maxSeq) setCursorSeq(0)
+      if (reverse && cursorSeq <= 0) setCursorSeq(maxSeq)
+      return true
+    })
+  }, [reverse, cursorSeq, maxSeq])
+
+  /**
+   * The app's only keyboard listener.
+   *
+   * One owner, so "which key does what" is answerable by reading one table
+   * (view/keymap.ts) rather than by grepping for onKeyDown. Registered on window in the
+   * bubble phase, so a component that wants a key for itself can still stop it.
+   */
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      // Chords belong to the browser and the OS. Shadowing Ctrl+F or Cmd+R would be a
+      // worse bug than any shortcut here is a feature.
+      if (e.ctrlKey || e.metaKey || e.altKey) return
+      // Mid-composition keystrokes are the IME's, not ours.
+      if (e.isComposing) return
+
+      const b = bindingFor(e.key)
+      if (!b) return
+      // Escape is exempt from the typing guard on purpose: the state where a modal is
+      // open AND a field inside it has focus is exactly the state Escape exists for.
+      if (b.keys[0] !== 'Escape' && isTypingTarget(e.target)) return
+      if (e.repeat && !b.repeatable) return
+      // Transport, range and framing act on the Analysis screen. Fired from Import, they
+      // would sweep a cursor and narrow a filter nothing on screen displays - work the
+      // user cannot see, undo, or even know happened.
+      // The map handles its own keys, on itself. Claiming them here would give two
+      // owners to one key, which is the situation this listener exists to end.
+      if (b.scope === 'map') return
+      if (b.scope === 'analyze' && mode !== 'analyze') return
+
+      switch (b.keys[0]) {
+        case 'Escape':
+          // Only swallow the key if something actually closed, so a future local handler
+          // is not starved by a global one that always claims it.
+          if (dismissTop()) e.preventDefault()
+          return
+        case '?': setKeySheet((v) => !v); break
+        case ' ': togglePlay(); break
+        case 'ArrowRight': moveCursor(cursorSeq + 1); break
+        case 'ArrowLeft': moveCursor(cursorSeq - 1); break
+        case 'PageDown': moveCursor(cursorSeq + 10); break
+        case 'PageUp': moveCursor(cursorSeq - 10); break
+        case 'Home': moveCursor(0); break
+        case 'End': moveCursor(maxSeq); break
+        case 'r': setReverse((v) => !v); break
+        case '+': setRate((r) => RATES[Math.min(RATES.length - 1, RATES.indexOf(r) + 1)]); break
+        case '-': setRate((r) => RATES[Math.max(0, RATES.indexOf(r) - 1)]); break
+        case '[': setRange((r) => ({ from: cursorSeq, to: r?.to ?? null })); break
+        case ']': setRange((r) => ({ from: r?.from ?? null, to: cursorSeq })); break
+        case '\\': setRange(null); break
+        case 'f': setRefitToken((n) => n + 1); break
+        default: return
+      }
+      e.preventDefault()
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [mode, cursorSeq, maxSeq, moveCursor, togglePlay])
+
+  // Playback belongs to the Analysis screen. Leaving it running while the user is in
+  // Import means a cursor sweeping a drive they are not looking at, and two fetches a
+  // second for it.
+  useEffect(() => { setPlaying(false) }, [mode])
+
+  useDismissable(keySheet, PRIORITY.MODAL, () => setKeySheet(false))
+  // Registered HERE and only here. LegendEditor registered itself as well, which looked
+  // harmless and was not: with two registrations for one surface, removing either one
+  // still closed the modal, so neither could be shown to be doing anything. A defect
+  // injection that disabled the component's registration changed no observable behaviour
+  // at all - the duplicate was hiding whether the feature worked.
+  useDismissable(editingScale, PRIORITY.MODAL, () => setEditingScale(false))
+  useDismissable(error != null, PRIORITY.NOTICE, () => setError(null))
+
 
   const removeSession = async () => {
     if (!session) return
@@ -241,20 +402,20 @@ export function App() {
   // Events now arrive with the seq the server resolved against the FULL sample table.
   // This used to scan `track`, which is decimated, so on a long drive an event jumped to
   // whichever sample happened to survive thinning rather than to its own.
-  const jumpToSeq = (seq: number) => setCursorSeq(seq)
+  const jumpToSeq = (seq: number) => moveCursor(seq)
 
   const chart = (name: string, filled = false) => {
     const s = seriesFor(name)
     return s ? (
       <TimeSeriesChart key={name} series={s} cursorSeq={cursorSeq}
-                       onCursorChange={setCursorSeq} filled={filled}
+                       onCursorChange={moveCursor} filled={filled}
                        events={events} eventTypes={eventTypes} />
     ) : null
   }
 
   const chartOf = (s: Series, filled = false) => (
     <TimeSeriesChart key={s.kpi} series={s} cursorSeq={cursorSeq}
-                     onCursorChange={setCursorSeq} filled={filled}
+                     onCursorChange={moveCursor} filled={filled}
                      events={events} eventTypes={eventTypes} />
   )
 
@@ -273,7 +434,7 @@ export function App() {
           track={track}
           cells={cells}
           cursorSeq={cursorSeq}
-          onCursorChange={setCursorSeq}
+          onCursorChange={moveCursor}
           onSaved={(w) => setWorkbooks((ws) => ws.map((x) => (x.id === w.id ? w : x)))}
           onDeleted={(id) => {
             setWorkbooks((ws) => ws.filter((x) => x.id !== id))
@@ -287,12 +448,13 @@ export function App() {
         return (
           <>
             <RouteMap track={track} cells={cells} cursorSeq={cursorSeq}
-                      onCursorChange={setCursorSeq} kpiName={activeDef?.displayName ?? kpi}
+                      frameKey={String(sessionId)} refitToken={refitToken}
+                      onCursorChange={moveCursor} kpiName={activeDef?.displayName ?? kpi}
                       bins={bins} footprints={footprints}
                       events={events} eventTypes={eventTypes} />
             {distanceStep > 0 && (
               <DistanceProfile sessionId={sessionId} kpiName={kpi} stepMeters={distanceStep}
-                               cursorSeq={cursorSeq} onJump={setCursorSeq} />
+                               cursorSeq={cursorSeq} onJump={moveCursor} />
             )}
             {chart(kpi)}
             <ParameterGrid snapshot={snapshot} />
@@ -328,7 +490,8 @@ export function App() {
                 other maps stay uncluttered: a fan of lines is an investigation aid, not
                 something every view needs. */}
             <RouteMap track={track} cells={cells} cursorSeq={cursorSeq}
-                      onCursorChange={setCursorSeq} kpiName={activeDef?.displayName ?? kpi}
+                      frameKey={String(sessionId)} refitToken={refitToken}
+                      onCursorChange={moveCursor} kpiName={activeDef?.displayName ?? kpi}
                       monitored={monitored?.cells ?? null} footprints={footprints}
                       events={events} eventTypes={eventTypes} />
             <div className="panel">
@@ -385,11 +548,11 @@ export function App() {
       case 'fieldtolab':
         return <FieldToLabPanel sessionId={sessionId} />
       case 'problems':
-        return <ProblemSurveyPanel sessionId={sessionId} onPick={setCursorSeq}
+        return <ProblemSurveyPanel sessionId={sessionId} onPick={moveCursor}
                                 events={events} eventTypes={eventTypes} />
       case 'neighbours':
         return <MonitoredSetPage sessionId={sessionId} set={monitored}
-                                 onJump={setCursorSeq} />
+                                 onJump={moveCursor} />
       case 'cells':
         return (
           <CellsPage sessionId={sessionId} kpi={kpi} range={range}
@@ -404,7 +567,8 @@ export function App() {
         return (
           <>
             <RouteMap track={track} cells={cells} cursorSeq={cursorSeq}
-                      onCursorChange={setCursorSeq} kpiName={activeDef?.displayName ?? kpi}
+                      frameKey={String(sessionId)} refitToken={refitToken}
+                      onCursorChange={moveCursor} kpiName={activeDef?.displayName ?? kpi}
                       bins={bins} footprints={footprints}
                       events={events} eventTypes={eventTypes} />
             <div className="panel">
@@ -419,7 +583,7 @@ export function App() {
                   <tbody>
                     {issues.map((x, i) => (
                       <tr key={i} className={`deg-row issue-${x.type}`}
-                          onClick={() => setCursorSeq(x.startSeq)}>
+                          onClick={() => moveCursor(x.startSeq)}>
                         <td>{x.type.replace('_', ' ')}</td>
                         <td className={x.severity === 'CRITICAL' ? 'sev-CRITICAL' : 'sev-WARNING'}>
                           {x.severity}
@@ -444,7 +608,7 @@ export function App() {
               </header>
               <div style={{ maxHeight: 300, overflow: 'auto' }}>
                 <DegradationPanel items={degradations} unit={activeDef?.unit ?? ''}
-                                  onPick={setCursorSeq} />
+                                  onPick={moveCursor} />
               </div>
             </div>
             {chart(kpi)}
@@ -472,19 +636,19 @@ export function App() {
             <div className="group">
               <label>Measurement</label>
               <select value={sessionId ?? ''}
-                      onChange={(e) => setSessionId(Number(e.target.value))}>
+                      onChange={(e) => { setSessionId(Number(e.target.value)); e.currentTarget.blur() }}>
                 {sessions.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
               </select>
             </div>
             <div className="group">
               <label>KPI</label>
-              <select value={kpi} onChange={(e) => setKpi(e.target.value)}>
+              <select value={kpi} onChange={(e) => { setKpi(e.target.value); e.currentTarget.blur() }}>
                 {defs.map((d) => <option key={d.name} value={d.name}>{d.displayName}</option>)}
               </select>
             </div>
             <div className="group">
               <label>Area bins</label>
-              <select value={binSize} onChange={(e) => setBinSize(Number(e.target.value))}>
+              <select value={binSize} onChange={(e) => { setBinSize(Number(e.target.value)); e.currentTarget.blur() }}>
                 <option value={0}>off (raw route)</option>
                 <option value={50}>50 m</option>
                 <option value={150}>150 m</option>
@@ -495,7 +659,7 @@ export function App() {
               <label title="Averages per unit of road travelled, so a stop at a light stops
                      dominating the average">Distance bins</label>
               <select value={distanceStep}
-                      onChange={(e) => setDistanceStep(Number(e.target.value))}>
+                      onChange={(e) => { setDistanceStep(Number(e.target.value)); e.currentTarget.blur() }}>
                 <option value={0}>off</option>
                 <option value={50}>50 m</option>
                 <option value={100}>100 m</option>
@@ -548,6 +712,8 @@ export function App() {
           <button onClick={() => setError(null)} aria-label="Dismiss error">✕</button>
         </div>
       )}
+
+      {keySheet && <KeySheet onClose={() => setKeySheet(false)} />}
 
       {editingScale && activeDef && (
         <LegendEditor def={activeDef}
@@ -666,10 +832,23 @@ export function App() {
           </div>
 
           <div className="statusbar">
-            <button className="play" onClick={() => setPlaying((p) => !p)}
-                    title={playing ? 'Pause playback' : 'Play the drive'}>
+            <button className="step" onClick={() => moveCursor(cursorSeq - 1)}
+                    title="Back one sample (←)">◀|</button>
+            <button className="play" onClick={togglePlay}
+                    title={playing ? 'Pause playback (Space)' : 'Play the drive (Space)'}>
               {playing ? '⏸' : '▶'}
             </button>
+            <button className="step" onClick={() => moveCursor(cursorSeq + 1)}
+                    title="Forward one sample (→)">|▶</button>
+            <button className={reverse ? 'step on' : 'step'}
+                    onClick={() => setReverse((v) => !v)}
+                    title="Reverse playback direction (R)">↺</button>
+            {/* Samples per second, not a multiplier of the drive: the step is always one
+                sample, so this is literally how many samples pass per second. */}
+            <select className="rate" value={rate} title="Playback rate (+ / −)"
+                    onChange={(e) => { setRate(Number(e.target.value)); e.currentTarget.blur() }}>
+              {RATES.map((r) => <option key={r} value={r}>{r}/s</option>)}
+            </select>
             <span>START <b>{session ? new Date(session.startedAt).toISOString().slice(11, 19) : '-'}</b></span>
             <span>END <b>{session ? new Date(session.endedAt).toISOString().slice(11, 19) : '-'}</b></span>
             <span>CURRENT <b style={{ color: 'var(--cursor)' }}>
@@ -680,8 +859,8 @@ export function App() {
                  // meant the one control that spans the whole run could not be swept.
                  onMouseDown={(e) => {
                    const box = e.currentTarget.getBoundingClientRect()
-                   const seek = (clientX: number) => setCursorSeq(Math.max(0, Math.min(maxSeq,
-                     Math.round(((clientX - box.left) / box.width) * maxSeq))))
+                   const seek = (clientX: number) => moveCursor(
+                     Math.round(((clientX - box.left) / box.width) * maxSeq))
                    seek(e.clientX)
                    const move = (ev: MouseEvent) => seek(ev.clientX)
                    const up = () => {
@@ -702,6 +881,8 @@ export function App() {
                       title="Filter up to the cursor position">To here</button>
             </span>
             <span className="dim">{session?.name}</span>
+            <button className="keys" onClick={() => setKeySheet(true)}
+                    title="Keyboard shortcuts (?)">?</button>
           </div>
         </>
       )}

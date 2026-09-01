@@ -35,6 +35,21 @@ interface Props {
   events?: NetworkEvent[]
   /** Name -> display identity, so a marker carries the same glyph the table does. */
   eventTypes?: Map<string, EventType>
+  /**
+   * What the current frame is a frame OF - the drive, not the parameters.
+   *
+   * The map used to re-fit on every change to [track, kpiName, onCursorChange, bins], so
+   * picking a different KPI threw away a zoom the user had set to look at one junction.
+   * Framing is a question about geography, and the geography only changes when the drive
+   * does; everything else is a question about colour.
+   */
+  frameKey?: string
+  /**
+   * Bumped to ask for a deliberate re-frame - the `F` key and the toolbar button.
+   * Stopping the automatic fit removes the only way back to the whole drive, so one has
+   * to be put back deliberately.
+   */
+  refitToken?: number
 }
 
 /**
@@ -45,6 +60,7 @@ interface Props {
 export function RouteMap({
   track, cells, cursorSeq, onCursorChange, kpiName, bins, showServingLine = true,
   monitored = null, footprints = null, events = [], eventTypes,
+  frameKey = '', refitToken = 0,
 }: Props) {
   const hostRef = useRef<HTMLDivElement>(null)
   const mapRef = useRef<L.Map | null>(null)
@@ -57,10 +73,31 @@ export function RouteMap({
   const footprintLayer = useRef<L.LayerGroup | null>(null)
   const cursorMarker = useRef<L.CircleMarker | null>(null)
   const [basemapFailed, setBasemapFailed] = useState(false)
+  /**
+   * Which drive the current frame belongs to, and which refit request produced it.
+   *
+   * Written during render, never in an effect closure. RouteMap's mount effect has an
+   * empty dependency array, so anything it captures is the value from the FIRST render -
+   * and on the first render `sessionId` is still null, because it is only set inside the
+   * sessions fetch. A mount-time stamp would therefore always read "null", never match a
+   * real drive, and re-fit anyway.
+   */
+  const framedFor = useRef<string | null>(null)
+  /** What the frame SHOULD be of, readable from any effect without being captured stale. */
+  const wanted = useRef('')
+  wanted.current = `${frameKey}#${refitToken}`
 
   useEffect(() => {
     if (!hostRef.current || mapRef.current) return
-    const map = L.map(hostRef.current, { zoomControl: true, attributionControl: true })
+    const map = L.map(hostRef.current, {
+      zoomControl: true,
+      attributionControl: true,
+      // Leaflet's keyboard handler claims the arrow keys whenever the map has focus and
+      // calls stopPropagation, so a click on the map silently killed the one-sample
+      // cursor - the key simply stopped doing anything, with nothing on screen to say
+      // why. The keys it provided are given back below, on the two this app never binds.
+      keyboard: false,
+    })
     const tiles = L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
       maxZoom: 19,
       attribution: '&copy; OpenStreetMap contributors',
@@ -99,6 +136,25 @@ export function RouteMap({
     }
   }, [bins])
 
+  /**
+   * Frame the map on the drive, at most once per drive.
+   *
+   * The guard is on the DATA about to be framed, not on a key that arrives separately:
+   * `track` and `bins` are fetched by two independent effects, and with area binning on,
+   * whichever resolves first drives this one. Stamping a frame while `track` still holds
+   * the previous drive's points would frame the old geography and then refuse to correct
+   * itself, because the stamp says the job is done.
+   */
+  const fitOnce = (map: L.Map, frame: [number, number][]) => {
+    if (track.length === 0) return
+    if (framedFor.current === wanted.current) return
+    framedFor.current = wanted.current
+    // animate:false so the resulting moveend is synchronous. Nothing listens for it yet,
+    // but the viewport work in the next item does, and an animated fit would leave a
+    // 250 ms window in which the app cannot tell its own fit from a user pan.
+    map.fitBounds(L.latLngBounds(frame), { padding: [18, 18], animate: false })
+  }
+
   useEffect(() => {
     const map = mapRef.current
     const layer = routeLayer.current
@@ -114,7 +170,7 @@ export function RouteMap({
       .map((p) => [p.latitude, p.longitude] as [number, number])
 
     if (bins && bins.length > 0) {
-      map.fitBounds(L.latLngBounds(frame), { padding: [18, 18] })
+      fitOnce(map, frame)
       return
     }
 
@@ -192,8 +248,12 @@ export function RouteMap({
         .addTo(layer)
     }
 
-    map.fitBounds(L.latLngBounds(frame), { padding: [18, 18] })
-  }, [track, kpiName, onCursorChange, bins])
+    fitOnce(map, frame)
+    // The dependency array is unchanged on purpose. The route must still be REDRAWN when
+    // the KPI changes - that is what recolours it - and it is only the FRAMING that had to
+    // stop following the KPI. Narrowing the array would have stopped the redraw too.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [track, kpiName, onCursorChange, bins, frameKey, refitToken])
 
   // Events, as per-type symbols anchored on the route.
   //
@@ -375,6 +435,20 @@ export function RouteMap({
         ref={hostRef}
         className={`map${basemapFailed ? ' no-basemap' : ''}`}
         style={{ flex: 1 }}
+        tabIndex={0}
+        // The pan Leaflet's own handler used to give, handed back on the two keys the
+        // app's keymap does not claim. Zoom is not re-provided: the +/- control is on
+        // screen, and those keys belong to the playback rate.
+        onKeyDown={(e) => {
+          if (e.ctrlKey || e.metaKey || e.altKey) return
+          const map = mapRef.current
+          if (!map) return
+          if (e.key === 'ArrowUp') map.panBy([0, -80])
+          else if (e.key === 'ArrowDown') map.panBy([0, 80])
+          else return
+          e.preventDefault()
+          e.stopPropagation()
+        }}
       />
     </div>
   )
