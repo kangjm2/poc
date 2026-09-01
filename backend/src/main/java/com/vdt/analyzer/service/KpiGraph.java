@@ -63,8 +63,26 @@ public final class KpiGraph {
     /** How many nodes a graph may hold, so a malformed document cannot build a huge query. */
     private static final int MAX_NODES = 60;
 
-    public enum Kind { SOURCE_KPI, SOURCE_NEIGHBOUR, COMBINE, EXPRESSION, FILTER,
-                       STATE_MACHINE, OUTPUT }
+    public enum Kind { SOURCE_KPI, SOURCE_NEIGHBOUR, SOURCE_SAMPLE, SOURCE_EVENT,
+                       COMBINE, EXPRESSION, FILTER, STATE_MACHINE, OUTPUT }
+
+    /**
+     * What a SOURCE_SAMPLE node can read, and the column it comes from.
+     *
+     * These live on `sample` rather than in `sample_kpi`, so before this they were the one
+     * part of a measurement the canvas could not reach at all. Both of the example KPIs
+     * every reviewer independently asked for need them: "RSRP margin while the car was
+     * moving" needs the speed, and "BLER while PCI 41 was serving" needs the serving cell.
+     *
+     * A fixed map, not a pass-through of whatever name arrives: this is the only place in
+     * the compiler where a column name could come from the document rather than from the
+     * catalogue, and an allow-list keeps that impossible.
+     */
+    private static final Map<String, String> SAMPLE_FIELDS = Map.of(
+            "LATITUDE", "latitude",
+            "LONGITUDE", "longitude",
+            "SPEED_KMH", "speed_kmh",
+            "SERVING_PCI", "serving_pci");
 
     /**
      * One node.
@@ -78,6 +96,8 @@ public final class KpiGraph {
                        String kpiName,
                        // SOURCE_NEIGHBOUR: which ranked cell, and which quantity
                        Integer rank, String metric, Boolean excludeServing,
+                       // SOURCE_SAMPLE: which per-sample field. SOURCE_EVENT: which type.
+                       String field, String eventType,
                        // EXPRESSION / FILTER
                        String expression, String as,
                        // STATE_MACHINE
@@ -226,6 +246,50 @@ public final class KpiGraph {
                 // can only ever be one of its names.
                 return cte + " AS (SELECT session_id, seq, ts, value AS " + quote(col)
                      + " FROM sample_kpi WHERE kpi_name = '" + kpi + "')";
+            }
+            case SOURCE_SAMPLE -> {
+                requireInputs(n, in, 0, 0);
+                String field = n.field() == null ? "SPEED_KMH" : n.field().toUpperCase();
+                String physical = SAMPLE_FIELDS.get(field);
+                if (physical == null) {
+                    throw new IllegalArgumentException(
+                            "A sample source reads one of " + SAMPLE_FIELDS.keySet()
+                            + ", not " + field);
+                }
+                String col = column(n.as() == null ? field : n.as());
+                columns.put(n.id(), List.of(col));
+                // `ts` comes from the same row, so a sample source joins to everything
+                // else on (session_id, seq) exactly like a KPI source does - which is what
+                // lets it be combined with one without any special case downstream.
+                return cte + " AS (SELECT session_id, seq, ts, " + physical
+                     + "::double precision AS " + quote(col) + " FROM sample)";
+            }
+            case SOURCE_EVENT -> {
+                requireInputs(n, in, 0, 0);
+                String type = n.eventType() == null ? null : n.eventType().toUpperCase();
+                if (type != null && !type.matches("[A-Z0-9_]{1,40}")) {
+                    throw new IllegalArgumentException("Not an event type name: " + n.eventType());
+                }
+                String col = column(n.as() == null
+                        ? (type == null ? "EVENT" : type) : n.as());
+                columns.put(n.id(), List.of(col));
+                // An event carries a timestamp, not a seq, so it is placed on the nearest
+                // sample here rather than by the consumer - the same resolution the events
+                // API already does, and for the same reason: every other node in this
+                // graph is keyed on seq, and an event that could not be is unusable.
+                //
+                // The value is 1 at the sample the event landed on and NULL elsewhere,
+                // not 0: a graph that filters on it should select the moments the event
+                // happened, and a zero would make every other sample a real measurement
+                // of "no event", which is not something the log asserts.
+                return cte + " AS (SELECT s.session_id, s.seq, s.ts, "
+                     + "max(1)::double precision AS " + quote(col)
+                     + " FROM network_event e"
+                     + " JOIN LATERAL (SELECT x.session_id, x.seq, x.ts FROM sample x"
+                     + "   WHERE x.session_id = e.session_id"
+                     + "   ORDER BY abs(extract(epoch FROM (x.ts - e.ts))) LIMIT 1) s ON true"
+                     + (type == null ? "" : " WHERE e.event_type = '" + type + "'")
+                     + " GROUP BY s.session_id, s.seq, s.ts)";
             }
             case SOURCE_NEIGHBOUR -> {
                 requireInputs(n, in, 0, 0);
@@ -420,6 +484,11 @@ public final class KpiGraph {
      * quoting is here to keep a column named e.g. `value` from colliding with SQL's own
      * words, not to sanitise anything. Sanitising happened at validation.
      */
+    /** The quoting used to build a preview SELECT from a node's own column list. */
+    public static String quoteColumn(String ident) {
+        return quote(ident);
+    }
+
     static String quote(String ident) {
         return '"' + ident + '"';
     }

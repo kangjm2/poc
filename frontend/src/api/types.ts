@@ -327,8 +327,11 @@ export interface PollutionSpan {
 // ------------------------------------------------------------------ KPI Workbench
 
 export type GraphNodeKind =
-  | 'SOURCE_KPI' | 'SOURCE_NEIGHBOUR' | 'COMBINE' | 'EXPRESSION'
-  | 'FILTER' | 'STATE_MACHINE' | 'OUTPUT'
+  | 'SOURCE_KPI' | 'SOURCE_NEIGHBOUR' | 'SOURCE_SAMPLE' | 'SOURCE_EVENT'
+  | 'COMBINE' | 'EXPRESSION' | 'FILTER' | 'STATE_MACHINE' | 'OUTPUT'
+
+/** What a sample source may read. The server holds the same allow-list. */
+export const SAMPLE_FIELDS = ['LATITUDE', 'LONGITUDE', 'SPEED_KMH', 'SERVING_PCI'] as const
 
 export interface GraphStateRule { state: string; condition: string }
 
@@ -346,6 +349,10 @@ export interface GraphNode {
   rank?: number | null
   metric?: string | null
   excludeServing?: boolean | null
+  /** SOURCE_SAMPLE: which per-sample field. */
+  field?: string | null
+  /** SOURCE_EVENT: which event type, or null for any. */
+  eventType?: string | null
   expression?: string | null
   as?: string | null
   states?: GraphStateRule[] | null
@@ -467,4 +474,18 @@ export interface SpatialDiff {
   /** HIGHER_IS_BETTER | LOWER_IS_BETTER | NEUTRAL - a NEUTRAL KPI gets no verdict. */
   direction: string
   bins: DiffBin[]
+}
+
+/** One row of a node preview, computed and discarded - nothing is published. */
+export interface GraphPreviewRow {
+  sessionId: number; seq: number; ts: string
+  values: Record<string, number | string | null>
+}
+
+export interface GraphNodePreview {
+  nodeId: number
+  columns: string[]
+  /** Over the WHOLE node, not the page: "3 rows" and "the first 3 of 41 000" differ. */
+  rowCount: number
+  rows: GraphPreviewRow[]
 }

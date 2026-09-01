@@ -5,6 +5,7 @@ import type {
   RunBringUp, CellBreakdown, ProblemSurvey, DerivedKpiResult, FieldToLab,
   Threshold, TrackPoint, UeProfile,
   MonitoredSet, NeighbourBreakdown, PollutionSpan, AreaStats, SpatialDiff,
+  GraphNodePreview,
   GraphRequest, GraphValidation, StoredGraph,
   DistanceBin, CellFootprint, Workbook, WorkbookRequest, EventType,
 } from './types'
@@ -228,6 +229,26 @@ export const api = {
     })
     if (!res.ok) throw new Error(`${res.status}: ${res.statusText}`)
     return res.json() as Promise<GraphValidation>
+  },
+
+  /**
+   * What one node produces, without publishing anything.
+   *
+   * A POST because the graph travels in the body, but it writes nothing - which is the
+   * whole point: the alternative was publishing a throwaway KPI to look at a node.
+   */
+  previewGraphNode: async (body: GraphRequest, nodeId: number,
+                           sessionId: number | null, limit = 8): Promise<GraphNodePreview> => {
+    const res = await fetch(
+      `${BASE}/kpi-definitions/graphs/preview?nodeId=${nodeId}&limit=${limit}`
+      + (sessionId == null ? '' : `&sessionId=${sessionId}`),
+      { method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body) })
+    if (!res.ok) {
+      const text = await res.text().catch(() => '')
+      throw new Error(text || `${res.status}: ${res.statusText}`)
+    }
+    return res.json() as Promise<GraphNodePreview>
   },
 
   saveKpiGraph: async (body: GraphRequest): Promise<StoredGraph> => {

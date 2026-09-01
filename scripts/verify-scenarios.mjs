@@ -1191,6 +1191,148 @@ scenario('S16 · A complaint about a place, not a time')
   await page.waitForTimeout(1200)
 }
 
+// ─── S17 · Building a KPI without publishing your guesses ────────────────────
+//
+// The canvas could not reach anything that lives on the sample - speed, position, serving
+// cell - and both example KPIs every reviewer independently asked for need one of them.
+// Worse, the only way to see what a node produced was to publish a throwaway KPI: rows
+// written for every session and an entry in the shared catalogue, on every guess, by
+// whoever was least sure of what they were doing.
+scenario('S17 · Building a KPI without publishing your guesses')
+{
+  // Swept BEFORE measuring, not only after. This scenario asserts that looking publishes
+  // nothing, so a leftover from an earlier run - or from a defect-injection run that
+  // deliberately published - would make the baseline wrong and the assertion meaningless.
+  // S13 learned the same lesson about its own graph.
+  for (const g of await apiGet('/api/kpi-definitions/graphs')) {
+    if (String(g.outputKpiName).startsWith('S17_')) {
+      await page.request.delete(`${API}/api/kpi-definitions/graphs/${g.id}`)
+    }
+  }
+  const kpisBefore = (await apiGet('/api/kpi-definitions')).length
+  const cityA = sessions.find((x) => x.name === CITY_A).id
+
+  const movingMargin = {
+    name: 'S17 margin while moving',
+    output: {
+      name: 'S17_MOVING', displayName: 'S17 margin while moving', unit: 'dB',
+      category: 'Workbench', technology: '5G NR', direction: 'HIGHER_IS_BETTER',
+      source: 'UE', decimals: 2, description: 'scenario check', expression: null,
+    },
+    spec: {
+      nodes: [
+        { id: 1, kind: 'SOURCE_SAMPLE', field: 'SPEED_KMH', as: 'SPEED' },
+        { id: 2, kind: 'SOURCE_KPI', kpiName: 'RSRP', as: 'RSRP' },
+        { id: 3, kind: 'COMBINE' },
+        { id: 4, kind: 'FILTER', expression: 'SPEED > 5' },
+        { id: 5, kind: 'EXPRESSION', expression: 'RSRP + 110', as: 'MARGIN' },
+        { id: 6, kind: 'OUTPUT', column: 'MARGIN' },
+      ],
+      edges: [{ from: 1, to: 3 }, { from: 2, to: 3 }, { from: 3, to: 4 },
+              { from: 4, to: 5 }, { from: 5, to: 6 }],
+    },
+  }
+
+  const post = (path, body) => page.request.post(`${API}${path}`, { data: body })
+
+  const valid = await (await post('/api/kpi-definitions/graphs/validate', movingMargin)).json()
+  step('a graph can read a field that lives on the sample, not in sample_kpi',
+    valid.ok === true, valid.error ?? 'compiled')
+  // A sample source reads no KPI, so it must not claim to depend on one - that list is
+  // what decides which graphs recompute when a KPI changes.
+  step('and does not claim to depend on a KPI it never reads',
+    JSON.stringify(valid.referencedKpis) === JSON.stringify(['RSRP']),
+    JSON.stringify(valid.referencedKpis))
+
+  const combined = await (await post(
+    `/api/kpi-definitions/graphs/preview?nodeId=3&sessionId=${cityA}&limit=3`,
+    movingMargin)).json()
+  step('a node can be looked at before anything is published',
+    combined.rowCount > 0 && combined.columns.includes('SPEED')
+    && combined.columns.includes('RSRP'),
+    `${combined.rowCount} rows, columns ${combined.columns.join(',')}`)
+
+  // The count is the point: it answers "did my filter do what I meant", which a page of
+  // rows cannot. Against the session's own sample count, fetched independently.
+  const filtered = await (await post(
+    `/api/kpi-definitions/graphs/preview?nodeId=4&sessionId=${cityA}&limit=3`,
+    movingMargin)).json()
+  const total = (await apiGet(`/api/sessions/${cityA}`)).sampleCount
+  step('the preview counts the whole node, so a filter can be judged',
+    combined.rowCount === total && filtered.rowCount < combined.rowCount,
+    `${combined.rowCount} before the speed filter, ${filtered.rowCount} after, `
+    + `${total} samples in the drive`)
+
+  // The whole reason this exists: looking must not touch what everyone else sees.
+  const kpisAfter = (await apiGet('/api/kpi-definitions')).length
+  const graphsAfter = await apiGet('/api/kpi-definitions/graphs')
+  step('and looking published nothing',
+    kpisAfter === kpisBefore && !graphsAfter.some((g) => g.outputKpiName === 'S17_MOVING'),
+    `${kpisBefore} KPIs before, ${kpisAfter} after`)
+
+  // An event source, against the events the session actually reported.
+  const atHandover = {
+    name: 'S17 BLER at handover',
+    output: {
+      name: 'S17_HO_BLER', displayName: 'S17 BLER at handover', unit: '%',
+      category: 'Workbench', technology: '5G NR', direction: 'LOWER_IS_BETTER',
+      source: 'UE', decimals: 2, description: 'scenario check', expression: null,
+    },
+    spec: {
+      nodes: [
+        { id: 1, kind: 'SOURCE_EVENT', eventType: 'HANDOVER', as: 'HO' },
+        { id: 2, kind: 'SOURCE_KPI', kpiName: 'DL_BLER', as: 'BLER' },
+        { id: 3, kind: 'COMBINE' },
+        { id: 4, kind: 'FILTER', expression: 'HO = 1' },
+        { id: 5, kind: 'OUTPUT', column: 'BLER' },
+      ],
+      edges: [{ from: 1, to: 3 }, { from: 2, to: 3 }, { from: 3, to: 4 },
+              { from: 4, to: 5 }],
+    },
+  }
+  const hoPreview = await (await post(
+    `/api/kpi-definitions/graphs/preview?nodeId=4&sessionId=${cityA}&limit=8`,
+    atHandover)).json()
+  const handovers = (await apiGet(`/api/sessions/${cityA}/events`))
+    .filter((e) => e.eventType === 'HANDOVER').length
+  step('an event source marks exactly the samples the network reported',
+    hoPreview.rowCount === handovers && handovers > 0,
+    `${hoPreview.rowCount} marked, ${handovers} handovers in the log`)
+
+  // The canvas must offer them, or the API is unreachable from the screen - which is the
+  // defect tools/uxtest/api-surface.mjs exists to catch, here as a journey step.
+  await openMode('Import')
+  await page.waitForTimeout(1200)
+  const kinds = await page.locator('.wb-palette button').allInnerTexts()
+  step('the canvas offers the new sources',
+    kinds.some((t) => /Sample source/.test(t)) && kinds.some((t) => /Event source/.test(t)),
+    kinds.map((t) => t.replace(/^\+ /, '')).join(', '))
+
+  // Offering the button is not the same as the button working. Placing one must produce a
+  // node the compiler recognises, which is the difference between a palette entry and a
+  // feature.
+  await page.locator('.wb-palette button', { hasText: 'Sample source' }).click()
+  await page.waitForTimeout(700)
+  // Selected, because the inspector is what proves the editor understood the kind -
+  // placing a node only proves a rectangle was drawn.
+  const placed = await page.locator('g.wb-node').count()
+  await page.locator('g.wb-node').last().click()
+  await page.waitForTimeout(600)
+  // The inspector is its own panel, headed "Node" - not part of the canvas panel.
+  const inspector = await page.locator('.panel:has-text("Node")').last().innerText()
+  step('placing one produces a node the editor understands',
+    placed > 0 && /Sample source/.test(inspector) && /SPEED_KMH/.test(inspector),
+    `${placed} node(s); inspector says `
+    + `${(inspector.match(/(KPI|Neighbour|Sample|Event) source/) ?? ['nothing'])[0]}`)
+  await openMode('Analysis')
+  await page.waitForTimeout(1000)
+
+  const leftovers = (await apiGet('/api/kpi-definitions/graphs'))
+    .filter((g) => String(g.outputKpiName).startsWith('S17_'))
+  step('the scenario leaves nothing behind',
+    leftovers.length === 0, `${leftovers.length} S17 graphs remain`)
+}
+
 // ─── wrap-up ─────────────────────────────────────────────────────────────────
 const appErrors = errors.filter((e) =>
   !/tile\.openstreetmap\.org|ERR_CONNECTION|Failed to load resource|ERR_TIMED_OUT/.test(e))
