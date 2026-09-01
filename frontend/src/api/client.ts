@@ -185,6 +185,30 @@ export const api = {
 
   importJobs: () => get<Array<Record<string, unknown>>>('/import/jobs'),
 
+  /** Ask a running import to stop. A request, not a kill - see the endpoint's comment. */
+  cancelImport: async (jobId: number): Promise<{ cancelRequested: boolean; message: string }> => {
+    const res = await fetch(`${BASE}/import/jobs/${jobId}/cancel`, { method: 'POST' })
+    if (!res.ok) throw new Error(`${res.status}: ${res.statusText}`)
+    return res.json()
+  },
+
+  /**
+   * The measurement list, optionally narrowed. Called with nothing it is the list it
+   * always returned, so every existing caller is unaffected.
+   */
+  sessionsFiltered: (f: {
+    q?: string; device?: string; operator?: string
+    technology?: string; from?: string; to?: string
+  }) => {
+    const p = new URLSearchParams()
+    for (const [k, v] of Object.entries(f)) if (v) p.set(k, v)
+    const qs = p.toString()
+    return get<SessionSummary[]>(`/sessions${qs ? `?${qs}` : ''}`)
+  },
+
+  sessionFacets: () =>
+    get<{ device: string[]; operator: string[]; technology: string[] }>('/sessions/facets'),
+
   monitoredSet: (id: number, seq: number) =>
     get<MonitoredSet>(`/sessions/${id}/monitored-set?seq=${seq}`),
 

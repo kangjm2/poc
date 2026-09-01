@@ -14,10 +14,12 @@ public class ImportController {
 
     private final ImportService imports;
     private final JdbcTemplate jdbc;
+    private final ImportJobLog jobLog;
 
-    public ImportController(ImportService imports, JdbcTemplate jdbc) {
+    public ImportController(ImportService imports, JdbcTemplate jdbc, ImportJobLog jobLog) {
         this.imports = imports;
         this.jdbc = jdbc;
+        this.jobLog = jobLog;
     }
 
     @PostMapping(path = "/csv", consumes = "multipart/form-data")
@@ -38,5 +40,21 @@ public class ImportController {
     @GetMapping("/jobs")
     public List<Map<String, Object>> jobs() {
         return jdbc.queryForList("SELECT * FROM import_job ORDER BY id DESC LIMIT 50");
+    }
+
+    /**
+     * Ask a running import to stop.
+     *
+     * A request, not a kill: the loading loop reads the flag on its next batch boundary
+     * and unwinds, so the transaction rolls back and the measurement leaves nothing
+     * behind. Answering "no such running import" rather than silently succeeding matters
+     * because the button is pressed exactly when someone is unsure what is happening.
+     */
+    @PostMapping("/jobs/{id}/cancel")
+    public Map<String, Object> cancel(@PathVariable long id) {
+        boolean asked = jobLog.requestCancel(id);
+        return Map.of("jobId", id, "cancelRequested", asked,
+                "message", asked ? "Stopping at the next batch"
+                                 : "That import is not running");
     }
 }

@@ -512,3 +512,27 @@ kbd {
   border-bottom: 1px solid var(--border);
 }
 .legend-basis { float: right; font-size: 11px; margin: 2px 4px 0 0; }
+
+/* Watching an import that is actually running. */
+.import-progress { font-size: 12px; display: inline-flex; align-items: center; gap: 4px; }
+.import-progress .dim { color: var(--text-dim); }
+
+/* Finding a measurement among many. */
+.session-filter { width: 780px; max-width: 94vw; }
+.filter-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  padding: 10px;
+}
+.filter-grid input, .filter-grid select { width: 100%; }
+.filter-summary {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  font-size: 12px;
+  border-top: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+}
+.filter-results { max-height: 340px; overflow: auto; }

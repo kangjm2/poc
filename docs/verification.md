@@ -6,10 +6,10 @@
 | 검사기 | 지금 | 최초 기록 시점 |
 |---|---|---|
 | `scripts/verify-ui.mjs` | **107/107** | 15 → 30 |
-| `scripts/verify-scenarios.mjs` | **145/145 단계 / 18 시나리오** | 75 / 8 |
-| `tools/uxtest/api-surface.mjs` | 격차 없음 (엔드포인트 59 · 클라이언트 55 · KPI 18/18 도달) | 엔드포인트 14 |
+| `scripts/verify-scenarios.mjs` | **157/157 단계 / 19 시나리오** | 75 / 8 |
+| `tools/uxtest/api-surface.mjs` | 격차 없음 (엔드포인트 61 · 클라이언트 58 · KPI 18/18 도달) | 엔드포인트 14 |
 | `mvn test` | **30개** (`KpiGraphTest` 24 · `ConvexHullTest` 6) | 없었음 |
-| Flyway 마이그레이션 | V1–V10 | V1–V3 |
+| Flyway 마이그레이션 | V1–V11 | V1–V3 |
 
 > **이 표의 숫자는 낡습니다.** 권위 있는 값은 검사기를 실행한 출력이며, 이 문서가 아닙니다.
 > 아래 본문은 *무엇을* 어떻게 검증하는지에 대한 기록으로 읽으십시오.

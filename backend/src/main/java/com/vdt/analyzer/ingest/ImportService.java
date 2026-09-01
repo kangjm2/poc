@@ -92,7 +92,7 @@ public class ImportService {
                     description, file.getOriginalFilename());
 
             Counters counters = loadRows(reader, delimiter, layout, sessionId,
-                    new HashSet<>(created));
+                    new HashSet<>(created), jobId);
             applyObservedDecimals(counters, created);
             finaliseSession(sessionId, counters);
             jobLog.succeeded(jobId, sessionId, counters.rows, counters.samples, counters.kpis);
@@ -111,6 +111,12 @@ public class ImportService {
                     layout.kpiColumns.values().stream().sorted().toList(),
                     layout.ignored, created, null);
 
+        } catch (ImportCancelled e) {
+            // Recorded as CANCELLED, not FAILED. The history is where a user goes to ask
+            // what happened to a file, and "you stopped it" and "it broke" are different
+            // answers. The rollback still happens, by rethrowing.
+            jobLog.cancelled(jobId, e.rowsRead, e.getMessage());
+            throw new ImportStopped(e.getMessage());
         } catch (IOException | RuntimeException e) {
             jobLog.failed(jobId, e.getMessage());
             throw new IllegalArgumentException("Import failed: " + e.getMessage(), e);
@@ -238,7 +244,8 @@ public class ImportService {
     }
 
     private Counters loadRows(BufferedReader reader, char delimiter, Layout layout,
-                              long sessionId, Set<String> observeDecimals) throws IOException {
+                              long sessionId, Set<String> observeDecimals, long jobId)
+            throws IOException {
         Counters c = new Counters();
         List<Object[]> sampleBatch = new ArrayList<>(BATCH);
         List<Object[]> kpiBatch = new ArrayList<>(BATCH * 4);
@@ -271,7 +278,14 @@ public class ImportService {
             }
             seq++;
 
-            if (sampleBatch.size() >= BATCH) flush(sampleBatch, kpiBatch);
+            if (sampleBatch.size() >= BATCH) {
+                flush(sampleBatch, kpiBatch);
+                // On the batch boundary, not per row: both of these are round trips, and
+                // one per row would cost more than the loading does. A batch is also the
+                // natural place to stop, since nothing is half-written.
+                jobLog.progress(jobId, c.rows, c.samples);
+                if (jobLog.cancelRequested(jobId)) throw new ImportCancelled(c.rows);
+            }
         }
         flush(sampleBatch, kpiBatch);
         return c;
@@ -285,6 +299,26 @@ public class ImportService {
         int places = 0;
         for (int i = dot + 1; i < t.length() && Character.isDigit(t.charAt(i)); i++) places++;
         return Math.min(4, places);
+    }
+
+    /**
+     * Raised when the loading loop notices a cancellation request.
+     *
+     * A distinct type rather than a boolean return, so it unwinds through the same path a
+     * failure does and gets the same rollback. A cancelled import must leave nothing
+     * behind: a half-loaded measurement that looks complete is worse than no measurement.
+     */
+    /** What the caller sees. Distinct from a failure so the API can answer 409, not 400. */
+    public static final class ImportStopped extends RuntimeException {
+        public ImportStopped(String message) { super(message); }
+    }
+
+    static final class ImportCancelled extends RuntimeException {
+        final long rowsRead;
+        ImportCancelled(long rowsRead) {
+            super("Import cancelled after " + rowsRead + " rows");
+            this.rowsRead = rowsRead;
+        }
     }
 
     private void flush(List<Object[]> samples, List<Object[]> kpis) {

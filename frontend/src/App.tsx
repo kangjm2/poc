@@ -26,6 +26,7 @@ import { LabView } from './components/LabView'
 import { ImportView } from './components/ImportView'
 import { LegendEditor } from './components/LegendEditor'
 import { KeySheet } from './components/KeySheet'
+import { SessionFilter } from './components/SessionFilter'
 import { bindingFor, isTypingTarget } from './view/keymap'
 import { PRIORITY, dismissTop, useDismissable } from './view/dismiss'
 import type { Correction } from './view/state'
@@ -154,6 +155,8 @@ export function App() {
   const [rate, setRate] = useState(RATES[1])
   const [reverse, setReverse] = useState(false)
   const [keySheet, setKeySheet] = useState(false)
+  /** The find-a-measurement dialog. The picker alone is unusable past a few dozen. */
+  const [finding, setFinding] = useState(false)
   /** Bumped to ask the map for a deliberate re-frame. */
   const [refitToken, setRefitToken] = useState(0)
   const [error, setError] = useState<string | null>(null)
@@ -498,6 +501,7 @@ export function App() {
   useEffect(() => { setPlaying(false) }, [mode])
 
   useDismissable(keySheet, PRIORITY.MODAL, () => setKeySheet(false))
+  useDismissable(finding, PRIORITY.MODAL, () => setFinding(false))
   // Registered HERE and only here. LegendEditor registered itself as well, which looked
   // harmless and was not: with two registrations for one surface, removing either one
   // still closed the modal, so neither could be shown to be doing anything. A defect
@@ -792,6 +796,9 @@ export function App() {
                       onChange={(e) => { setSessionId(Number(e.target.value)); e.currentTarget.blur() }}>
                 {sessions.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
               </select>
+              <button title="Search and filter measurements"
+                      aria-label="Find a measurement"
+                      onClick={() => setFinding(true)}>Find…</button>
             </div>
             <div className="group">
               <label>KPI</label>
@@ -904,6 +911,11 @@ export function App() {
       )}
 
       {keySheet && <KeySheet onClose={() => setKeySheet(false)} />}
+
+      {finding && (
+        <SessionFilter onClose={() => setFinding(false)}
+                       onPick={(id) => setSessionId(id)} />
+      )}
 
       {editingScale && activeDef && (
         <LegendEditor def={activeDef}

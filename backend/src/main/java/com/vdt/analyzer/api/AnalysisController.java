@@ -47,9 +47,27 @@ public class AnalysisController {
         this.spatialDiff = spatialDiff;
     }
 
+    /**
+     * The measurement list, optionally narrowed.
+     *
+     * Every parameter is optional and absent means "do not narrow by this". Called with
+     * none, it is exactly the list it always returned.
+     */
     @GetMapping("/sessions")
-    public List<SessionSummary> sessions() {
-        return analysis.listSessions();
+    public List<SessionSummary> sessions(
+            @RequestParam(required = false) String q,
+            @RequestParam(required = false) String device,
+            @RequestParam(required = false) String operator,
+            @RequestParam(required = false) String technology,
+            @RequestParam(required = false) String from,
+            @RequestParam(required = false) String to) {
+        return analysis.listSessions(q, device, operator, technology, from, to);
+    }
+
+    /** The values the filter controls can offer, from the data rather than a guess. */
+    @GetMapping("/sessions/facets")
+    public java.util.Map<String, List<String>> sessionFacets() {
+        return analysis.sessionFacets();
     }
 
     @GetMapping("/sessions/{id}")
