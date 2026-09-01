@@ -2,6 +2,7 @@ import { Fragment, useEffect, useRef, useState } from 'react'
 import type {
   Degradation, Distribution, EventType, KpiDefinition, NetworkEvent, SignalingMessage, Snapshot,
 } from '../api/types'
+import { UNIDENTIFIED } from '../view/paint'
 
 /** Parameter grid: every KPI at the cursor, grouped by category. */
 export function ParameterGrid({ snapshot }: { snapshot: Snapshot | null }) {
@@ -52,9 +53,12 @@ export function ParameterGrid({ snapshot }: { snapshot: Snapshot | null }) {
  * Ours are weighted by sample, so it says so rather than borrowing "[Time]":
  * with an irregular log the two do differ, and the reader has to know which.
  */
-export function LegendPanel({ dist, onEdit }: {
+export function LegendPanel({ dist, onEdit, isolate, onIsolate }: {
   dist: Distribution | null
   onEdit?: () => void
+  /** The bin currently shown alone on the map, if any. */
+  isolate?: string | null
+  onIsolate?: (binLabel: string | null) => void
 }) {
   if (!dist) return <div className="loading">Loading…</div>
   return (
@@ -79,19 +83,89 @@ export function LegendPanel({ dist, onEdit }: {
           Auto scale &mdash; quartiles of this session, no pass/fail implied
         </div>
       )}
+      {/* Clicking a bin shows it alone on the map. The legend was already the thing the
+          user was reading the distribution off; making it the control as well removes the
+          workaround this replaces - open the colour editor, paint every other bin grey,
+          look, undo - which mutated the KPI's shared scale to ask a private question. */}
       {dist.bins.map((b) => (
-        <div className="legend-row" key={b.label}>
+        <div className={`legend-row${isolate === b.label ? ' isolated' : ''}`} key={b.label}
+             onClick={onIsolate ? () => onIsolate(isolate === b.label ? null : b.label) : undefined}
+             style={onIsolate ? { cursor: 'pointer' } : undefined}
+             title={onIsolate
+               ? (isolate === b.label ? 'Show the whole route again' : 'Show only this bin on the map')
+               : undefined}>
           <span className="swatch" style={{ background: b.color }} />
           <span className="label">{b.label}</span>
           <span className="count">{b.count}</span>
           <span className="pct">{b.percentage.toFixed(2)}%</span>
         </div>
       ))}
+      {isolate != null && (
+        <div className="legend-note isolating">
+          Showing <b>{isolate}</b> only &mdash; the rest of the drive is drawn grey for
+          position, not hidden.
+          <button onClick={() => onIsolate?.(null)}>Show all</button>
+        </div>
+      )}
       <div className="legend-row" style={{ borderTop: '1px solid #e2e2e8', color: '#666' }}>
         <span className="swatch" style={{ visibility: 'hidden' }} />
         <span className="label">Total</span>
         <span className="count">{dist.total}</span><span className="pct">100.00%</span>
       </div>
+    </div>
+  )
+}
+
+/**
+ * The legend for identity colouring: which colour is which serving cell.
+ *
+ * Counts come from the server's own per-cell totals, not from the track this map drew.
+ * The track is decimated above a few thousand points, so counting it would quietly report
+ * a share of the DRAWN route as though it were a share of the drive - a number that is
+ * wrong by more the longer the measurement, which is the worst direction for an error to
+ * scale.
+ */
+export function PciLegend({ colors, bars, total }: {
+  colors: Map<number, string>
+  bars: { pci: number; samplesServing: number }[]
+  total: number
+}) {
+  const rows = [...colors.entries()]
+    .map(([pci, color]) => ({
+      pci, color,
+      serving: bars.find((b) => b.pci === pci)?.samplesServing ?? 0,
+    }))
+  const uncoloured = rows.filter((r) => r.color === UNIDENTIFIED).length
+  return (
+    <div>
+      <div className="legend-row" style={{ fontWeight: 600, borderBottom: '1px solid #e2e2e8' }}>
+        <span className="swatch" style={{ visibility: 'hidden' }} />
+        <span className="label">Serving cell [Sample]</span>
+        <span className="count">n</span><span className="pct">%</span>
+      </div>
+      {/* The same honesty the derived colour scale already owes: these colours are
+          assigned in order of first appearance in THIS drive, so they identify cells
+          within it and mean nothing across measurements. And unlike the KPI ramp they
+          carry no verdict - a colour here is a name, not a grade. */}
+      <div className="legend-note" title="Assigned in order of first appearance in this drive.">
+        Identity colours &mdash; no pass/fail implied, and not comparable between drives
+      </div>
+      {rows.map((r) => (
+        <div className="legend-row" key={r.pci}>
+          <span className="swatch" style={{ background: r.color }} />
+          <span className="label">PCI {r.pci}</span>
+          <span className="count">{r.serving}</span>
+          <span className="pct">
+            {total > 0 ? ((100 * r.serving) / total).toFixed(2) : '0.00'}%
+          </span>
+        </div>
+      ))}
+      {uncoloured > 0 && (
+        <div className="legend-note">
+          {uncoloured} more cell{uncoloured === 1 ? '' : 's'} than the palette has colours
+          &mdash; drawn grey rather than sharing a colour with another cell.
+        </div>
+      )}
     </div>
   )
 }

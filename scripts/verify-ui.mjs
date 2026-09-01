@@ -44,7 +44,7 @@ await page.waitForSelector('.statusbar', { timeout: 15000 })
 await page.waitForTimeout(2500) // let map tiles settle
 
 // 1. session list populated
-const sessionCount = await page.locator('.toolbar select').first().locator('option').count()
+const sessionCount = await page.locator('.toolbar select[aria-label="Measurement"]').locator('option').count()
 check('세션 목록 로드', sessionCount >= 3, `${sessionCount} sessions`)
 
 // 2. legend carries counts and percentages, not just colours
@@ -87,7 +87,7 @@ const framing = await page.evaluate(() => {
   // The app's own .map div, not Leaflet's .leaflet-container: that class is not
   // present in this build at all (the basemap is blocked here and the panel renders
   // as .map.no-basemap), so keying on it made this check fail on healthy code.
-  const paths = [...document.querySelectorAll('.leaflet-overlay-pane path[stroke-width="6"]')]
+  const paths = [...document.querySelectorAll('.leaflet-overlay-pane path.route-run')]
   if (!paths.length) return null
   const container = paths[0].closest('.map')
   if (!container) return null
@@ -107,7 +107,7 @@ check('경로가 이상치에 눌려 찌그러지지 않음', framing != null &&
 // Restore by VALUE, not by index 0: the picker is ordered newest-first, so index 0 is
 // the most recent session rather than the one that was loaded. Getting this wrong left
 // every later check running against a different drive than it was written for.
-const sessionPicker = page.locator('.toolbar select').first()
+const sessionPicker = page.locator('.toolbar select[aria-label="Measurement"]')
 const sessionBefore = await sessionPicker.inputValue()
 await sessionPicker.selectOption({ index: 1 })
 await page.waitForTimeout(2200)
@@ -169,7 +169,7 @@ await page.screenshot({ path: `${OUT}/01-overview.png`, fullPage: false })
 // moves even when the viewport is byte-identical, and it would report a difference the
 // user cannot see. Zooming OUT changes the viewport just as well and clips nothing.
 const routeFrame = () => page.evaluate(() => {
-  const paths = [...document.querySelectorAll('.leaflet-overlay-pane path[stroke-width="6"]')]
+  const paths = [...document.querySelectorAll('.leaflet-overlay-pane path.route-run')]
     .filter((p) => p.getAttribute('d') !== 'M0 0')
   if (!paths.length) return null
   const r = paths.map((p) => p.getBoundingClientRect())
@@ -186,7 +186,11 @@ const seqNow = async () =>
 // Restored by VALUE at the end, the same way the session picker is restored above: the
 // options are keyed on the KPI name and labelled with its display name, and the two are
 // different strings (SINR / "SS-SINR"), so a label round-trip does not close.
-const kpiPicker = page.locator('.toolbar select').nth(1)
+// Addressed by name, not by position. These used to be `.nth(1)` / `.nth(2)`, so adding
+// one control to the toolbar silently re-pointed four call sites at the wrong select and
+// the run died on "did not find some options" - a failure that says nothing about the
+// feature under test.
+const kpiPicker = page.locator('.toolbar select[aria-label="KPI"]')
 const kpiBefore = await kpiPicker.inputValue()
 
 await page.locator('.leaflet-control-zoom-out').click()
@@ -278,6 +282,75 @@ check('단축키 시트가 실제로 동작하는 키를 적음',
 await kpiPicker.selectOption(kpiBefore)
 await page.waitForTimeout(1200)
 
+// 3f. colour that answers a question, and colour that says which one.
+//
+// Isolating a bin MUTES the rest rather than hiding it, so the witness is not "fewer runs
+// exist" - it is that the muted colour appears where it did not before while the route
+// still spans the same ground. Counting runs alone would pass on a map that had simply
+// stopped drawing.
+const strokeCensus = () => page.evaluate(() => {
+  const paths = [...document.querySelectorAll('.leaflet-overlay-pane path.route-run')]
+    .filter((p) => p.getAttribute('d') !== 'M0 0')
+  const by = {}
+  for (const p of paths) {
+    const c = (p.getAttribute('stroke') ?? '').toLowerCase()
+    by[c] = (by[c] ?? 0) + 1
+  }
+  return { total: paths.length, colors: Object.keys(by).length, by }
+})
+
+const beforeIso = await strokeCensus()
+await page.locator('.dock.right .legend-row').filter({ has: page.locator('.swatch') })
+  .nth(1).click()
+await page.waitForTimeout(1200)
+const afterIso = await strokeCensus()
+check('범례 구간을 누르면 그 구간만 강조', 
+  (afterIso.by['#c9c9d0'] ?? 0) > 0 && (beforeIso.by['#c9c9d0'] ?? 0) === 0
+  && afterIso.total > 0,
+  `muted runs ${beforeIso.by['#c9c9d0'] ?? 0} -> ${afterIso.by['#c9c9d0'] ?? 0}`)
+
+// Muting must be a display choice, not a filter: the route still has to cover the same
+// ground, or the user has lost the ability to see WHERE the isolated samples are. Both
+// frames are measured with the same selector - the first version of this compared an
+// isolated frame that counted only the highlighted runs against a full one, and reported
+// a difference that was entirely its own.
+const isoFrame = await routeFrame()
+await page.locator('.legend-note.isolating button').click()
+await page.waitForTimeout(1200)
+const allFrame = await routeFrame()
+check('격리는 숨기기가 아니라 문맥 유지',
+  isoFrame != null && allFrame != null && Math.abs(isoFrame.w - allFrame.w) < 3,
+  `route spans ${isoFrame?.w.toFixed(0)} isolated, ${allFrame?.w.toFixed(0)} whole`)
+
+// Identity colouring. The witness is the SERVING CELL count from the API, not the number
+// of colours drawn - a palette bug that gave every cell the same colour would still draw
+// "some colours".
+await page.locator('.toolbar select[aria-label="Colour by"]').selectOption('pci')
+await page.waitForTimeout(1800)
+const pciCensus = await strokeCensus()
+const bd = await (await page.request.get(
+  `${API_BASE}/api/sessions/${await sessionPicker.inputValue()}/neighbour-breakdown`)).json()
+// The API's own count of cells that actually served, so a palette bug that painted every
+// cell the same colour, or one that invented colours for cells that never served, both
+// fail here. Counting "how many colours are on the map" alone would pass on either.
+const servingCells = bd.bars.filter((b) => b.samplesServing > 0).length
+check('서빙 셀별로 경로선이 나뉨',
+  pciCensus.colors === servingCells && servingCells > 1,
+  `${pciCensus.colors} route colours, ${servingCells} cells served in this drive`)
+
+const pciLegend = await page.locator('.dock.right .legend-row .label').allInnerTexts()
+check('PCI 범례가 서빙 셀을 나열',
+  pciLegend.filter((t) => /^PCI \d+$/.test(t)).length === servingCells,
+  `${pciLegend.filter((t) => /^PCI \d+$/.test(t)).length} PCI rows`)
+
+// Identity is not a verdict, and the colours are per-drive. Saying so is the same debt
+// the derived KPI scale already pays for its quartiles.
+check('정체성 색임을 명시',
+  /no pass\/fail implied/.test(await page.locator('.dock.right .legend-note').first().innerText()))
+
+await page.locator('.toolbar select[aria-label="Colour by"]').selectOption('kpi')
+await page.waitForTimeout(1500)
+
 // 4. shared time cursor: moving it must change the readout AND the grid
 const before = await page.locator('.statusbar b').nth(2).innerText()
 const beforeGrid = await page.locator('.dock.right table.grid').first().innerText()
@@ -356,14 +429,14 @@ check('네트워크(DU) 측 KPI 노출', /Network Side/.test(treeText) && /PRB u
 
 // 17. area binning replaces the raw route with tiles
 const segBefore = await page.locator('path.leaflet-interactive').count()
-await page.locator('.toolbar select').nth(2).selectOption('150')
+await page.locator('.toolbar select[aria-label="Area bins"]').selectOption('150')
 await page.waitForTimeout(1600)
 const rects = await page.locator('.leaflet-overlay-pane path').count()
 const mapTitle = await page.locator('.panel > header .title').first().innerText()
 check('영역 비닝(area binning) 렌더링', /area bins/.test(mapTitle) && rects > 0,
   `${segBefore} segments -> ${rects} shapes, title="${mapTitle}"`)
 await page.screenshot({ path: `${OUT}/09-area-bins.png` })
-await page.locator('.toolbar select').nth(2).selectOption('0')
+await page.locator('.toolbar select[aria-label="Area bins"]').selectOption('0')
 await page.waitForTimeout(900)
 
 // 18. coverage issue detection
@@ -410,11 +483,11 @@ await page.screenshot({ path: `${OUT}/12-import.png` })
 // 23-25. fronthaul injection scenario: a transport fault the radio view cannot see
 await page.locator('.mode-tabs button', { hasText: 'Analysis' }).click()
 await page.waitForTimeout(600)
-const sessionOpts = await page.locator('.toolbar select').first().locator('option').allInnerTexts()
+const sessionOpts = await page.locator('.toolbar select[aria-label="Measurement"]').locator('option').allInnerTexts()
 const fh = sessionOpts.find((o) => /fronthaul/i.test(o))
 check('프론트홀 주입 세션 존재', Boolean(fh), fh ?? 'not found')
 if (fh) {
-  await page.locator('.toolbar select').first().selectOption({ label: fh })
+  await page.locator('.toolbar select[aria-label="Measurement"]').selectOption({ label: fh })
   await page.waitForTimeout(2500)
   const tree = await page.locator('.dock .tree').innerText()
   check('O-RAN 프론트홀 KPI 계열', /Fronthaul/.test(tree) && /CUS RX late/.test(tree))
@@ -437,7 +510,7 @@ if (fh) {
 }
 
 // 26. L3 message log follows the cursor and expands
-await page.locator('.toolbar select').first().selectOption({ index: 0 })
+await page.locator('.toolbar select[aria-label="Measurement"]').selectOption({ index: 0 })
 await page.waitForTimeout(1500)
 await page.locator('.workbook-tabs button', { hasText: 'L3 Signalling' }).click()
 await page.waitForTimeout(1200)
@@ -642,10 +715,10 @@ await page.waitForTimeout(800)
 // underpass. Selecting whatever happens to be first picked the lab replay, which has no
 // deep fade - so the coverage-hole check below was asserting against data that could not
 // exhibit the defect it exists to catch, and passed for that reason rather than on merit.
-const msOpts = await page.locator('.toolbar select').first().locator('option').allInnerTexts()
+const msOpts = await page.locator('.toolbar select[aria-label="Measurement"]').locator('option').allInnerTexts()
 const fadeSession = msOpts.find((o) => /1\.4\.2/.test(o))
 check('깊은 페이드 구간이 있는 세션 확보', Boolean(fadeSession), fadeSession ?? 'not found')
-await page.locator('.toolbar select').first().selectOption({ label: fadeSession })
+await page.locator('.toolbar select[aria-label="Measurement"]').selectOption({ label: fadeSession })
 await page.waitForTimeout(2000)
 
 // The dock the reference keeps permanently on screen.
@@ -779,7 +852,7 @@ await page.screenshot({ path: `${OUT}/27-kpi-workbench.png`, fullPage: true })
 // ------------------------------------------------- distance bins / footprints
 await page.locator('.mode-tabs button', { hasText: 'Analysis' }).click()
 await page.waitForTimeout(800)
-await page.locator('.toolbar select').first().selectOption({ label: fadeSession })
+await page.locator('.toolbar select[aria-label="Measurement"]').selectOption({ label: fadeSession })
 await page.locator('.workbook-tabs button', { hasText: 'Overview' }).click()
 await page.waitForTimeout(1200)
 // Sets its own KPI rather than inheriting whatever an earlier check left selected. The

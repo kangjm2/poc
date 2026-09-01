@@ -4,6 +4,8 @@ import 'leaflet/dist/leaflet.css'
 import type {
   AreaBin, CellFootprint, CellRef, EventType, MonitoredCell, NetworkEvent, TrackPoint,
 } from '../api/types'
+import type { ColorBy } from '../view/paint'
+import { buildPciColors, paint } from '../view/paint'
 
 interface Props {
   track: TrackPoint[]
@@ -50,6 +52,16 @@ interface Props {
    * to be put back deliberately.
    */
   refitToken?: number
+  /**
+   * What the route's colour MEANS: the KPI's verdict, or which cell was serving.
+   * See view/paint.ts - the two are different kinds of claim, not two palettes.
+   */
+  colorBy?: ColorBy
+  /**
+   * One bin label to show at full strength, the rest muted. The workaround this replaces
+   * was opening the colour editor, painting every other bin grey, looking, and undoing.
+   */
+  isolate?: string | null
 }
 
 /**
@@ -60,7 +72,7 @@ interface Props {
 export function RouteMap({
   track, cells, cursorSeq, onCursorChange, kpiName, bins, showServingLine = true,
   monitored = null, footprints = null, events = [], eventTypes,
-  frameKey = '', refitToken = 0,
+  frameKey = '', refitToken = 0, colorBy = 'kpi', isolate = null,
 }: Props) {
   const hostRef = useRef<HTMLDivElement>(null)
   const mapRef = useRef<L.Map | null>(null)
@@ -185,13 +197,21 @@ export function RouteMap({
     // state that we measured ground we have nothing from (a gap) or that the vehicle
     // went somewhere it did not (a bad fix) - the map's only two ways of asserting
     // something false. The server classifies these; see RouteContinuity.
+    // Painted once here, so the run boundaries and the drawn colour cannot disagree.
+    // Under 'pci' this makes every handover a run boundary, which is the whole point of
+    // that mode: the boundary IS the finding.
+    const rule = { colorBy, isolate, pciColors: buildPciColors(track) }
+    const painted = track.map((p) => paint(p, rule))
+
     let runStart = 0
     for (let i = 1; i <= track.length; i++) {
       const broken = i < track.length && track[i].breakBefore > 0
-      const endOfRun = i === track.length || broken || track[i].color !== track[runStart].color
+      const endOfRun = i === track.length || broken
+        || painted[i].color !== painted[runStart].color
       if (!endOfRun) continue
 
       const head = track[runStart]
+      const ink = painted[runStart]
       // Extend one sample past the run so adjacent runs join without a visible gap -
       // but never across a break, which is the one place the gap is the point.
       const end = broken ? i - 1 : Math.min(i, track.length - 1)
@@ -200,12 +220,20 @@ export function RouteMap({
 
       if (coords.length > 1) {
         L.polyline(coords, {
-          color: head.color, weight: 6, opacity: 0.95, lineCap: 'butt', lineJoin: 'round',
+          // Classed, not identified by stroke width. Cell markers and the cursor are
+          // circleMarkers drawn at width 3, which is also the width a muted run uses, so
+          // a width-based selector counts map furniture as route.
+          className: 'route-run',
+          color: ink.color, weight: ink.weight,
+          opacity: ink.emphasised ? 0.95 : 0.5,
+          lineCap: 'butt', lineJoin: 'round',
         })
           .on('click', () => onCursorChange(head.seq))
           .bindTooltip(
             `${new Date(head.ts).toISOString().slice(11, 19)}<br/>${kpiName}: ${head.value ?? '-'}`
-            + `<br/>${head.binLabel}<br/>${coords.length} samples`,
+            + `<br/>${head.binLabel}`
+            + (colorBy === 'pci' ? `<br/>serving PCI ${head.servingPci ?? '-'}` : '')
+            + `<br/>${coords.length} samples`,
             { sticky: true },
           )
           .addTo(layer)
@@ -253,7 +281,7 @@ export function RouteMap({
     // the KPI changes - that is what recolours it - and it is only the FRAMING that had to
     // stop following the KPI. Narrowing the array would have stopped the redraw too.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [track, kpiName, onCursorChange, bins, frameKey, refitToken])
+  }, [track, kpiName, onCursorChange, bins, frameKey, refitToken, colorBy, isolate])
 
   // Events, as per-type symbols anchored on the route.
   //

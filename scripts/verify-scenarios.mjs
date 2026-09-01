@@ -53,7 +53,7 @@ page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()) })
 
 const apiGet = async (path) => (await page.request.get(`${API}${path}`)).json()
 const selectSession = async (label) => {
-  await page.locator('.toolbar select').first().selectOption({ label })
+  await page.locator('.toolbar select[aria-label="Measurement"]').selectOption({ label })
   await page.waitForTimeout(1800)
 }
 const openWorkbook = async (label) => {
@@ -251,14 +251,14 @@ scenario('S4 · Fronthaul fault triage (transport vs radio)')
   const meta = sessions.find((s) => s.name === FRONTHAUL)
 
   // The user's entry point is the symptom: a throughput dip somewhere in the run.
-  await page.locator('.toolbar select').nth(1).selectOption({ label: 'MAC downlink throughput' })
+  await page.locator('.toolbar select[aria-label="KPI"]').selectOption({ label: 'MAC downlink throughput' })
   await page.waitForTimeout(1500)
   await openWorkbook('Degradation')
   const thrText = await page.locator('.panels').innerText()
   step('symptom visible: throughput degrades', /CRITICAL|WARNING/.test(thrText))
 
   // Radio-side check: the fronthaul KPI family exists because RF cannot see this.
-  await page.locator('.toolbar select').nth(1).selectOption({ label: 'CUS RX late' })
+  await page.locator('.toolbar select[aria-label="KPI"]').selectOption({ label: 'CUS RX late' })
   await page.waitForTimeout(1500)
   const fhDeg = await apiGet(`/api/sessions/${meta.id}/degradations?kpi=FH_RX_LATE&minSamples=5`)
   step('fronthaul window flagged CRITICAL',
@@ -293,7 +293,7 @@ scenario('S4 · Fronthaul fault triage (transport vs radio)')
 // ─── S5 · Coverage optimization ──────────────────────────────────────────────
 scenario('S5 · Coverage optimization')
 {
-  await page.locator('.toolbar select').nth(1).selectOption({ label: 'RSRP (NR SpCell)' })
+  await page.locator('.toolbar select[aria-label="KPI"]').selectOption({ label: 'RSRP (NR SpCell)' })
   await selectSession(HIGHWAY)
   await openWorkbook('Overview')
   const meta = sessions.find((s) => s.name === HIGHWAY)
@@ -304,7 +304,7 @@ scenario('S5 · Coverage optimization')
     /No fronthaul counters in this session/.test(fhEmpty))
   await openWorkbook('Overview')
 
-  await page.locator('.toolbar select').nth(2).selectOption('150')
+  await page.locator('.toolbar select[aria-label="Area bins"]').selectOption('150')
   await page.waitForTimeout(1800)
   const mapTitle = await page.locator('.panel > header .title').first().innerText()
   const shapes = await page.locator('.leaflet-overlay-pane path').count()
@@ -335,7 +335,7 @@ scenario('S5 · Coverage optimization')
   step('an unknown KPI is refused rather than exported as nulls',
     badKpi.status() === 400, `HTTP ${badKpi.status()}`)
 
-  await page.locator('.toolbar select').nth(2).selectOption('0')
+  await page.locator('.toolbar select[aria-label="Area bins"]').selectOption('0')
   await page.waitForTimeout(900)
 }
 
@@ -500,7 +500,7 @@ scenario('S9 · Colour scale personalisation')
   await openMode('Analysis')
   await selectSession(CITY_A)
   await openWorkbook('Overview')
-  await page.locator('.toolbar select').nth(1).selectOption({ label: 'RSRP (NR SpCell)' })
+  await page.locator('.toolbar select[aria-label="KPI"]').selectOption({ label: 'RSRP (NR SpCell)' })
   await page.waitForTimeout(1500)
 
   const legendLabels = () => page.locator('.dock.right .legend-row .label').allInnerTexts()
@@ -614,7 +614,7 @@ scenario('S10 · Unconfigured KPI falls back to an auto scale')
     // And the UI has to say so, or the map reads as an absolute judgement.
     await openMode('Analysis')
     await selectSession(CITY_A)
-    await page.locator('.toolbar select').nth(1).selectOption({ label: 'CQI' })
+    await page.locator('.toolbar select[aria-label="KPI"]').selectOption({ label: 'CQI' })
     await page.waitForTimeout(1600)
     const noteVisible = await page.locator('.dock.right .legend-note').count()
     step('legend says the scale was derived, not configured', noteVisible === 1,
@@ -630,7 +630,7 @@ scenario('S10 · Unconfigured KPI falls back to an auto scale')
     await page.waitForTimeout(500)
 
     await page.request.post(`${API}/api/kpi-definitions/${stripped}/thresholds/reset`)
-    await page.locator('.toolbar select').nth(1).selectOption({ label: 'RSRP (NR SpCell)' })
+    await page.locator('.toolbar select[aria-label="KPI"]').selectOption({ label: 'RSRP (NR SpCell)' })
     await page.waitForTimeout(1200)
   }
 }
@@ -741,7 +741,7 @@ scenario('S11 · Unknown columns become KPIs instead of being dropped')
     if (s) await page.request.delete(`${API}/api/sessions/${s.id}`)
   }
   await selectSession(CITY_A)
-  await page.locator('.toolbar select').nth(1).selectOption({ label: 'RSRP (NR SpCell)' })
+  await page.locator('.toolbar select[aria-label="KPI"]').selectOption({ label: 'RSRP (NR SpCell)' })
   await page.waitForTimeout(1000)
 }
 
@@ -971,7 +971,7 @@ scenario('S15 · A view handed to somebody else')
 {
   await selectSession(CITY_B)
   await openWorkbook('Radio Quality')
-  await page.locator('.toolbar select').nth(1).selectOption('SINR')
+  await page.locator('.toolbar select[aria-label="KPI"]').selectOption('SINR')
   await page.waitForTimeout(1200)
   await page.keyboard.press('Home')
   for (let i = 0; i < 7; i++) await page.keyboard.press('ArrowRight')
@@ -1002,10 +1002,10 @@ scenario('S15 · A view handed to somebody else')
     clock === new Date(truth.ts).toISOString().slice(11, 19),
     `recipient reads ${clock}, server says ${new Date(truth.ts).toISOString().slice(11, 19)}`)
   step('and on the same parameter and tab',
-    (await other.locator('.toolbar select').nth(1).inputValue()) === 'SINR'
+    (await other.locator('.toolbar select[aria-label="KPI"]').inputValue()) === 'SINR'
     && (await other.locator('.workbook-tabs button.active, .workbook-tabs button[aria-current]')
       .first().innerText()).includes('Radio'),
-    await other.locator('.toolbar select').nth(1).inputValue())
+    await other.locator('.toolbar select[aria-label="KPI"]').inputValue())
   step('nothing was repaired, so no notice is raised',
     (await other.locator('.view-notice').count()) === 0)
   await other.close()

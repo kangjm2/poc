@@ -2,13 +2,14 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { api } from './api/client'
 import type {
   AreaBin, CellRef, CoverageIssue, Degradation, Distribution, EventType, KpiDefinition,
-  CellFootprint, MonitoredSet, NetworkEvent, SeqRange, Series, SessionSummary,
+  CellFootprint, MonitoredSet, NeighbourBar, NetworkEvent, SeqRange, Series, SessionSummary,
   SignalingMessage, Snapshot, TrackPoint, Workbook,
 } from './api/types'
 import { RouteMap } from './components/RouteMap'
 import { TimeSeriesChart } from './components/TimeSeriesChart'
 import {
   DegradationPanel, EventList, LegendPanel, MessageList, ParameterGrid, ParameterTree,
+  PciLegend,
 } from './components/Panels'
 import { CompareView } from './components/CompareView'
 import { CellsPage } from './components/CellBarChart'
@@ -26,6 +27,8 @@ import { bindingFor, isTypingTarget } from './view/keymap'
 import { PRIORITY, dismissTop, useDismissable } from './view/dismiss'
 import type { Correction } from './view/state'
 import { encodeView, parseView, reconcile } from './view/state'
+import type { ColorBy } from './view/paint'
+import { buildPciColors } from './view/paint'
 
 /**
  * Workbook pages. Existing users switch screen sets from a tab strip along the
@@ -99,6 +102,14 @@ export function App() {
   // same one, so it gets its own control rather than sharing the tile selector.
   const [distanceStep, setDistanceStep] = useState(initial.distanceStep)
   const [showFootprints, setShowFootprints] = useState(initial.footprints)
+  /**
+   * What the route's colour means. See view/paint.ts: the KPI ramp is a verdict, the
+   * serving cell is an identity, and they are not two palettes for one idea.
+   */
+  const [colorBy, setColorBy] = useState<ColorBy>('kpi')
+  /** One bin shown alone on the map, the rest muted. */
+  const [isolate, setIsolate] = useState<string | null>(null)
+  const [pciBars, setPciBars] = useState<NeighbourBar[]>([])
   const [footprints, setFootprints] = useState<CellFootprint[] | null>(null)
   const [workbooks, setWorkbooks] = useState<Workbook[]>([])
   const [issues, setIssues] = useState<CoverageIssue[]>([])
@@ -329,6 +340,18 @@ export function App() {
     api.coverageIssues(sessionId).then(setIssues).catch(fail)
   }, [sessionId, fail])
 
+  // Only while identity colouring is on: the legend is the only consumer, and this is a
+  // full-table aggregate rather than something already in the track payload.
+  useEffect(() => {
+    if (sessionId == null || colorBy !== 'pci') { setPciBars([]); return }
+    api.neighbourBreakdown(sessionId).then((d) => setPciBars(d.bars)).catch(fail)
+  }, [sessionId, colorBy, fail])
+
+  // Isolation is a statement about ONE scale's bins, so it cannot survive a change of
+  // scale: the label it names may not exist on the next KPI, and a stale isolate would
+  // mute the whole route with nothing highlighted and no way to see why.
+  useEffect(() => { setIsolate(null) }, [kpi, sessionId])
+
   const seriesFor = (name: string) =>
     series.find((s) => s.kpi === name)
     ?? (extraSeries?.kpi === name ? extraSeries : null)
@@ -546,6 +569,7 @@ export function App() {
                       frameKey={String(sessionId)} refitToken={refitToken}
                       onCursorChange={moveCursor} kpiName={activeDef?.displayName ?? kpi}
                       bins={bins} footprints={footprints}
+                      colorBy={colorBy} isolate={isolate}
                       events={events} eventTypes={eventTypes} />
             {distanceStep > 0 && (
               <DistanceProfile sessionId={sessionId} kpiName={kpi} stepMeters={distanceStep}
@@ -588,6 +612,7 @@ export function App() {
                       frameKey={String(sessionId)} refitToken={refitToken}
                       onCursorChange={moveCursor} kpiName={activeDef?.displayName ?? kpi}
                       monitored={monitored?.cells ?? null} footprints={footprints}
+                      colorBy={colorBy} isolate={isolate}
                       events={events} eventTypes={eventTypes} />
             <div className="panel">
               <header>
@@ -665,6 +690,7 @@ export function App() {
                       frameKey={String(sessionId)} refitToken={refitToken}
                       onCursorChange={moveCursor} kpiName={activeDef?.displayName ?? kpi}
                       bins={bins} footprints={footprints}
+                      colorBy={colorBy} isolate={isolate}
                       events={events} eventTypes={eventTypes} />
             <div className="panel">
               <header>
@@ -730,20 +756,31 @@ export function App() {
           <>
             <div className="group">
               <label>Measurement</label>
-              <select value={sessionId ?? ''}
+              <select value={sessionId ?? ''} aria-label="Measurement"
                       onChange={(e) => { setSessionId(Number(e.target.value)); e.currentTarget.blur() }}>
                 {sessions.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
               </select>
             </div>
             <div className="group">
               <label>KPI</label>
-              <select value={kpi} onChange={(e) => { setKpi(e.target.value); e.currentTarget.blur() }}>
+              <select value={kpi} aria-label="KPI"
+                      onChange={(e) => { setKpi(e.target.value); e.currentTarget.blur() }}>
                 {defs.map((d) => <option key={d.name} value={d.name}>{d.displayName}</option>)}
               </select>
             </div>
             <div className="group">
+              <label>Colour by</label>
+              <select value={colorBy} aria-label="Colour by"
+                      title="What the route's colour means"
+                      onChange={(e) => { setColorBy(e.target.value as ColorBy); e.currentTarget.blur() }}>
+                <option value="kpi">KPI value</option>
+                <option value="pci">Serving cell (PCI)</option>
+              </select>
+            </div>
+            <div className="group">
               <label>Area bins</label>
-              <select value={binSize} onChange={(e) => { setBinSize(Number(e.target.value)); e.currentTarget.blur() }}>
+              <select value={binSize} aria-label="Area bins"
+                      onChange={(e) => { setBinSize(Number(e.target.value)); e.currentTarget.blur() }}>
                 <option value={0}>off (raw route)</option>
                 <option value={50}>50 m</option>
                 <option value={150}>150 m</option>
@@ -754,6 +791,7 @@ export function App() {
               <label title="Averages per unit of road travelled, so a stop at a light stops
                      dominating the average">Distance bins</label>
               <select value={distanceStep}
+                      aria-label="Distance bins"
                       onChange={(e) => { setDistanceStep(Number(e.target.value)); e.currentTarget.blur() }}>
                 <option value={0}>off</option>
                 <option value={50}>50 m</option>
@@ -907,8 +945,14 @@ export function App() {
               <div className="dock-section">
                 <h3>Color Legends</h3>
                 <div className="content">
-                  <LegendPanel dist={dist}
-                               onEdit={activeDef ? () => setEditingScale(true) : undefined} />
+                  {colorBy === 'pci' ? (
+                    <PciLegend colors={buildPciColors(track)} bars={pciBars}
+                               total={session?.sampleCount ?? 0} />
+                  ) : (
+                    <LegendPanel dist={dist}
+                                 onEdit={activeDef ? () => setEditingScale(true) : undefined}
+                                 isolate={isolate} onIsolate={setIsolate} />
+                  )}
                 </div>
               </div>
               <div className="dock-section" style={{ flex: 1, minHeight: 0 }}>
