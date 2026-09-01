@@ -381,3 +381,46 @@ export interface GraphRequest {
   output: KpiOutputRequest | null
   spec: GraphSpec
 }
+
+// ------------------------------------------------- distance bins & cell footprints
+
+/**
+ * One bin of a fixed distance travelled. `fromMetres` locates it along the route, so a
+ * bin is addressable by where it sits on the drive rather than by when it happened.
+ */
+export interface DistanceBin {
+  fromMetres: number; toMetres: number
+  centerLat: number; centerLon: number
+  sampleCount: number; avgValue: number; minValue: number; maxValue: number
+  fromSeq: number; toSeq: number
+  color: string; binLabel: string
+}
+
+/**
+ * The ground a cell was MEASURED serving. `hull` is [lat, lon] pairs forming a convex
+ * polygon — convex, so it can cover ground the cell never served. The screen says so.
+ */
+export interface CellFootprint {
+  pci: number; arfcn: number | null; band: string | null
+  sampleCount: number; avgRsrp: number
+  hull: Array<[number, number]>
+}
+
+// ------------------------------------------------------------ composed workbooks
+
+export interface WorkbookLayer { kpiName: string; visible: boolean }
+
+export interface WorkbookPane {
+  id?: number
+  kind: 'CHART' | 'MAP'
+  title: string | null
+  layers: WorkbookLayer[]
+}
+
+export interface Workbook {
+  id: number; name: string; ordinal: number; panes: WorkbookPane[]
+}
+
+export interface WorkbookRequest {
+  id: number | null; name: string; panes: WorkbookPane[]
+}

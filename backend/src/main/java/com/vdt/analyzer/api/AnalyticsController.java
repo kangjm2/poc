@@ -36,6 +36,33 @@ public class AnalyticsController {
         return geo.areaBins(id, kpi, sizeMeters);
     }
 
+    /**
+     * Averages the route into fixed steps of DISTANCE travelled.
+     *
+     * The sibling of /bins, and a different question: that one asks what the signal is at a
+     * place, this one asks what the drive saw per unit of road. A stop at a light stops
+     * dominating the average.
+     */
+    @GetMapping("/distance-bins")
+    public List<GeoAnalysisService.DistanceBin> distanceBins(
+            @PathVariable long id, @RequestParam String kpi,
+            @RequestParam(defaultValue = "100") double stepMeters) {
+        return geo.distanceBins(id, kpi, stepMeters);
+    }
+
+    /**
+     * The outline of where each cell was measured serving.
+     *
+     * Not the cell's configured coverage - we hold no beamwidth or range - but the ground
+     * it actually held on this drive.
+     */
+    @GetMapping("/cell-footprints")
+    public List<GeoAnalysisService.CellFootprint> cellFootprints(
+            @PathVariable long id,
+            @RequestParam(defaultValue = "10") int minSamples) {
+        return geo.cellFootprints(id, minSamples);
+    }
+
     @GetMapping("/coverage-issues")
     public List<GeoAnalysisService.CoverageIssue> coverage(
             @PathVariable long id,

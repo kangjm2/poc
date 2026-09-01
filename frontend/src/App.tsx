@@ -2,8 +2,8 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { api } from './api/client'
 import type {
   AreaBin, CellRef, CoverageIssue, Degradation, Distribution, KpiDefinition,
-  MonitoredSet, NetworkEvent, SeqRange, Series, SessionSummary, SignalingMessage,
-  Snapshot, TrackPoint,
+  CellFootprint, MonitoredSet, NetworkEvent, SeqRange, Series, SessionSummary,
+  SignalingMessage, Snapshot, TrackPoint, Workbook,
 } from './api/types'
 import { RouteMap } from './components/RouteMap'
 import { TimeSeriesChart } from './components/TimeSeriesChart'
@@ -13,6 +13,8 @@ import {
 import { CompareView } from './components/CompareView'
 import { CellsPage } from './components/CellBarChart'
 import { MonitoredSetDock, MonitoredSetPage } from './components/MonitoredSetPanel'
+import { ComposedWorkbook } from './components/ComposedWorkbook'
+import { DistanceProfile } from './components/DistanceProfile'
 import { ProblemSurveyPanel } from './components/ProblemSurveyPanel'
 import { FieldToLabPanel } from './components/FieldToLabPanel'
 import { StatisticsPanel } from './components/StatisticsPanel'
@@ -39,7 +41,14 @@ const WORKBOOKS = [
   { id: 'statistics', label: 'Statistics' },
   { id: 'fieldtolab', label: 'Field-to-Lab' },
 ] as const
-type WorkbookId = (typeof WORKBOOKS)[number]['id']
+type BuiltInId = (typeof WORKBOOKS)[number]['id']
+/**
+ * A tab is either one of the built-in screens or a composed workbook, addressed as
+ * `wb:<id>`. Two kinds rather than one list because they really are different things: the
+ * built-ins hold panels that are not panes - a bring-up sequence, an import form - and
+ * flattening them into pane rows would have meant inventing a pane type per screen.
+ */
+type WorkbookId = BuiltInId | `wb:${number}`
 
 export function App() {
   const [sessions, setSessions] = useState<SessionSummary[]>([])
@@ -52,6 +61,12 @@ export function App() {
   // Area binning replaces the raw route once a drive is too dense to read.
   const [binSize, setBinSize] = useState(0)
   const [bins, setBins] = useState<AreaBin[] | null>(null)
+  // Distance binning is a different question from area binning, not a different size of the
+  // same one, so it gets its own control rather than sharing the tile selector.
+  const [distanceStep, setDistanceStep] = useState(0)
+  const [showFootprints, setShowFootprints] = useState(false)
+  const [footprints, setFootprints] = useState<CellFootprint[] | null>(null)
+  const [workbooks, setWorkbooks] = useState<Workbook[]>([])
   const [issues, setIssues] = useState<CoverageIssue[]>([])
 
   const [track, setTrack] = useState<TrackPoint[]>([])
@@ -160,6 +175,22 @@ export function App() {
     api.bins(sessionId, kpi, binSize).then(setBins).catch(fail)
   }, [sessionId, kpi, binSize, scaleVersion, fail])
 
+  // Footprints are fetched only when asked for. They are per-session and change with
+  // neither the KPI nor the cursor, so refetching alongside those would be pure waste.
+  useEffect(() => {
+    if (sessionId == null || !showFootprints) { setFootprints(null); return }
+    let live = true
+    api.cellFootprints(sessionId)
+      .then((f) => { if (live) setFootprints(f) })
+      .catch(() => { if (live) setFootprints(null) })
+    return () => { live = false }
+  }, [sessionId, showFootprints])
+
+  const reloadWorkbooks = useCallback(() => {
+    api.workbooks().then(setWorkbooks).catch(() => setWorkbooks([]))
+  }, [])
+  useEffect(reloadWorkbooks, [reloadWorkbooks])
+
   useEffect(() => {
     if (sessionId == null) return
     api.coverageIssues(sessionId).then(setIssues).catch(fail)
@@ -221,13 +252,40 @@ export function App() {
   )
 
   const renderWorkbook = () => {
+    // A composed workbook is addressed as `wb:<id>`, so it is matched before the switch
+    // rather than added as a case: its id is not a literal.
+    if (typeof workbook === 'string' && workbook.startsWith('wb:')) {
+      const book = workbooks.find((w) => `wb:${w.id}` === workbook)
+      if (!book) return <div className="loading">Loading…</div>
+      return (
+        <ComposedWorkbook
+          key={book.id}
+          workbook={book}
+          sessionId={sessionId}
+          defs={defs}
+          track={track}
+          cells={cells}
+          cursorSeq={cursorSeq}
+          onCursorChange={setCursorSeq}
+          onSaved={(w) => setWorkbooks((ws) => ws.map((x) => (x.id === w.id ? w : x)))}
+          onDeleted={(id) => {
+            setWorkbooks((ws) => ws.filter((x) => x.id !== id))
+            setWorkbook('overview')
+          }}
+        />
+      )
+    }
     switch (workbook) {
       case 'overview':
         return (
           <>
             <RouteMap track={track} cells={cells} cursorSeq={cursorSeq}
                       onCursorChange={setCursorSeq} kpiName={activeDef?.displayName ?? kpi}
-                      bins={bins} />
+                      bins={bins} footprints={footprints} />
+            {distanceStep > 0 && (
+              <DistanceProfile sessionId={sessionId} kpiName={kpi} stepMeters={distanceStep}
+                               cursorSeq={cursorSeq} onJump={setCursorSeq} />
+            )}
             {chart(kpi)}
             <ParameterGrid snapshot={snapshot} />
           </>
@@ -263,7 +321,7 @@ export function App() {
                 something every view needs. */}
             <RouteMap track={track} cells={cells} cursorSeq={cursorSeq}
                       onCursorChange={setCursorSeq} kpiName={activeDef?.displayName ?? kpi}
-                      monitored={monitored?.cells ?? null} />
+                      monitored={monitored?.cells ?? null} footprints={footprints} />
             <div className="panel">
               <header>
                 <span className="title">Cells</span>
@@ -337,7 +395,7 @@ export function App() {
           <>
             <RouteMap track={track} cells={cells} cursorSeq={cursorSeq}
                       onCursorChange={setCursorSeq} kpiName={activeDef?.displayName ?? kpi}
-                      bins={bins} />
+                      bins={bins} footprints={footprints} />
             <div className="panel">
               <header>
                 <span className="title">Detected coverage issues</span>
@@ -421,6 +479,25 @@ export function App() {
                 <option value={150}>150 m</option>
                 <option value={500}>500 m</option>
               </select>
+            </div>
+            <div className="group">
+              <label title="Averages per unit of road travelled, so a stop at a light stops
+                     dominating the average">Distance bins</label>
+              <select value={distanceStep}
+                      onChange={(e) => setDistanceStep(Number(e.target.value))}>
+                <option value={0}>off</option>
+                <option value={50}>50 m</option>
+                <option value={100}>100 m</option>
+                <option value={250}>250 m</option>
+              </select>
+            </div>
+            <div className="group">
+              <label title="The outline of where each cell was measured serving">
+                Footprints</label>
+              <button onClick={() => setShowFootprints((v) => !v)}
+                      style={showFootprints ? { fontWeight: 600 } : undefined}>
+                {showFootprints ? 'on' : 'off'}
+              </button>
             </div>
             <div className="group">
               <label>Export</label>
@@ -517,6 +594,22 @@ export function App() {
                   <button key={w.id} className={workbook === w.id ? 'active' : ''}
                           onClick={() => setWorkbook(w.id)}>{w.label}</button>
                 ))}
+                {workbooks.map((w) => (
+                  <button key={`wb:${w.id}`}
+                          className={workbook === `wb:${w.id}` ? 'active' : ''}
+                          title={`Composed workbook — ${w.panes.length} pane(s)`}
+                          onClick={() => setWorkbook(`wb:${w.id}`)}>{w.name}</button>
+                ))}
+                {/* The `+` the reference has and we did not. Everything after this point
+                    on the strip is the user's, not ours. */}
+                <button title="New workbook — compose your own panes"
+                        onClick={async () => {
+                          const created = await api.saveWorkbook({
+                            id: null, name: 'New workbook', panes: [],
+                          })
+                          setWorkbooks((ws) => [...ws, created])
+                          setWorkbook(`wb:${created.id}`)
+                        }}>+</button>
               </div>
             </div>
 

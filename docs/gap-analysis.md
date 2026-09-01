@@ -40,13 +40,13 @@
 |---|---|---|
 | Synchronized workbooks, pages, data views | ✅ | 공유 시간 커서 + 워크북 탭 |
 | Maps / grids / line graphs | ✅ | |
-| Bar graphs, pie charts, surface grids, color grids, spreadsheets | ◐ | 바 차트(서빙 셀별 + **모니터드 셋별**)·파이 차트(원인별). surface/color grid는 아직 |
+| Bar graphs, pie charts, surface grids, color grids, spreadsheets | ◐ | 바 차트(서빙 셀별 · **모니터드 셋별** · **거리 프로파일**)·파이 차트(원인별). surface/color grid는 아직 |
 | **Area binning** | ✅ | 50/150/500 m |
-| **Distance binning** | ⛔ | 거리 기반(Lee's criteria) 집계 없음 |
+| **Distance binning** | ✅ | **해소.** 툴바 `Distance bins` → 이동 거리 기준 프로파일(50/100/250 m). 정차가 평균을 끌어당기지 않습니다 |
 | Base station map overlay | ✅ | 셀 마커 + 방위각 스포크 |
 | **Line from terminal to serving cell** | ✅ | 커서 위치 → 서빙 셀 점선 |
 | Line to *monitored* cells (pilot pollution 표시) | ✅ | **해소.** `sample_neighbour`(V7) 추가 → Mobility 지도에서 커서 시점 모니터드 셀까지 점선. 최강 셀 대비 6 dB 이내면 굵게(경합), 그 밖은 흐리게 |
-| Cell footprint / service area 시각화 | ⛔ | |
+| Cell footprint / service area 시각화 | ◐ | **해소(측정 기반).** 셀이 실제로 서빙한 표본의 **볼록 껍질**을 지도에 표시. 설계상 커버리지가 아니며(빔폭·반경 미기록) 볼록이라 오목한 실제 범위는 과대 포함합니다 — 화면에 그렇게 적혀 있습니다 |
 | Playback of individual log files | ◐ | 커서 이동은 되나 자동 재생 없음 |
 | 3D Visualizer (빔 3D) | ⬛ | 범위 외 |
 | Dashboards | ⛔ | |
