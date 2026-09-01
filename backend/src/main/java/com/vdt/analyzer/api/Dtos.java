@@ -14,9 +14,15 @@ public final class Dtos {
             String locationName, String notes, long sampleCount, long eventCount) {}
 
     /** One point on the drive route, already assigned to a colour bin. */
+    /**
+     * @param breakBefore how the step from the previous point is to be drawn:
+     *                    0 continuous, 1 a gap in the samples, 2 an implausible fix.
+     *                    See {@code RouteContinuity}.
+     */
     public record TrackPoint(
             int seq, Instant ts, double latitude, double longitude,
-            Double value, String color, String binLabel, Integer servingPci, Double speedKmh) {}
+            Double value, String color, String binLabel, Integer servingPci, Double speedKmh,
+            int breakBefore) {}
 
     public record SeriesPoint(int seq, Instant ts, Double value) {}
 

@@ -27,6 +27,8 @@ export interface TrackPoint {
   binLabel: string
   servingPci: number | null
   speedKmh: number | null
+  /** How the step from the previous point may be drawn: 0 continuous, 1 gap, 2 bad fix. */
+  breakBefore: number
 }
 
 export interface SeriesPoint { seq: number; ts: string; value: number | null }

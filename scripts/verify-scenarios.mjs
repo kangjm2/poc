@@ -30,6 +30,7 @@ const CITY_B = 'Oulu city centre - build 1.5.0'
 const HIGHWAY = 'Oulu highway northbound - build 1.5.0'
 const FRONTHAUL = 'Lab fronthaul replay - O-DU under test'
 const ROUNDTRIP = 'E2E roundtrip'
+const ROUNDTRIP_NOTE = 'rush hour, wipers on'
 
 const results = []
 let current = ''
@@ -344,11 +345,20 @@ scenario('S6 · Data lifecycle round-trip')
   const src = sessions.find((s) => s.name === CITY_B)
   const csv = await (await page.request.get(`${API}/api/sessions/${src.id}/export.csv`)).text()
 
+  // Duplicate session names are now refused, which makes this scenario non-idempotent:
+  // a run that died before its delete step leaves the name taken and blocks every run
+  // after it. Clearing it first keeps the scenario re-runnable without weakening the
+  // product rule it goes on to assert.
+  for (const stale of (await apiGet('/api/sessions')).filter((x) => x.name === ROUNDTRIP)) {
+    await page.request.delete(`${API}/api/sessions/${stale.id}`)
+  }
+
   await openMode('Import')
   await page.locator('input[type=file]').setInputFiles({
     name: 'e2e-roundtrip.csv', mimeType: 'text/csv', buffer: Buffer.from(csv),
   })
   await page.locator('label:has-text("Session name") input').fill(ROUNDTRIP)
+  await page.locator('.import-description').fill(ROUNDTRIP_NOTE)
   await page.locator('.panels button', { hasText: 'Import' }).click()
   await page.waitForSelector('.panel header .title:text("Import result")', { timeout: 30000 })
   await page.waitForTimeout(500)
@@ -364,6 +374,22 @@ scenario('S6 · Data lifecycle round-trip')
   step('import recorded in history', histText.includes('e2e-roundtrip.csv')
     && /COMPLETED/.test(histText))
 
+  // Importing the same name twice is how two indistinguishable drives get into the
+  // picker, and the next person analyses whichever one the dropdown lists first. The
+  // second import must be refused, and the refusal has to name the session already
+  // holding the name - "already exists" alone leaves the user with nothing to do.
+  await page.locator('input[type=file]').setInputFiles({
+    name: 'e2e-roundtrip.csv', mimeType: 'text/csv', buffer: Buffer.from(csv),
+  })
+  await page.locator('label:has-text("Session name") input').fill(ROUNDTRIP)
+  await page.locator('.panels button', { hasText: 'Import' }).click()
+  await page.waitForTimeout(2500)
+  const dupText = await page.locator('.panels').first().innerText()
+  const dupCount = (await apiGet('/api/sessions')).filter((x) => x.name === ROUNDTRIP).length
+  step('re-importing the same session name is refused, not silently duplicated',
+    dupCount === 1 && /already exists/i.test(dupText),
+    `${dupCount} session(s) named ${ROUNDTRIP}`)
+
   await openMode('Analysis')
   await selectSession(ROUNDTRIP)
   const segments = await page.locator('path.leaflet-interactive').count()
@@ -371,6 +397,15 @@ scenario('S6 · Data lifecycle round-trip')
   const legendTotal = Number(totalRow.match(/(\d+)/)?.[1] ?? -1)
   step('imported session analyzes like a native one', segments > 100 && legendTotal === src.sampleCount,
     `${segments} segments, legend ${legendTotal}`)
+
+  // The description is the only thing a session can say that its file name cannot, and
+  // it has to survive to where the analyst actually looks - the note bar, not just a row
+  // in the database.
+  // The note bar specifically, not the page text: searching the whole body would pass
+  // on any build that rendered the string anywhere at all.
+  const noteBar = await page.locator('.session-notes').innerText()
+  step('the description typed at import reaches the note bar',
+    noteBar.includes(ROUNDTRIP_NOTE), noteBar)
 
   page.once('dialog', (d) => d.accept())
   await page.locator('.toolbar button.danger').click()

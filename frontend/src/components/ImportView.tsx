@@ -18,6 +18,7 @@ export function ImportView({ onImported }: { onImported: () => void }) {
   const [device, setDevice] = useState('')
   const [operator, setOperator] = useState('')
   const [technology, setTechnology] = useState('5G NR SA')
+  const [description, setDescription] = useState('')
   const [busy, setBusy] = useState(false)
   const [result, setResult] = useState<ImportResult | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -42,6 +43,7 @@ export function ImportView({ onImported }: { onImported: () => void }) {
     if (device) form.append('device', device)
     if (operator) form.append('operator', operator)
     if (technology) form.append('technology', technology)
+    if (description) form.append('description', description)
     if (createUnknown) form.append('createUnknownColumns', 'true')
     try {
       setResult(await api.importCsv(form))
@@ -86,6 +88,13 @@ export function ImportView({ onImported }: { onImported: () => void }) {
               <input value={technology} onChange={(e) => setTechnology(e.target.value)}
                      style={{ width: '100%' }} /></label>
           </div>
+          {/* Two weeks on, the file name is all that distinguishes four drives in the
+              picker. This is the only place a session can say what it was. */}
+          <label>Description<br />
+            <input className="import-description" value={description}
+                   onChange={(e) => setDescription(e.target.value)}
+                   placeholder="what this drive was - build, route, conditions"
+                   style={{ width: '100%' }} /></label>
           <div>
             <button onClick={submit} disabled={busy}>{busy ? 'Importing…' : 'Import'}</button>
           </div>

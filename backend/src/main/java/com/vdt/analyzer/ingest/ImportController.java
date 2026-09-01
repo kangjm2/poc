@@ -27,11 +27,12 @@ public class ImportController {
             @RequestParam(required = false) String device,
             @RequestParam(required = false) String operator,
             @RequestParam(required = false) String technology,
+            @RequestParam(required = false) String description,
             @RequestParam(required = false, defaultValue = ",") String delimiter,
             @RequestParam(required = false, defaultValue = "false") boolean createUnknownColumns) {
         char d = delimiter.isEmpty() ? ',' : delimiter.charAt(0);
-        return imports.importCsv(file, sessionName, device, operator, technology, d,
-                createUnknownColumns);
+        return imports.importCsv(file, sessionName, device, operator, technology,
+                description, d, createUnknownColumns);
     }
 
     @GetMapping("/jobs")
