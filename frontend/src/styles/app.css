@@ -436,3 +436,23 @@ kbd {
   border-bottom-width: 2px;
   border-radius: 3px;
 }
+
+/* A link the app had to repair. Not an error - nothing went wrong - but the recipient has
+   to know their view is not the sender's, or they will pass the same broken link on. */
+.view-notice {
+  position: relative;
+  margin: 6px 10px;
+  padding: 8px 34px 8px 10px;
+  background: #fff8e6;
+  border: 1px solid #e0c060;
+  border-left-width: 4px;
+  font-size: 12px;
+}
+.view-notice ul { margin: 4px 0 0; padding-left: 18px; }
+.view-notice li { margin: 2px 0; }
+.view-notice code { background: #f6efd8; padding: 0 3px; }
+.view-notice > button {
+  position: absolute;
+  top: 4px;
+  right: 6px;
+}

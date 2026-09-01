@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { api } from './api/client'
 import type {
   AreaBin, CellRef, CoverageIssue, Degradation, Distribution, EventType, KpiDefinition,
@@ -24,6 +24,8 @@ import { LegendEditor } from './components/LegendEditor'
 import { KeySheet } from './components/KeySheet'
 import { bindingFor, isTypingTarget } from './view/keymap'
 import { PRIORITY, dismissTop, useDismissable } from './view/dismiss'
+import type { Correction } from './view/state'
+import { encodeView, parseView, reconcile } from './view/state'
 
 /**
  * Workbook pages. Existing users switch screen sets from a tab strip along the
@@ -76,20 +78,27 @@ const CURSOR_FETCH_MS = 125
 type WorkbookId = BuiltInId | `wb:${number}`
 
 export function App() {
+  // Read once, before the first render, so the initial fetches are already aimed at the
+  // linked drive rather than at the oldest one and then corrected - which would show the
+  // recipient a drive nobody sent them, briefly but visibly.
+  const [initial] = useState(() => parseView(window.location.search))
+  const [corrections, setCorrections] = useState<Correction[]>([])
+  const [reconciled, setReconciled] = useState(false)
+
   const [sessions, setSessions] = useState<SessionSummary[]>([])
-  const [sessionId, setSessionId] = useState<number | null>(null)
+  const [sessionId, setSessionId] = useState<number | null>(initial.sessionId)
   const [defs, setDefs] = useState<KpiDefinition[]>([])
-  const [kpi, setKpi] = useState('RSRP')
-  const [workbook, setWorkbook] = useState<WorkbookId>('overview')
-  const [mode, setMode] = useState<'analyze' | 'compare' | 'lab' | 'import'>('analyze')
+  const [kpi, setKpi] = useState(initial.kpi)
+  const [workbook, setWorkbook] = useState<WorkbookId>(initial.workbook as WorkbookId)
+  const [mode, setMode] = useState<'analyze' | 'compare' | 'lab' | 'import'>(initial.mode)
 
   // Area binning replaces the raw route once a drive is too dense to read.
-  const [binSize, setBinSize] = useState(0)
+  const [binSize, setBinSize] = useState(initial.binSize)
   const [bins, setBins] = useState<AreaBin[] | null>(null)
   // Distance binning is a different question from area binning, not a different size of the
   // same one, so it gets its own control rather than sharing the tile selector.
-  const [distanceStep, setDistanceStep] = useState(0)
-  const [showFootprints, setShowFootprints] = useState(false)
+  const [distanceStep, setDistanceStep] = useState(initial.distanceStep)
+  const [showFootprints, setShowFootprints] = useState(initial.footprints)
   const [footprints, setFootprints] = useState<CellFootprint[] | null>(null)
   const [workbooks, setWorkbooks] = useState<Workbook[]>([])
   const [issues, setIssues] = useState<CoverageIssue[]>([])
@@ -109,7 +118,7 @@ export function App() {
 
   // The single time cursor every panel reads from. This shared cursor is the
   // interaction existing users rely on most, so it lives at the top of the tree.
-  const [cursorSeq, setCursorSeq] = useState(0)
+  const [cursorSeq, setCursorSeq] = useState(initial.seq)
   // Session-independent, so it is fetched once rather than per drive.
   const [eventTypes, setEventTypes] = useState<Map<string, EventType>>(new Map())
   const [playing, setPlaying] = useState(false)
@@ -133,7 +142,7 @@ export function App() {
   // honour it; the map and charts keep the whole drive so the selection stays in
   // context. The active range is shown as a chip because a filter the user cannot
   // see is a filter they will forget is on.
-  const [range, setRange] = useState<SeqRange | null>(null)
+  const [range, setRange] = useState<SeqRange | null>(initial.range)
 
   // The selected KPI's own series, fetched on demand when it is not one of the
   // pre-fetched overview KPIs - otherwise 12 of the 18 KPIs would have no chart.
@@ -150,10 +159,51 @@ export function App() {
 
   const fail = useCallback((e: unknown) => setError(String(e)), [])
 
+  /**
+   * True for exactly the first session the page adopts, when it came from the URL.
+   *
+   * A ref rather than state, and armed at CONSTRUCTION rather than by reconcile(). The
+   * reset effect runs on mount, before the session list has even arrived, so anything
+   * decided later is decided too late: the link's cursor is already back at 0 by then.
+   * That is not hypothetical - it is what the first version of this did, and the handover
+   * check caught it by comparing the recipient's clock against the server's timestamp for
+   * the sent seq rather than against anything the page printed.
+   */
+  const openedFromLink = useRef(initial.sessionId != null)
+
+  /**
+   * Make the incoming view legal, once, as soon as there is something to judge it against.
+   *
+   * Runs after the session list AND the KPI catalogue arrive, because "no such
+   * measurement" and "we have not looked yet" are different answers and only one of them
+   * justifies rewriting somebody's link.
+   */
+  useEffect(() => {
+    if (reconciled || sessions.length === 0 || defs.length === 0) return
+    const { view, corrections: fixes } = reconcile(
+      { ...initial, sessionId, kpi, workbook, seq: cursorSeq, range,
+        mode, binSize, distanceStep, footprints: showFootprints },
+      sessions, defs)
+    setReconciled(true)
+    setCorrections(fixes)
+    // Not re-armed here. When reconcile REPLACES the session - the linked drive is gone -
+    // the reset is exactly what should happen, and it agrees with the seq and range this
+    // function has already dropped. The flag only has to survive the reset effect's very
+    // first run, which happens before this effect can, so it is armed at construction.
+    if (view.sessionId !== sessionId) setSessionId(view.sessionId)
+    if (view.kpi !== kpi) setKpi(view.kpi)
+    if (view.seq !== cursorSeq) setCursorSeq(view.seq)
+    if (view.range !== range) setRange(view.range)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sessions, defs, reconciled])
+
+
   useEffect(() => {
     api.sessions().then((s) => {
       setSessions(s)
-      if (s.length) setSessionId([...s].sort((a, b) => a.id - b.id)[0].id)
+      // Which session to open is now decided by reconcile(), below, because that decision
+      // is entangled with what to do about the rest of the link when the named drive is
+      // gone. Deciding it here as well would put the lowest-id fallback in two places.
     }).catch(fail)
     api.kpiDefinitions().then(setDefs).catch(fail)
     api.eventTypes()
@@ -165,12 +215,20 @@ export function App() {
     'RSRP', 'RSRQ', 'SINR', 'MAC_DL_THROUGHPUT', 'MAC_UL_THROUGHPUT', 'DL_BLER',
   ], [])
 
+  // Changing measurement resets the cursor and the range, because both are indices into
+  // the drive being left. The ONE exception is the very first drive the page adopts: the
+  // seq and range on an incoming link were composed against that drive, and clearing them
+  // here would discard the whole point of the link. reconcile() has already decided
+  // whether they are legal for it.
   useEffect(() => {
     if (sessionId == null) return
     setError(null)
-    setCursorSeq(0)
     setPlaying(false)
-    setRange(null)
+    if (!openedFromLink.current) {
+      setCursorSeq(0)
+      setRange(null)
+    }
+    openedFromLink.current = false
     Promise.all([
       api.cells(sessionId).then(setCells),
       api.series(sessionId, SERIES_KPIS).then(setSeries),
@@ -186,7 +244,24 @@ export function App() {
 
   useEffect(() => {
     if (sessionId == null) return
-    api.distribution(sessionId, kpi, range).then(setDist).catch(fail)
+    api.distribution(sessionId, kpi, range)
+      .then((d) => {
+        setDist(d)
+        // "Is this a real parameter" is answered by the catalogue, which reconcile()
+        // already checked. "Does this drive contain any of it" can only be answered by
+        // the drive, and the answer arrives here. A link naming a fronthaul counter and
+        // opening a field measurement passes every earlier check and then paints an
+        // entirely grey route with a zeroed legend and nothing to say why - a screen that
+        // looks like a finding rather than like a mismatch.
+        if (d.total === 0 && kpi !== 'RSRP' && range == null) {
+          setCorrections((c) => c.some((x) => x.param === 'kpi') ? c : [...c, {
+            param: 'kpi', raw: kpi, became: 'RSRP',
+            why: 'this measurement recorded no values for it',
+          }])
+          setKpi('RSRP')
+        }
+      })
+      .catch(fail)
     api.degradations(sessionId, kpi, 5, range).then(setDegradations).catch(fail)
   }, [sessionId, kpi, range, scaleVersion, fail])
 
@@ -366,6 +441,25 @@ export function App() {
     return () => window.removeEventListener('keydown', onKey)
   }, [mode, cursorSeq, maxSeq, moveCursor, togglePlay])
 
+  /**
+   * Write the view back to the address bar.
+   *
+   * replaceState, never pushState. The cursor alone changes tens of times a second under
+   * playback, and a history entry per change would make Back mean "one sample earlier"
+   * and bury whatever the user was doing before they opened this. The URL here is an
+   * ADDRESS - something to copy, reload and send - not a navigation history.
+   */
+  useEffect(() => {
+    if (!reconciled) return
+    const url = window.location.pathname
+      + encodeView({ mode, sessionId, kpi, workbook, seq: cursorSeq, range,
+                     binSize, distanceStep, footprints: showFootprints })
+    if (url !== window.location.pathname + window.location.search) {
+      window.history.replaceState(null, '', url)
+    }
+  }, [reconciled, mode, sessionId, kpi, workbook, cursorSeq, range,
+      binSize, distanceStep, showFootprints])
+
   // Playback belongs to the Analysis screen. Leaving it running while the user is in
   // Import means a cursor sweeping a drive they are not looking at, and two fetches a
   // second for it.
@@ -379,6 +473,7 @@ export function App() {
   // at all - the duplicate was hiding whether the feature worked.
   useDismissable(editingScale, PRIORITY.MODAL, () => setEditingScale(false))
   useDismissable(error != null, PRIORITY.NOTICE, () => setError(null))
+  useDismissable(corrections.length > 0, PRIORITY.NOTICE, () => setCorrections([]))
 
 
   const removeSession = async () => {
@@ -710,6 +805,24 @@ export function App() {
         <div className="error">
           {error}
           <button onClick={() => setError(null)} aria-label="Dismiss error">✕</button>
+        </div>
+      )}
+
+      {/* Every repair the app made to an incoming link, named. Correcting a shared view
+          silently is the failure this whole feature is built to avoid: the recipient gets
+          a screen that is entirely self-consistent and entirely not what was sent, and
+          goes on to send the same broken link again tomorrow. */}
+      {corrections.length > 0 && (
+        <div className="view-notice">
+          <b>This link was adjusted to fit what is on this server.</b>
+          <ul>
+            {corrections.map((c) => (
+              <li key={c.param + c.raw}>
+                <code>{c.param}={c.raw}</code> → <b>{c.became}</b> — {c.why}
+              </li>
+            ))}
+          </ul>
+          <button onClick={() => setCorrections([])} aria-label="Dismiss notice">✕</button>
         </div>
       )}
 

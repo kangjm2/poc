@@ -23,7 +23,7 @@
 │    ├── LabView         랩 캠페인 구성 · 합불 판정                  │
 │    ├── ImportView      CSV 임포트 · 이력                          │
 │    ├── LegendEditor    색상 스케일 편집 (모달)                     │
-│    └── view/           keymap(바인딩+도움말 한 곳) · Esc 사다리    │
+│    └── view/           keymap · Esc 사다리 · state(URL 경계+합법성)│
 │                        api/client.ts — 유일한 HTTP 경계            │
 └───────────────────────────────┬───────────────────────────────────┘
                                 │ REST/JSON (gzip)
