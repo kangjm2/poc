@@ -161,6 +161,123 @@ check('이벤트 목록이 원시 타입명 대신 등록된 표시명을 씀',
 
 await page.screenshot({ path: `${OUT}/01-overview.png`, fullPage: false })
 
+// 3e. the interaction surface: a cursor you can step, a frame you own, keys with one owner.
+//
+// The map framing checks measure the route bbox only while the WHOLE route is inside the
+// panel. Leaflet clips every polyline to the renderer's padded bounds and re-clips on
+// remount, writing `d="M0 0"` for anything fully outside - so a zoomed-in route's bbox
+// moves even when the viewport is byte-identical, and it would report a difference the
+// user cannot see. Zooming OUT changes the viewport just as well and clips nothing.
+const routeFrame = () => page.evaluate(() => {
+  const paths = [...document.querySelectorAll('.leaflet-overlay-pane path[stroke-width="6"]')]
+    .filter((p) => p.getAttribute('d') !== 'M0 0')
+  if (!paths.length) return null
+  const r = paths.map((p) => p.getBoundingClientRect())
+  return {
+    x: Math.min(...r.map((b) => b.left)),
+    w: Math.max(...r.map((b) => b.right)) - Math.min(...r.map((b) => b.left)),
+    n: paths.length,
+  }
+})
+
+const seqNow = async () =>
+  Number((await page.locator('.statusbar .dim').first().innerText()).match(/seq (\d+)/)[1])
+
+// Restored by VALUE at the end, the same way the session picker is restored above: the
+// options are keyed on the KPI name and labelled with its display name, and the two are
+// different strings (SINR / "SS-SINR"), so a label round-trip does not close.
+const kpiPicker = page.locator('.toolbar select').nth(1)
+const kpiBefore = await kpiPicker.inputValue()
+
+await page.locator('.leaflet-control-zoom-out').click()
+await page.locator('.leaflet-control-zoom-out').click()
+await page.waitForTimeout(700)
+const zoomed = await routeFrame()
+await kpiPicker.selectOption('SINR')
+await page.waitForTimeout(1800)
+const afterKpi = await routeFrame()
+// Two clauses, because "the frame did not move" is also true of a map that stopped
+// drawing entirely. The KPI change re-partitions the colour runs, so the path count is an
+// independent witness that the route was genuinely redrawn in the frame the user set.
+check('지도 프레임이 KPI 변경을 견딤',
+  zoomed != null && afterKpi != null
+    && Math.abs(afterKpi.w - zoomed.w) < 2 && Math.abs(afterKpi.x - zoomed.x) < 2
+    && afterKpi.n !== zoomed.n,
+  zoomed && afterKpi
+    ? `w ${zoomed.w.toFixed(0)}->${afterKpi.w.toFixed(0)}, paths ${zoomed.n}->${afterKpi.n}`
+    : 'no route')
+
+// Stopping the automatic fit removes the only way back to the whole drive, so one is put
+// back deliberately. Without this the previous check would be satisfied by a map that can
+// never be re-framed at all.
+await page.locator('.map').first().click({ position: { x: 5, y: 5 } })
+await page.keyboard.press('f')
+await page.waitForTimeout(900)
+const refit = await routeFrame()
+check('F 키가 주행 전체로 다시 맞춤', refit != null && refit.w > zoomed.w * 1.5,
+  refit ? `w ${zoomed.w.toFixed(0)} -> ${refit.w.toFixed(0)}` : 'no route')
+
+const seqA = await seqNow()
+for (let i = 0; i < 5; i++) await page.keyboard.press('ArrowRight')
+await page.waitForTimeout(500)
+const seqB = await seqNow()
+check('화살표 키가 정확히 한 표본씩 움직임', seqB - seqA === 5, `seq ${seqA} -> ${seqB}`)
+
+// The item's actual defect. Playback used to divide the drive into 240 steps whatever its
+// length, so on a long drive it advanced dozens of samples a tick and most samples could
+// not be reached by playing at all. At the slowest rate the step is now one sample a
+// second, so ~2.4 s of playback is a couple of samples - the old loop would be at ~48.
+await page.keyboard.press('Home')
+await page.waitForTimeout(400)
+await page.locator('.statusbar .rate').selectOption('1')
+await page.keyboard.press(' ')
+await page.waitForTimeout(2400)
+await page.keyboard.press(' ')
+await page.waitForTimeout(400)
+const played = await seqNow()
+check('재생이 표본을 건너뛰지 않음', played >= 1 && played <= 6,
+  `${played} samples in 2.4 s at 1/s`)
+
+// Keys must not fire while the user is writing. The parameter search is the field they
+// are most likely to be in, and `]` would silently narrow every statistic on the page.
+await page.locator('.dock .tree-search input').first().fill('thr')
+await page.keyboard.press(']')
+await page.waitForTimeout(500)
+check('타이핑 중에는 단축키가 죽음',
+  (await page.locator('.filter-chip').count()) === 0,
+  `${await page.locator('.filter-chip').count()} filter chips after ] in a text field`)
+await page.locator('.dock .tree-search input').first().fill('')
+
+// Escape has one owner and a written-down order, so the modal wins over the panel behind it.
+await page.locator('.legend-row').first().click({ button: 'left' })
+await page.locator('button', { hasText: 'Edit scale' }).first().click()
+await page.waitForTimeout(700)
+const modalUp = await page.locator('.modal').count()
+await page.keyboard.press('Escape')
+await page.waitForTimeout(500)
+check('Esc가 열린 모달을 닫음',
+  modalUp === 1 && (await page.locator('.modal').count()) === 0,
+  `modal ${modalUp} -> ${await page.locator('.modal').count()}`)
+
+// The sheet is rendered from the same table that binds the keys, so a key it lists is a
+// key that works. Checking a listed key BEHAVES is what makes that claim testable - a
+// count of rows would pass on a sheet listing keys nobody bound.
+await page.keyboard.press('?')
+await page.waitForTimeout(500)
+const sheetKeys = await page.locator('.key-sheet kbd').allTextContents()
+await page.keyboard.press('Escape')
+await page.waitForTimeout(400)
+await page.keyboard.press('End')
+await page.waitForTimeout(600)
+const atEnd = await seqNow()
+const maxOfDrive = Number((await page.locator('.statusbar .dim').first().innerText()).match(/\/ (\d+)/)[1])
+check('단축키 시트가 실제로 동작하는 키를 적음',
+  sheetKeys.includes('End') && atEnd === maxOfDrive,
+  `sheet lists ${sheetKeys.length} keys; End -> ${atEnd}/${maxOfDrive}`)
+
+await kpiPicker.selectOption(kpiBefore)
+await page.waitForTimeout(1200)
+
 // 4. shared time cursor: moving it must change the readout AND the grid
 const before = await page.locator('.statusbar b').nth(2).innerText()
 const beforeGrid = await page.locator('.dock.right table.grid').first().innerText()
@@ -231,7 +348,6 @@ check('비교 판정 산출', verdicts.some((v) => v === 'BETTER' || v === 'WORS
   verdicts.join(','))
 await page.screenshot({ path: `${OUT}/08-compare.png`, fullPage: true })
 
-const appErrors = errors.filter((e) => !/tile\.openstreetmap\.org|ERR_CONNECTION|Failed to load resource/.test(e))
 // 16. network-side KPIs are present alongside UE-side ones
 await page.locator('.mode-tabs button', { hasText: 'Analysis' }).click()
 await page.waitForTimeout(700)
@@ -764,6 +880,11 @@ const books = await (await page.request.get(`${API_BASE}/api/workbooks`)).json()
 for (const b of books) await page.request.delete(`${API_BASE}/api/workbooks/${b.id}`)
 check('체크가 만든 워크북을 정리', books.length >= 1, `removed ${books.length}`)
 
+// Filtered HERE, not where it used to be - 533 lines earlier, just after the compare
+// screenshot. `errors.filter(...)` copies the array at the call site, so every console
+// error raised by the checks in between was invisible to this assertion: the tripwire
+// was armed for the first third of the run and disarmed for the rest.
+const appErrors = errors.filter((e) => !/tile\.openstreetmap\.org|ERR_CONNECTION|Failed to load resource/.test(e))
 check('앱 코드 콘솔 오류 없음', appErrors.length === 0, appErrors.slice(0, 3).join(' | '))
 const tileFailures = errors.length - appErrors.length
 if (tileFailures > 0) console.log(`  (note: ${tileFailures} basemap tile fetches failed - network egress, not app code)`)

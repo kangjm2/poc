@@ -4,6 +4,7 @@ import type {
   EventType, NetworkEvent, ProblemInstance, ProblemSurvey, Series,
 } from '../api/types'
 import { TimeSeriesChart } from './TimeSeriesChart'
+import { PRIORITY, useDismissable } from '../view/dismiss'
 
 /**
  * Problems classified by cause, as a pie you can drill through.
@@ -69,6 +70,10 @@ export function ProblemSurveyPanel({ sessionId, onPick, events = [], eventTypes 
     api.series(sessionId, ['RSRP']).then((all) => setContext(all[0] ?? null))
       .catch(() => setContext(null))
   }, [sessionId])
+
+  // The context panel is a drill-down, not a modal: if the scale editor is open over it,
+  // Escape means the editor first.
+  useDismissable(selected != null, PRIORITY.DRILLDOWN, () => setSelected(null))
 
   if (error) return <div className="error">{error}</div>
   if (!data) return <div className="loading">Loading…</div>

@@ -401,3 +401,38 @@ input.boundary { width: 76px; text-align: right; }
   font: 11px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace;
   color: var(--text-dim);
 }
+
+/* ── Transport and the keyboard sheet ─────────────────────────────────────── */
+
+/* The status bar, not the toolbar. The toolbar is a non-wrapping flex row with no slack
+   left at 1680 px - adding controls there pushes the trailing buttons off screen. */
+.statusbar .step,
+.statusbar .keys {
+  font-size: 11px;
+  padding: 1px 5px;
+  min-width: 22px;
+}
+.statusbar .step.on { background: #dce8f6; border-color: #7fa5cd; }
+.statusbar .rate {
+  font-size: 11px;
+  padding: 0 2px;
+  height: 20px;
+}
+.statusbar .keys { margin-left: 6px; }
+
+.key-sheet { width: 520px; max-width: 92vw; }
+.key-groups { padding: 8px 10px; display: grid; grid-template-columns: 1fr 1fr; gap: 4px 18px; }
+.key-group b { display: block; font-size: 11px; color: var(--text-dim); margin: 6px 0 2px; }
+.key-group table { width: 100%; }
+.key-group td { padding: 1px 4px; }
+kbd {
+  display: inline-block;
+  min-width: 20px;
+  padding: 0 5px;
+  font: 11px/17px ui-monospace, SFMono-Regular, Menlo, monospace;
+  text-align: center;
+  background: #f4f4f6;
+  border: 1px solid var(--border);
+  border-bottom-width: 2px;
+  border-radius: 3px;
+}

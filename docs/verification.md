@@ -5,7 +5,7 @@
 
 | 검사기 | 지금 | 최초 기록 시점 |
 |---|---|---|
-| `scripts/verify-ui.mjs` | **95/95** | 15 → 30 |
+| `scripts/verify-ui.mjs` | **102/102** | 15 → 30 |
 | `scripts/verify-scenarios.mjs` | **106/106 단계 / 14 시나리오** | 75 / 8 |
 | `tools/uxtest/api-surface.mjs` | 격차 없음 (엔드포인트 56 · 클라이언트 52 · KPI 18/18 도달) | 엔드포인트 14 |
 | `mvn test` | **25개** (`KpiGraphTest` 19 · `ConvexHullTest` 6) | 없었음 |
