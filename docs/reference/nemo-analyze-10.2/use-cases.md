@@ -51,7 +51,7 @@ UC27은 p403–426입니다.
 | 10 | 118–120 | 8 · 그리드 | Color sets in grids | ● | ◐ |
 | 11 | 120–121 | 8 · 그리드 | Play audio sample | ● | ✕ 범위 밖 |
 | 12 | 121–122 | 8 · 그리드 | Using L3 and RRC message search parameters | ● | ◐ |
-| 13 | 147–148 | 8 · MapX/BTS | Adding map layers and saving layer combinations as geosets | ● | ✅ |
+| 13 | 147–148 | 8 · MapX/BTS | Adding map layers and saving layer combinations as geosets | ● | ◐ |
 | 14 | 148–149 | 8 · MapX/BTS | Coloring routes based on BTS coverage | ● | ✅ |
 | 15 | 150–157 | 8 · MapX/BTS | Performing area binning (+ Distance-based binning) | ● | ✅ |
 | 16 | 158–162 | 8 · MapX/BTS | Comparing two groups of measurements from the same route on map | ● | ✅ |
@@ -460,7 +460,15 @@ Details`(더블클릭 — Info View에 디코딩). `Export Data To` — MS Excel
 
 **그림.** `uc13-drag-tab-layer_p147`, `uc13-mapx-save-geoset_p148`.
 
-**우리.** ✅ — Layers 도크 + 서버 저장 워크북. 지오셋 파일 개념은 없고 워크북이 그 역할을 합니다.
+**우리.** ◐ — **2026-09-02 하향(코드 확인 후).** "조합을 저장한다"는 절반은 워크북이 합니다.
+막히는 것은 **무엇을 조합하는가**입니다 — 레퍼런스의 레이어는 `.TAB` **지도 자산**(그리고 UC15가
+말하듯 분석 결과도 새 레이어가 됩니다)이고, 우리 레이어는 `{kpiName, visible}`
+(`types.ts:436`, `WorkbookService.java:31`)뿐입니다. MapX·`.TAB`·지오셋은 코드에 전무하고
+(`grep -i "mapx|geoset|basemap"` → `RouteMap.tsx`의 타일 실패 플래그만), 지도에는 **레이어 목록
+자체가 없습니다**(우측 도크 = Parameters·Color Legends·Numerical Data·Monitored Set·Events,
+`App.tsx:962·997·1011·1029·1035`). 게다가 워크북 MAP 페인의 Layers 도크는 **캡션만 바꾸고 그림을
+바꾸지 않습니다**(`ComposedWorkbook.tsx:202` — `visible[0]`이 라벨에만 쓰이고 오버레이 prop이
+넘어가지 않음).
 
 #### UC14 · p148–149 · BTS 커버리지로 경로 채색 — ●
 
