@@ -81,7 +81,20 @@ button, select, input { font-family: inherit; font-size: inherit; color: inherit
   border-bottom: 1px solid var(--border-soft);
   border-top: 1px solid var(--border-soft);
 }
+.dock-section > h3 { display: flex; align-items: center; justify-content: space-between; }
+/* A tool button in a section header: the heading keeps its weight, the tool stays small
+   enough not to read as part of the title. */
+.dock-section > h3 button.dock-tool {
+  border: 1px solid transparent; background: none; cursor: pointer;
+  font-size: 11px; line-height: 1; padding: 1px 4px; border-radius: 2px;
+}
+.dock-section > h3 button.dock-tool[aria-expanded="true"] {
+  border-color: var(--border); background: #fff;
+}
 .dock-section .content { overflow: auto; background: var(--data-bg); }
+.event-colours input[type=color] {
+  width: 26px; height: 16px; padding: 0; border: 1px solid var(--border); background: none;
+}
 
 .center { flex: 1; display: flex; flex-direction: column; min-width: 0; }
 .panels { flex: 1; overflow: auto; padding: 6px; display: flex; flex-direction: column; gap: 6px; }
@@ -248,6 +261,40 @@ td.sev-WARNING  { background: var(--warning-bg); color: #262626; }
   border-radius: 3px; padding: 3px 10px; cursor: pointer; font-size: 12px;
 }
 .toolbar button.danger:hover { background: #fbeaec; }
+/* ------------------------------------------------------- global filter bar */
+/* A strip of its own under the toolbar, not a control inside it. The filter governs
+   every panel below, and a control that changes what all of them mean should not sit in
+   the same row as the ones that change only one. */
+.globalfilter {
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+  padding: 5px 12px; font-size: 12px;
+  background: #f4f6f9; border-bottom: 1px solid var(--border);
+}
+/* Amber while in force, matching the range chip: the two are the same kind of claim -
+   "you are not looking at the whole drive" - and should read as one language. */
+.globalfilter.on { background: #fff3d6; border-bottom-color: #e0c477; }
+.globalfilter label { color: var(--text-dim); }
+.globalfilter input {
+  width: 260px; padding: 3px 6px; font-size: 12px;
+  border: 1px solid var(--border); border-radius: 2px; background: #fff;
+}
+.globalfilter button {
+  padding: 3px 10px; font-size: 12px; cursor: pointer;
+  border: 1px solid var(--border); background: #fff; border-radius: 2px;
+}
+.globalfilter .gf-active b { color: #6b5310; }
+.globalfilter .gf-error { color: #a3212f; }
+.globalfilter .gf-reach { color: var(--text-dim); }
+.globalfilter .gf-reach-list {
+  flex-basis: 100%; display: flex; gap: 24px; padding: 6px 0 2px;
+  border-top: 1px dashed var(--border); margin-top: 4px;
+}
+.globalfilter .gf-reach-list .col { flex: 1; min-width: 0; }
+.globalfilter .gf-reach-list h4 { margin: 2px 0; font-size: 12px; }
+.globalfilter .gf-reach-list ul { margin: 0; padding-left: 16px; }
+.globalfilter .gf-reach-list li { color: #5a5f66; line-height: 1.5; }
+.globalfilter .gf-reach-list code { color: #24303c; }
+
 .session-notes {
   padding: 4px 12px; font-size: 12px; color: #5a5f66;
   background: #f4f6f9; border-bottom: 1px solid var(--border);

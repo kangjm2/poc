@@ -1650,6 +1650,254 @@ scenario('S19 · Loading a folder, and stopping when it is the wrong one')
   await page.waitForTimeout(1200)
 }
 
+// ─── S20 · One condition, every screen ───────────────────────────────────────
+//
+// UC5's claim is the whole point and the whole risk: "all operations performed with Nemo
+// Analyze" answer through one condition. A filter that nine screens honour and four
+// ignore is worse than none, because the four look exactly like the nine. So this
+// scenario does not check that filtering "works" - it checks the word GLOBAL, twice
+// over: that the requests the app actually issues carry it wherever the server says they
+// must, and that the endpoints then agree on ONE number rather than each returning its
+// own plausible one.
+scenario('S20 · One condition, every screen')
+{
+  const SPEC = 'kpi:RSRQ:>=:-12'
+  const enc = encodeURIComponent(SPEC)
+  const coverage = await apiGet('/api/global-filter/coverage')
+  const honoured = coverage.filter((c) => c.honoured)
+  const exempt = coverage.filter((c) => !c.honoured)
+  step('the server publishes what the filter reaches and what it does not',
+    honoured.length >= 10 && exempt.length >= 5,
+    `${honoured.length} honoured, ${exempt.length} exempt`)
+
+  // Every exemption carries a reason. An unexplained one is indistinguishable from a
+  // screen that simply forgot, which is the failure this list exists to prevent.
+  step('every exemption says why', exempt.every((c) => (c.note ?? '').length > 20),
+    exempt.filter((c) => (c.note ?? '').length <= 20).map((c) => c.path).join(', ') || 'all explained')
+
+  // ── the numbers. One drive, one condition, one count - from twelve different queries.
+  const sid = sessions.find((s) => s.name === CITY_A).id
+  const csvRows = async (qs) =>
+    (await (await page.request.get(`${API}/api/sessions/${sid}/export.csv${qs}`)).text())
+      .trim().split('\n').length - 1
+  const numbers = async (qs, amp) => ({
+    statistics: (await apiGet(`/api/sessions/${sid}/statistics?kpi=RSRP${amp}`)).count,
+    distribution: (await apiGet(`/api/sessions/${sid}/distribution?kpi=RSRP${amp}`)).total,
+    track: (await apiGet(`/api/sessions/${sid}/track?kpi=RSRP&maxPoints=100000${amp}`)).length,
+    cellBreakdown: (await apiGet(`/api/sessions/${sid}/cell-breakdown?kpi=RSRP${amp}`)).total,
+    series: (await apiGet(`/api/sessions/${sid}/series?kpis=RSRP&maxPoints=100000${amp}`))[0]
+      .points.length,
+    bins: (await apiGet(`/api/sessions/${sid}/bins?kpi=RSRP&sizeMeters=150${amp}`))
+      .reduce((a, b) => a + b.sampleCount, 0),
+    footprints: (await apiGet(
+      `/api/sessions/${sid}/cell-footprints?minSamples=10&basis=SERVING${amp}`))
+      .reduce((a, b) => a + b.sampleCount, 0),
+    geojson: (await apiGet(`/api/sessions/${sid}/export.geojson?kpi=RSRP${amp}`)).features.length,
+    csv: await csvRows(qs),
+  })
+  const whole = await numbers('', '')
+  const narrowed = await numbers(`?filter=${enc}`, `&filter=${enc}`)
+
+  const wholeSet = [...new Set(Object.values(whole))]
+  step('unfiltered, every analytic reads the same whole drive',
+    wholeSet.length === 1, JSON.stringify(whole))
+
+  // The witness that matters. Nine independent queries - three of them writing files
+  // rather than JSON - reduced to ONE number, so an endpoint that quietly skipped the
+  // filter shows up as a second number rather than as a plausible screen.
+  const narrowSet = [...new Set(Object.values(narrowed))]
+  step('filtered, they all read the same narrower drive - one number, nine queries',
+    narrowSet.length === 1 && narrowSet[0] < wholeSet[0] && narrowSet[0] > 0,
+    JSON.stringify(narrowed))
+
+  // Degradation and area statistics answer a different shape, so they are witnessed
+  // separately rather than folded into the count above.
+  const degWhole = (await apiGet(
+    `/api/sessions/${sid}/degradations?kpi=RSRP&minSamples=5`)).length
+  const degNarrow = (await apiGet(
+    `/api/sessions/${sid}/degradations?kpi=RSRP&minSamples=5&filter=${enc}`)).length
+  step('the degradation list is narrowed too', degNarrow < degWhole,
+    `${degWhole} stretches whole, ${degNarrow} filtered`)
+
+  // A shape and a filter are two different narrowings and both must apply: the polygon
+  // says where to look, the filter says which samples count anywhere.
+  const trackPts = await apiGet(`/api/sessions/${sid}/track?kpi=RSRP&maxPoints=100000`)
+  const mid = (xs) => xs.slice().sort((a, b) => a - b)[Math.floor(xs.length / 2)]
+  // The MEDIAN, not the range midpoint: this drive carries a deliberate GPS glitch, and a
+  // box centred on the midpoint of the latitude RANGE lands on empty ground.
+  const mLat = mid(trackPts.map((p) => p.latitude))
+  const mLon = mid(trackPts.map((p) => p.longitude))
+  const d = 0.01
+  const ring = encodeURIComponent([
+    [mLat - d, mLon - d], [mLat - d, mLon + d], [mLat + d, mLon + d], [mLat + d, mLon - d],
+  ].map(([a, b]) => `${a},${b}`).join(';'))
+  const areaWhole = await apiGet(
+    `/api/sessions/${sid}/area-statistics?kpi=RSRP&polygon=${ring}`)
+  const areaNarrow = await apiGet(
+    `/api/sessions/${sid}/area-statistics?kpi=RSRP&polygon=${ring}&filter=${enc}`)
+  step('a drawn shape and the filter both apply, not one or the other',
+    areaWhole.sampleCount > 0 && areaNarrow.sampleCount > 0
+    && areaNarrow.sampleCount < areaWhole.sampleCount
+    && areaNarrow.statistics.count === areaNarrow.sampleCount,
+    `${areaWhole.sampleCount} in shape, ${areaNarrow.sampleCount} in shape and filter`)
+
+  // The report is the artefact read furthest from the screen that made it, so it is the
+  // one that must SAY the condition as well as apply it.
+  const reportOn = await (await page.request.get(
+    `${API}/api/sessions/${sid}/report.html?filter=${enc}`)).text()
+  const reportOff = await (await page.request.get(
+    `${API}/api/sessions/${sid}/report.html`)).text()
+  step('the report applies the filter and prints it in its own metadata',
+    /Global filter/.test(reportOn) && /RSRQ &gt;= -12/.test(reportOn)
+    && !/Global filter/.test(reportOff),
+    reportOn.match(/Global filter<\/th><td>[^<]*/)?.[0] ?? 'not named')
+
+  // ── the app. Not "does the server filter" but "does the SCREEN ask it to", on every
+  //    request it issues, which is the half a server-side check cannot see.
+  const asked = []
+  const record = (r) => {
+    const u = new URL(r.url())
+    if (u.pathname.startsWith('/api/')) asked.push({ path: u.pathname, search: u.search })
+  }
+  await page.goto(BASE, { waitUntil: 'domcontentloaded' })
+  await page.waitForTimeout(2500)
+  await selectSession(CITY_A)
+
+  const bar = page.locator('.globalfilter')
+  step('with nothing set, the bar says so in the reference\'s own words',
+    /No global filters/.test(await bar.innerText()), (await bar.innerText()).slice(0, 60))
+
+  await page.locator('#gf-spec').fill(SPEC)
+  page.on('request', record)
+  await bar.locator('button', { hasText: 'Apply' }).click()
+  await page.waitForTimeout(2000)
+
+  step('the bar states the filter in force, in the server\'s words',
+    /In force/.test(await bar.innerText()) && /RSRQ >= -12/.test(await bar.innerText()),
+    (await bar.innerText()).replace(/\n/g, ' / ').slice(0, 90))
+
+  // Walk the screens that fetch, so the recording covers more than one endpoint.
+  await page.locator('.toolbar select[aria-label="Area bins"]').selectOption('150')
+  await page.waitForTimeout(1400)
+  await page.locator('.toolbar select[aria-label="Area bins"]').selectOption('0')
+  await page.waitForTimeout(900)
+  await page.locator('.toolbar .group:has(label:text("Footprints")) button').click()
+  await page.waitForTimeout(1400)
+  await openWorkbook('Cells')
+  await page.waitForTimeout(900)
+  await openWorkbook('Statistics')
+  await page.waitForTimeout(900)
+  await openWorkbook('Overview')
+  await page.waitForTimeout(900)
+  page.off('request', record)
+
+  const rx = (tpl) => new RegExp('^' + tpl.replace(/\{id\}/g, '\\d+') + '$')
+  const carried = (r) => /[?&]filter=/.test(r.search)
+  const hitHonoured = asked.filter((r) => honoured.some((c) => rx(c.path).test(r.path)))
+  const hitExempt = asked.filter((r) => exempt.some((c) => rx(c.path).test(r.path)))
+  const distinct = new Set(hitHonoured.map((r) => r.path.replace(/\d+/g, '{id}'))).size
+
+  // The guard that keeps this check from passing on nothing: a walk that fetched two
+  // endpoints would satisfy "every one carried it" and prove almost nothing.
+  step('the walk actually exercised most of the honoured analytics',
+    distinct >= 6, `${distinct} distinct honoured endpoints requested`)
+  step('every honoured request the app made carried the filter',
+    hitHonoured.length > 0 && hitHonoured.every(carried),
+    hitHonoured.filter((r) => !carried(r)).map((r) => r.path).join(', ') || 'all carried it')
+  // Over-application is the other half. Sending it to an endpoint the server lists as
+  // exempt would either 400 or - worse - be ignored, and the screen would then be
+  // filtered in name only.
+  step('and no exempt request carried it',
+    hitExempt.length > 0 && !hitExempt.some(carried),
+    hitExempt.filter(carried).map((r) => r.path).join(', ') || `${hitExempt.length} exempt calls, none filtered`)
+
+  // The downloads are links, not fetches, so they are checked as links.
+  const hrefs = await page.locator('.toolbar .group:has(label:text("Export")) a')
+    .evaluateAll((as) => as.map((a) => a.getAttribute('href')))
+  step('the export and report links carry it too',
+    hrefs.length === 3 && hrefs.every((h) => /[?&]filter=/.test(h)),
+    hrefs.map((h) => h.split('?')[0].split('/').pop()).join(', '))
+
+  // What the screen shows, against what the server says - the legend's Total is the app's
+  // own arithmetic over the payload it received.
+  const legendTotal = Number((await page.locator('.dock.right .legend-row', { hasText: 'Total' })
+    .innerText()).match(/(\d+)/)?.[1] ?? -1)
+  step('the legend on screen counts the filtered drive, not the whole one',
+    legendTotal === narrowSet[0], `legend ${legendTotal}, server ${narrowSet[0]}`)
+
+  // The reach list is where an exemption stops being a hidden limit and becomes a stated
+  // one, so it has to be reachable from the bar rather than only from the API.
+  await bar.locator('button', { hasText: 'Reach' }).click()
+  await page.waitForTimeout(400)
+  const reachText = await bar.locator('.gf-reach-list').innerText()
+  step('the bar can name the analytics the filter does not reach, with reasons',
+    exempt.every((c) => reachText.includes(c.path))
+    && /events/.test(reachText) && /keyed by time/.test(reachText),
+    reachText.replace(/\n/g, ' / ').slice(0, 100))
+  await bar.locator('button', { hasText: 'Reach' }).click()
+
+  // ── the link. A filter changes what every number means, so a view sent without it
+  //    arrives self-consistent and not the thing that was sent.
+  step('the filter is in the address', /[?&]gf=/.test(await page.evaluate(() => location.search)),
+    await page.evaluate(() => location.search))
+
+  const cold = await browser.newPage({ viewport: { width: 1680, height: 1000 } })
+  const firstCalls = []
+  cold.on('request', (r) => {
+    const u = new URL(r.url())
+    if (/\/track$/.test(u.pathname)) firstCalls.push(u.search)
+  })
+  await cold.goto(`${BASE}?s=${sid}&gf=${enc}`, { waitUntil: 'domcontentloaded' })
+  await cold.waitForTimeout(3200)
+  const coldTotal = Number((await cold.locator('.dock.right .legend-row', { hasText: 'Total' })
+    .innerText()).match(/(\d+)/)?.[1] ?? -1)
+  step('a recipient opens the filtered view, not the whole drive',
+    coldTotal === narrowSet[0], `recipient legend ${coldTotal}, server ${narrowSet[0]}`)
+  // Not one unfiltered round first. A page that fetches the whole drive and then corrects
+  // itself shows the recipient a screen nobody sent them, briefly but visibly.
+  step('and never fetched the unfiltered drive on the way',
+    firstCalls.length > 0 && firstCalls.every((q) => /[?&]filter=/.test(q)),
+    `${firstCalls.length} track calls, ${firstCalls.filter((q) => !/filter=/.test(q)).length} unfiltered`)
+  await cold.close()
+
+  // ── refusal. A spec that means nothing must not become a filter, or every panel
+  //    answers 400 at once and the screen has no way back.
+  await page.locator('#gf-spec').fill('kpi:RSRP:~:-100')
+  await bar.locator('button', { hasText: 'Apply' }).click()
+  await page.waitForTimeout(1200)
+  const stillTotal = Number((await page.locator('.dock.right .legend-row', { hasText: 'Total' })
+    .innerText()).match(/(\d+)/)?.[1] ?? -1)
+  step('an unparseable condition is refused, and the one in force is untouched',
+    (await bar.locator('.gf-error').count()) === 1 && stillTotal === narrowSet[0],
+    `${await bar.locator('.gf-error').innerText().catch(() => 'no error shown')}, `
+    + `legend still ${stillTotal}`)
+
+  const bad = await browser.newPage({ viewport: { width: 1680, height: 1000 } })
+  await bad.goto(`${BASE}?s=${sid}&gf=${encodeURIComponent('kpi:RSRP:~:-100')}`,
+    { waitUntil: 'domcontentloaded' })
+  await bad.waitForTimeout(3200)
+  const badNotice = await bad.locator('.view-notice').innerText().catch(() => '')
+  step('a link carrying a nonsense filter is repaired and says so',
+    /gf=/.test(badNotice)
+    && Number((await bad.locator('.dock.right .legend-row', { hasText: 'Total' })
+      .innerText()).match(/(\d+)/)?.[1] ?? -1) === wholeSet[0],
+    badNotice.replace(/\n/g, ' / ').slice(0, 110) || 'no notice')
+  await bad.close()
+
+  // Clearing puts the whole drive back, so the filter is a lens and not a one-way door.
+  await page.locator('#gf-spec').fill('')
+  await bar.locator('button', { hasText: 'Apply' }).click()
+  await page.waitForTimeout(1800)
+  const back = Number((await page.locator('.dock.right .legend-row', { hasText: 'Total' })
+    .innerText()).match(/(\d+)/)?.[1] ?? -1)
+  step('clearing it puts the whole drive back',
+    back === wholeSet[0] && /No global filters/.test(await bar.innerText()),
+    `legend ${back} of ${wholeSet[0]}`)
+
+  await page.goto(BASE, { waitUntil: 'domcontentloaded' })
+  await page.waitForTimeout(2500)
+}
+
 // ─── wrap-up ─────────────────────────────────────────────────────────────────
 const appErrors = errors.filter((e) =>
   !/tile\.openstreetmap\.org|ERR_CONNECTION|Failed to load resource|ERR_TIMED_OUT/.test(e))

@@ -51,6 +51,36 @@ public class EventTypeCatalog {
         byName = Map.copyOf(m);
     }
 
+    /**
+     * Recolours one type - the string colour set, made editable.
+     *
+     * The reference's third colour-set kind maps a NAME to a colour rather than a range
+     * (p440), and its worked example is exactly this: colour the L3 grid by message name.
+     * Ours already existed and was the one colour set nobody could touch - every KPI scale
+     * was editable and the registry that colours events on the map, the chart, the dock and
+     * the pie was seeded and fixed.
+     *
+     * Recolouring here reaches all four at once, because they all read this catalogue. That
+     * is the same property that made the registry worth building and it is why the edit
+     * belongs here rather than in whichever screen the user happened to be looking at.
+     *
+     * `color_overridden` records that a person chose it, so a later reseed of the defaults
+     * leaves it alone rather than quietly taking the choice back.
+     */
+    public EventType recolour(String name, String colour) {
+        if (!byName.containsKey(name)) {
+            throw new IllegalArgumentException("Unknown event type: " + name);
+        }
+        if (colour == null || !colour.matches("#[0-9a-fA-F]{6}")) {
+            throw new IllegalArgumentException(
+                    "A colour must be #rrggbb, was: " + colour);
+        }
+        jdbc.update("UPDATE event_type SET color = ?, color_overridden = TRUE WHERE name = ?",
+                colour.toLowerCase(), name);
+        reload();
+        return byName.get(name);
+    }
+
     /** Every type, in display order. */
     public List<EventType> all() {
         return byName.values().stream()

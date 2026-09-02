@@ -8,6 +8,7 @@ import type {
   GraphNodePreview,
   GraphRequest, GraphValidation, StoredGraph,
   DistanceBin, CellFootprint, Workbook, WorkbookLimits, WorkbookRequest, EventType,
+  FilterCoverage,
 } from './types'
 
 const BASE = '/api'
@@ -17,8 +18,44 @@ const rangeQs = (r?: SeqRange | null) => {
   return (r.from != null ? `&fromSeq=${r.from}` : '') + (r.to != null ? `&toSeq=${r.to}` : '')
 }
 
-async function get<T>(path: string): Promise<T> {
-  const res = await fetch(`${BASE}${path}`)
+/**
+ * The global filter, held HERE rather than passed through every call.
+ *
+ * UC5's whole claim is that one condition reaches every analytic. Threading it through
+ * twelve method signatures would mean twelve chances to forget it, and a forgotten one
+ * looks identical on screen to an honoured one - a panel showing the unfiltered drive
+ * beside panels showing the filtered one, with nothing to say which is which. So the
+ * value lives in one variable and one function appends it, and the list of paths that
+ * get it is written out below rather than inferred, so it can be compared against the
+ * server's own list.
+ */
+let globalFilter: string | null = null
+
+/**
+ * The paths the filter is sent to. Mirrors `GlobalFilter.coverage()`'s honoured entries.
+ *
+ * Checked behaviourally rather than by comparison: S20 records every request the app
+ * makes while a filter is in force and requires each one matching an honoured path to
+ * carry it, and each one matching an exempt path not to. Comparing this array against the
+ * server's list would only prove the two arrays agree - it would not notice a call that
+ * bypasses `get` altogether, which is the way this could actually go wrong.
+ */
+const FILTERED_PATHS = [
+  '/track', '/series', '/distribution', '/statistics', '/cell-breakdown',
+  '/degradations', '/area-statistics', '/bins', '/cell-footprints',
+  '/export.csv', '/export.geojson', '/report.html',
+]
+
+/** Appends `filter=` to the paths that honour it, and to nothing else. */
+function filtered(path: string): string {
+  if (!globalFilter) return path
+  const base = path.split('?')[0]
+  if (!FILTERED_PATHS.some((p) => base.endsWith(p))) return path
+  return `${path}${path.includes('?') ? '&' : '?'}filter=${encodeURIComponent(globalFilter)}`
+}
+
+async function get<T>(path: string, honourFilter = true): Promise<T> {
+  const res = await fetch(`${BASE}${honourFilter ? filtered(path) : path}`)
   if (!res.ok) {
     let detail = res.statusText
     try {
@@ -32,6 +69,22 @@ async function get<T>(path: string): Promise<T> {
 }
 
 export const api = {
+  /**
+   * Set the condition every analytic answers through, or null for none.
+   *
+   * Deliberately not validated here: the parser that runs the queries is on the server,
+   * and a second grammar in TypeScript would eventually accept something the server
+   * rejects. `describeFilter` is how a caller checks a spec before setting it.
+   */
+  setGlobalFilter: (spec: string | null) => { globalFilter = spec && spec.trim() ? spec : null },
+
+  /** Which analytics honour the filter, which do not, and why - the server's own list. */
+  filterCoverage: () => get<FilterCoverage[]>('/global-filter/coverage'),
+  /** What a spec says, in words. Throws with the server's message when it says nothing. */
+  describeFilter: (spec: string) =>
+    get<{ active: boolean; text: string }>(
+      `/global-filter/describe?filter=${encodeURIComponent(spec)}`),
+
   sessions: () => get<SessionSummary[]>('/sessions'),
   // maxPoints caps the payload; the server decimates while preserving bin changes
   // and per-bucket extremes.
@@ -43,6 +96,19 @@ export const api = {
       + (area ? `&area=${encodeURIComponent(area)}` : '')),
   series: (id: number, kpis: string[], maxPoints = 2000) =>
     get<Series[]>(`/sessions/${id}/series?kpis=${kpis.join(',')}&maxPoints=${maxPoints}`),
+  /**
+   * The same series with the global filter deliberately NOT applied. One caller.
+   *
+   * The problem survey is exempt from the filter because it mixes network-reported
+   * failures, which have no sample to filter on, with sample-derived ones. Its context
+   * chart therefore has to be exempt too: a filtered chart under an unfiltered case list
+   * would show a case sitting on a stretch the chart says was never measured. The escape
+   * is named rather than achieved by building the URL by hand, so it is greppable and so
+   * a second one cannot appear without a reviewer seeing it.
+   */
+  seriesUnfiltered: (id: number, kpis: string[], maxPoints = 2000) =>
+    get<Series[]>(
+      `/sessions/${id}/series?kpis=${kpis.join(',')}&maxPoints=${maxPoints}`, false),
   snapshot: (id: number, seq?: number) =>
     get<Snapshot>(`/sessions/${id}/snapshot${seq === undefined ? '' : `?seq=${seq}`}`),
   createDerivedKpi: async (body: Record<string, unknown>) => {
@@ -249,6 +315,28 @@ export const api = {
   // the one that says how full is full.
   workbookLimits: () => get<WorkbookLimits>('/workbooks/limits'),
 
+  // Bands or a ramp, for one KPI. Separate from the thresholds call because it is a
+  // separate decision - the bands say what the numbers mean, this says how they are drawn.
+  setScaleType: async (name: string, scaleType: string): Promise<KpiDefinition> => {
+    const res = await fetch(`${BASE}/kpi-definitions/${name}/scale-type`, {
+      method: 'PUT', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ scaleType }),
+    })
+    if (!res.ok) throw new Error((await res.text()) || res.statusText)
+    return res.json()
+  },
+
+  // The string colour set: one colour per event NAME. Reaches the map, the chart, the dock
+  // and the pie at once, because all four read the same registry.
+  recolourEventType: async (name: string, color: string): Promise<EventType> => {
+    const res = await fetch(`${BASE}/event-types/${name}/color`, {
+      method: 'PUT', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ color }),
+    })
+    if (!res.ok) throw new Error((await res.text()) || res.statusText)
+    return res.json()
+  },
+
   saveWorkbook: async (body: WorkbookRequest): Promise<Workbook> => {
     const res = await fetch(`${BASE}/workbooks`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -318,9 +406,11 @@ export const api = {
 
   // A report opens rather than downloads: it is meant to be read, and printed to PDF
   // from the browser if the reader wants a file.
-  reportUrl: (id: number) => `${BASE}/sessions/${id}/report.html`,
+  // Built through the same `filtered` as every fetch, so a report or a spreadsheet
+  // cannot be the one artefact that silently holds the whole drive.
+  reportUrl: (id: number) => `${BASE}${filtered(`/sessions/${id}/report.html`)}`,
   exportUrl: (id: number, kind: 'csv' | 'geojson', kpi?: string) =>
-    kind === 'csv'
-      ? `${BASE}/sessions/${id}/export.csv`
-      : `${BASE}/sessions/${id}/export.geojson?kpi=${kpi}`,
+    `${BASE}${filtered(kind === 'csv'
+      ? `/sessions/${id}/export.csv`
+      : `/sessions/${id}/export.geojson?kpi=${kpi}`)}`,
 }

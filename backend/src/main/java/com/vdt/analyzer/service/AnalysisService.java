@@ -170,7 +170,13 @@ public class AnalysisService {
      */
     public List<TrackPoint> track(long sessionId, String kpiName, Integer maxPoints,
                                   String polygonSpec) {
+        return track(sessionId, kpiName, maxPoints, polygonSpec, null);
+    }
+
+    public List<TrackPoint> track(long sessionId, String kpiName, Integer maxPoints,
+                                  String polygonSpec, String filterSpec) {
         KpiDefinition def = catalog.require(kpiName);
+        GlobalFilter.Scope scope = GlobalFilter.scope(filterSpec, sessionId, "sample");
         long total = countSamples(sessionId);
         int limit = maxPoints == null ? DEFAULT_MAX_POINTS : Math.max(2, maxPoints);
         int stride = (int) Math.max(1, Math.ceil(total / (double) limit));
@@ -191,7 +197,7 @@ public class AnalysisService {
                            %5$s AS in_area,
                            %2$s AS step_m,
                            %3$s AS dt_s
-                    FROM sample WHERE session_id = ?
+                    FROM sample WHERE session_id = ?%6$s
                 ),
                 broken AS (
                     SELECT *, %4$s AS brk FROM geo
@@ -217,7 +223,8 @@ public class AnalysisService {
                               RouteContinuity.STEP_METRES,
                               RouteContinuity.SECONDS_SINCE_PREV,
                               RouteContinuity.classify("step_m", "dt_s"),
-                              area == null ? "NULL::boolean" : "(" + area.sql() + ")");
+                              area == null ? "NULL::boolean" : "(" + area.sql() + ")",
+                              GlobalFilter.and(scope));
 
         Map<Integer, KpiThreshold> byOrdinal = new HashMap<>();
         for (KpiThreshold t : scale) byOrdinal.put(t.getOrdinal(), t);
@@ -228,6 +235,7 @@ public class AnalysisService {
         List<Object> args = new ArrayList<>();
         if (area != null) args.addAll(area.params());
         args.add(sessionId);
+        args.addAll(GlobalFilter.params(scope));
         args.add(sessionId);
         args.add(kpiName);
         args.add(stride);
@@ -235,9 +243,12 @@ public class AnalysisService {
         return jdbc.query(sql, (rs, i) -> {
             Double v = (Double) rs.getObject("value");
             KpiThreshold bin = byOrdinal.get(rs.getInt("bin_ordinal"));
+            // The BAND still names the value; only the colour may be interpolated. That
+            // split is what lets a gradient map sit under an unchanged legend.
+            String colour = catalog.colourFor(def, scale, v);
             return new TrackPoint(rs.getInt("seq"), rs.getTimestamp("ts").toInstant(),
                     rs.getDouble("latitude"), rs.getDouble("longitude"), v,
-                    bin == null ? "#999999" : bin.getColor(),
+                    colour != null ? colour : (bin == null ? "#999999" : bin.getColor()),
                     bin == null ? "no data" : bin.getLabel(),
                     (Integer) rs.getObject("serving_pci"), (Double) rs.getObject("speed_kmh"),
                     rs.getInt("brk"), (Boolean) rs.getObject("in_area"));
@@ -284,6 +295,12 @@ public class AnalysisService {
      * engineer is looking for.
      */
     public List<Series> series(long sessionId, List<String> kpiNames, Integer maxPoints) {
+        return series(sessionId, kpiNames, maxPoints, null);
+    }
+
+    public List<Series> series(long sessionId, List<String> kpiNames, Integer maxPoints,
+                               String filterSpec) {
+        GlobalFilter.Scope scope = GlobalFilter.scope(filterSpec, sessionId, "k");
         long total = countSamples(sessionId);
         int limit = maxPoints == null ? DEFAULT_MAX_POINTS : Math.max(4, maxPoints);
         int buckets = Math.max(1, limit / 2);
@@ -295,17 +312,18 @@ public class AnalysisService {
             List<SeriesPoint> pts;
             if (bucketSize <= 1) {
                 pts = jdbc.query("""
-                        SELECT seq, ts, value FROM sample_kpi
-                        WHERE session_id = ? AND kpi_name = ? ORDER BY seq
-                        """, (rs, i) -> new SeriesPoint(rs.getInt("seq"),
+                        SELECT k.seq, k.ts, k.value FROM sample_kpi k
+                        WHERE k.session_id = ? AND k.kpi_name = ?%s ORDER BY k.seq
+                        """.formatted(GlobalFilter.and(scope)),
+                        (rs, i) -> new SeriesPoint(rs.getInt("seq"),
                         rs.getTimestamp("ts").toInstant(), (Double) rs.getObject("value")),
-                        sessionId, name);
+                        seriesArgs(sessionId, name, null, scope));
             } else {
                 pts = jdbc.query("""
                         WITH bucketed AS (
-                            SELECT seq, ts, value, seq / ? AS bucket
-                            FROM sample_kpi
-                            WHERE session_id = ? AND kpi_name = ?
+                            SELECT k.seq, k.ts, k.value, k.seq / ? AS bucket
+                            FROM sample_kpi k
+                            WHERE k.session_id = ? AND k.kpi_name = ?%s
                         ),
                         extremes AS (
                             SELECT bucket,
@@ -320,9 +338,10 @@ public class AnalysisService {
                         WHERE b.value = e.lo OR b.value = e.hi
                         GROUP BY b.seq, b.ts, b.value
                         ORDER BY b.seq
-                        """, (rs, i) -> new SeriesPoint(rs.getInt("seq"),
+                        """.formatted(GlobalFilter.and(scope)),
+                        (rs, i) -> new SeriesPoint(rs.getInt("seq"),
                         rs.getTimestamp("ts").toInstant(), (Double) rs.getObject("value")),
-                        bucketSize, sessionId, name);
+                        seriesArgs(sessionId, name, bucketSize, scope));
             }
             out.add(new Series(name, def.getDisplayName(), def.getUnit(), pts));
         }
@@ -378,7 +397,13 @@ public class AnalysisService {
      */
     public CellBreakdown cellBreakdown(long sessionId, String kpiName,
                                        Integer fromSeq, Integer toSeq) {
+        return cellBreakdown(sessionId, kpiName, fromSeq, toSeq, null);
+    }
+
+    public CellBreakdown cellBreakdown(long sessionId, String kpiName,
+                                       Integer fromSeq, Integer toSeq, String filterSpec) {
         KpiDefinition def = catalog.require(kpiName);
+        GlobalFilter.Scope scope = GlobalFilter.scope(filterSpec, sessionId, "k");
         List<KpiThreshold> scale = autoScale.effective(sessionId, def);
 
         List<Object[]> rows = jdbc.query("""
@@ -391,14 +416,14 @@ public class AnalysisService {
                 FROM sample_kpi k
                 JOIN sample s ON s.session_id = k.session_id AND s.seq = k.seq
                 WHERE k.session_id = ? AND k.kpi_name = ?
-                  AND k.seq >= ? AND k.seq <= ? AND s.serving_pci IS NOT NULL
+                  AND k.seq >= ? AND k.seq <= ? AND s.serving_pci IS NOT NULL%s
                 GROUP BY s.serving_pci
-                """,
+                """.formatted(GlobalFilter.and(scope)),
                 (rs, i) -> new Object[]{
                         rs.getInt("pci"), rs.getLong("n"),
                         (Double) rs.getObject("mean_v"), (Double) rs.getObject("min_v"),
                         (Double) rs.getObject("max_v"), (Double) rs.getObject("p05_v")},
-                sessionId, kpiName, lo(fromSeq), hi(toSeq));
+                seqArgs(sessionId, kpiName, fromSeq, toSeq, scope));
 
         Map<Integer, Object[]> refs = new HashMap<>();
         jdbc.query("SELECT pci, arfcn, band, cell_type FROM cell_ref WHERE session_id = ?",
@@ -465,7 +490,60 @@ public class AnalysisService {
      */
     public Distribution distribution(long sessionId, String kpiName,
                                      Integer fromSeq, Integer toSeq, String weightedBy) {
+        return distribution(sessionId, kpiName, fromSeq, toSeq, weightedBy, null);
+    }
+
+    /**
+     * Positional order for a plain `session, kpi, seq-range` query: the filter binds last.
+     *
+     * Every one of these helpers exists for the same reason - a global filter contributes a
+     * VARIABLE number of parameters, so the moment a query gains one the old fixed varargs
+     * call is off by however many the filter carries, and JdbcTemplate reports that as a
+     * column-index error rather than as a wrong answer. Naming the order once per query
+     * shape keeps the SQL and its bindings in the same field of view.
+     */
+    private Object[] seqArgs(long sessionId, String kpiName, Integer fromSeq, Integer toSeq,
+                             GlobalFilter.Scope scope) {
+        List<Object> out = new ArrayList<>(List.of(
+                sessionId, kpiName, lo(fromSeq), hi(toSeq)));
+        out.addAll(GlobalFilter.params(scope));
+        return out.toArray();
+    }
+
+    /** As above, plus the island-size threshold, which the HAVING binds after the filter. */
+    private Object[] degradationArgs(long sessionId, String kpiName,
+                                     Integer fromSeq, Integer toSeq,
+                                     GlobalFilter.Scope scope, int minSamples) {
+        List<Object> out = new ArrayList<>(List.of(seqArgs(sessionId, kpiName, fromSeq, toSeq, scope)));
+        out.add(minSamples);
+        return out.toArray();
+    }
+
+    /** The decimated form binds its bucket size before the session; the plain form has none. */
+    private Object[] seriesArgs(long sessionId, String kpiName, Integer bucketSize,
+                                GlobalFilter.Scope scope) {
+        List<Object> out = new ArrayList<>();
+        if (bucketSize != null) out.add(bucketSize);
+        out.add(sessionId);
+        out.add(kpiName);
+        out.addAll(GlobalFilter.params(scope));
+        return out.toArray();
+    }
+
+    /** Positional order for the distribution query: the filter binds last, in its clause. */
+    private Object[] distArgs(long sessionId, String kpiName, Integer fromSeq, Integer toSeq,
+                              GlobalFilter.Scope scope) {
+        List<Object> out = new ArrayList<>(List.of(
+                sessionId, sessionId, kpiName, lo(fromSeq), hi(toSeq)));
+        out.addAll(GlobalFilter.params(scope));
+        return out.toArray();
+    }
+
+    public Distribution distribution(long sessionId, String kpiName,
+                                     Integer fromSeq, Integer toSeq, String weightedBy,
+                                     String filterSpec) {
         KpiDefinition def = catalog.require(kpiName);
+        GlobalFilter.Scope scope = GlobalFilter.scope(filterSpec, sessionId, "k");
         List<KpiThreshold> scale = autoScale.effective(sessionId, def);
         AggregationBasis basis = AggregationBasis.of(def, weightedBy,
                 AggregationBasis.AS_RECORDED);
@@ -482,21 +560,22 @@ public class AnalysisService {
                 FROM sample_kpi k
                 JOIN stepped g ON g.seq = k.seq
                 WHERE k.session_id = ? AND k.kpi_name = ?
-                  AND k.seq >= ? AND k.seq <= ?
+                  AND k.seq >= ? AND k.seq <= ?%6$s
                 GROUP BY 1
                 """.formatted(
                 KpiSql.binOrdinalExpr(scale, "k.value"),
                 RouteContinuity.STEP_METRES,
                 RouteContinuity.SECONDS_SINCE_PREV,
                 RouteContinuity.classify("step_m", "dt_s"),
-                byDistance ? RouteContinuity.travelledMetres("g.step_m", "g.brk") : "1.0");
+                byDistance ? RouteContinuity.travelledMetres("g.step_m", "g.brk") : "1.0",
+                GlobalFilter.and(scope));
 
         Map<Integer, Long> counts = new HashMap<>();
         Map<Integer, Double> weights = new HashMap<>();
         jdbc.query(sql, rs -> {
             counts.put(rs.getInt("bin_ordinal"), rs.getLong("n"));
             weights.put(rs.getInt("bin_ordinal"), rs.getDouble("w"));
-        }, sessionId, sessionId, kpiName, lo(fromSeq), hi(toSeq));
+        }, distArgs(sessionId, kpiName, fromSeq, toSeq, scope));
 
         long total = counts.values().stream().mapToLong(Long::longValue).sum();
         double totalW = weights.values().stream().mapToDouble(Double::doubleValue).sum();
@@ -541,9 +620,16 @@ public class AnalysisService {
     public Statistics statistics(long sessionId, String kpiName,
                                  Integer fromSeq, Integer toSeq,
                                  String weightedBy, String domain) {
+        return statistics(sessionId, kpiName, fromSeq, toSeq, weightedBy, domain, null);
+    }
+
+    public Statistics statistics(long sessionId, String kpiName,
+                                 Integer fromSeq, Integer toSeq,
+                                 String weightedBy, String domain, String filterSpec) {
         KpiDefinition def = catalog.require(kpiName);
         return weighted.compute(sessionId, def,
-                AggregationBasis.of(def, weightedBy, domain), fromSeq, toSeq);
+                AggregationBasis.of(def, weightedBy, domain), fromSeq, toSeq,
+                GlobalFilter.scope(filterSpec, sessionId, "k"));
     }
 
 
@@ -555,7 +641,13 @@ public class AnalysisService {
      */
     public List<Degradation> degradations(long sessionId, String kpiName, int minSamples,
                                           Integer fromSeq, Integer toSeq) {
+        return degradations(sessionId, kpiName, minSamples, fromSeq, toSeq, null);
+    }
+
+    public List<Degradation> degradations(long sessionId, String kpiName, int minSamples,
+                                          Integer fromSeq, Integer toSeq, String filterSpec) {
         KpiDefinition def = catalog.require(kpiName);
+        GlobalFilter.Scope scope = GlobalFilter.scope(filterSpec, sessionId, "k");
         // Which end of a degraded stretch to report as its worst sample. A NEUTRAL
         // KPI has no bad end in general, but the only severe bin such a KPI carries
         // in practice is a low-end liveness one ("< 1"), so the minimum is the
@@ -569,7 +661,7 @@ public class AnalysisService {
                     FROM sample_kpi k
                     JOIN sample s ON s.session_id = k.session_id AND s.seq = k.seq
                     WHERE k.session_id = ? AND k.kpi_name = ?
-                      AND k.seq >= ? AND k.seq <= ?
+                      AND k.seq >= ? AND k.seq <= ?%3$s
                 ),
                 flagged AS (
                     SELECT *, (severity IN ('WARNING','CRITICAL')) AS bad FROM classified
@@ -589,7 +681,8 @@ public class AnalysisService {
                 GROUP BY grp
                 HAVING count(*) >= ?
                 ORDER BY count(*) DESC
-                """.formatted(sevExpr, higherBetter ? "min(value)" : "max(value)");
+                """.formatted(sevExpr, higherBetter ? "min(value)" : "max(value)",
+                GlobalFilter.and(scope));
 
         return jdbc.query(sql, (rs, i) -> {
             Instant start = rs.getTimestamp("start_ts").toInstant();
@@ -600,7 +693,7 @@ public class AnalysisService {
                     round(rs.getDouble("worst")), round(rs.getDouble("mean_value")),
                     rs.getInt("has_critical") == 1 ? "CRITICAL" : "WARNING",
                     rs.getDouble("lat"), rs.getDouble("lon"), rs.getInt("n"));
-        }, sessionId, kpiName, lo(fromSeq), hi(toSeq), minSamples);
+        }, degradationArgs(sessionId, kpiName, fromSeq, toSeq, scope, minSamples));
     }
 
     // ------------------------------------------------------------- comparison

@@ -45,6 +45,19 @@ public class WeightedStats {
      */
     public Statistics compute(long sessionId, KpiDefinition def, AggregationBasis basis,
                               Integer fromSeq, Integer toSeq) {
+        return compute(sessionId, def, basis, fromSeq, toSeq, null);
+    }
+
+    /**
+     * Under a global filter as well.
+     *
+     * The filter narrows which samples are AVERAGED; it deliberately does not narrow the
+     * geometry CTE above it, for exactly the reason stated there. A filtered-out sample
+     * still happened and the car still drove past it, so the step into the next kept
+     * sample is the real distance travelled, not a shorter one invented by the filter.
+     */
+    public Statistics compute(long sessionId, KpiDefinition def, AggregationBasis basis,
+                              Integer fromSeq, Integer toSeq, GlobalFilter.Scope scope) {
         boolean byDistance = AggregationBasis.BY_DISTANCE.equals(basis.weightedBy());
         boolean linear = AggregationBasis.LINEAR.equals(basis.domain());
 
@@ -72,7 +85,7 @@ public class WeightedStats {
                     JOIN stepped g ON g.seq = k.seq
                     WHERE k.session_id = ? AND k.kpi_name = ?
                       AND k.seq >= ? AND k.seq <= ?
-                      AND k.value IS NOT NULL
+                      AND k.value IS NOT NULL%5$s
                 )
                 """.formatted(
                 RouteContinuity.STEP_METRES,
@@ -80,7 +93,14 @@ public class WeightedStats {
                 RouteContinuity.classify("step_m", "dt_s"),
                 byDistance
                         ? RouteContinuity.travelledMetres("g.step_m", "g.brk")
-                        : "1.0");
+                        : "1.0",
+                GlobalFilter.and(scope));
+
+        // Both queries below append to the same CTE, so both bind the same prefix.
+        List<Object> pre = new java.util.ArrayList<>(List.of(
+                sessionId, sessionId, def.getName(), lo, hi));
+        pre.addAll(GlobalFilter.params(scope));
+        Object[] args = pre.toArray();
 
         // A drive that never moved has no distance to weight by. Falling back to sample
         // weighting and saying nothing would print numbers under a basis label that is not
@@ -94,7 +114,7 @@ public class WeightedStats {
                             THEN 10 * log(sum(power(10, v / 10.0) * wt) / sum(wt)) END
                             AS mean_linear
                 FROM w
-                """, sessionId, sessionId, def.getName(), lo, hi);
+                """, args);
 
         long n = ((Number) agg.get("n")).longValue();
         double totalW = agg.get("total_w") == null ? 0 : ((Number) agg.get("total_w")).doubleValue();
@@ -126,7 +146,7 @@ public class WeightedStats {
                 GROUP BY p ORDER BY p
                 """,
                 (rs, i) -> new CdfPoint(round(rs.getDouble("v")), rs.getInt("p")),
-                sessionId, sessionId, def.getName(), lo, hi);
+                args);
 
         Double p05 = at(cdf, 5), p50 = at(cdf, 50), p95 = at(cdf, 95);
 

@@ -138,11 +138,19 @@ function BreakdownTable({ data }: { data: CellBreakdown }) {
  * disagree - and fetching twice would let them, besides doubling the query. The page owns
  * the request; the views are pure.
  */
-export function CellsPage({ sessionId, kpi, range, scaleVersion, isolate, onPickCell }: {
+export function CellsPage({
+  sessionId, kpi, range, scaleVersion, isolate, filterSpec, onPickCell,
+}: {
   sessionId: number | null
   kpi: string
   range?: SeqRange | null
   scaleVersion?: number
+  /**
+   * Not sent - the api module sends it - but depended on, so this panel refetches when
+   * the global filter changes. A panel that kept its pre-filter bars beside a filtered
+   * map is the exact failure the filter's design note is about.
+   */
+  filterSpec?: string | null
   isolate?: string | null
   onPickCell?: (pci: number) => void
 }) {
@@ -154,7 +162,7 @@ export function CellsPage({ sessionId, kpi, range, scaleVersion, isolate, onPick
     setError(null)
     api.cellBreakdown(sessionId, kpi, range).then(setData)
       .catch((e) => setError(e instanceof Error ? e.message : String(e)))
-  }, [sessionId, kpi, range?.from, range?.to, scaleVersion])
+  }, [sessionId, kpi, range?.from, range?.to, scaleVersion, filterSpec])
 
   if (error) return <div className="error">{error}</div>
   if (!data) return <div className="loading">Loading…</div>

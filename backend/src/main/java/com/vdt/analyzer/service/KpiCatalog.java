@@ -36,4 +36,27 @@ public class KpiCatalog {
         if (value == null) return Optional.empty();
         return bins.stream().filter(t -> t.contains(value)).findFirst();
     }
+
+    /**
+     * The colour a value is drawn in, which is not always its band's colour.
+     *
+     * On a GRADIENT scale the colour is interpolated between the bands while the LABEL
+     * still comes from the band - so the legend keeps saying "warning" and the map stops
+     * drawing a whole street one flat colour. Both readings come from the same ladder,
+     * which is why a gradient cannot disagree with the legend beside it.
+     *
+     * One place, because a second implementation of "what colour is this value" is exactly
+     * the drift this repository keeps removing: the route, the tiles, the bars and the
+     * report would each have had to learn about gradients separately.
+     */
+    public String colourFor(KpiDefinition def, List<KpiThreshold> bins, Double value) {
+        if (value == null) return null;
+        if (def != null && "GRADIENT".equals(def.getScaleType())) {
+            String c = ColourRamp.colourAt(ColourRamp.stops(bins), value);
+            if (c != null) return c;
+            // A ramp that could not be built falls back to the bands rather than to a
+            // default colour: the bands are still a true statement about the value.
+        }
+        return binFor(bins, value).map(KpiThreshold::getColor).orElse(null);
+    }
 }

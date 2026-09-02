@@ -62,8 +62,14 @@ public class GeoAnalysisService {
      */
     public List<AreaBin> areaBins(long sessionId, String kpiName, double sizeMeters,
                                   String statisticName) {
+        return areaBins(sessionId, kpiName, sizeMeters, statisticName, null);
+    }
+
+    public List<AreaBin> areaBins(long sessionId, String kpiName, double sizeMeters,
+                                  String statisticName, String filterSpec) {
         KpiDefinition def = catalog.require(kpiName);
         BinStatistic stat = BinStatistic.of(statisticName);
+        GlobalFilter.Scope scope = GlobalFilter.scope(filterSpec, sessionId, "s");
         List<KpiThreshold> scale = autoScale.effective(sessionId, def);
         if (sizeMeters < 5 || sizeMeters > 20_000) {
             throw new IllegalArgumentException("Bin size must be between 5 and 20000 metres");
@@ -85,10 +91,10 @@ public class GeoAnalysisService {
                        %s AS paint_v
                 FROM sample s
                 JOIN sample_kpi k ON k.session_id = s.session_id AND k.seq = s.seq
-                WHERE s.session_id = ? AND k.kpi_name = ?
+                WHERE s.session_id = ? AND k.kpi_name = ?%2$s
                 GROUP BY gy, gx
                 ORDER BY n DESC
-                """.formatted(stat.sqlExpr()), (rs, i) -> {
+                """.formatted(stat.sqlExpr(), GlobalFilter.and(scope)), (rs, i) -> {
             double lat = (rs.getDouble("gy") + 0.5) * dLat;
             double lon = (rs.getDouble("gx") + 0.5) * dLon;
             double avg = rs.getDouble("avg_v");
@@ -97,12 +103,13 @@ public class GeoAnalysisService {
             // its mean while its worst sample is a hole is the whole reason for the switch.
             double painted = rs.getDouble("paint_v");
             Optional<KpiThreshold> bin = catalog.binFor(scale, painted);
+            String colour = catalog.colourFor(def, scale, painted);
             return new AreaBin(round6(lat), round6(lon), sizeMeters, rs.getLong("n"),
                     round2(avg), round2(rs.getDouble("min_v")), round2(rs.getDouble("max_v")),
-                    bin.map(KpiThreshold::getColor).orElse("#999999"),
+                    colour != null ? colour : bin.map(KpiThreshold::getColor).orElse("#999999"),
                     bin.map(KpiThreshold::getLabel).orElse("no data"),
                     stat.name(), stat.bracket(), round2(painted));
-        }, dLat, dLon, sessionId, kpiName);
+        }, binArgs(dLat, dLon, sessionId, kpiName, scope));
 
         return bins;
     }
@@ -233,7 +240,7 @@ public class GeoAnalysisService {
     public static final String BY_TOP3 = "TOP3";
 
     public List<CellFootprint> cellFootprints(long sessionId, int minSamples) {
-        return cellFootprints(sessionId, minSamples, BY_SERVING, null);
+        return cellFootprints(sessionId, minSamples, BY_SERVING, null, null);
     }
 
     /**
@@ -246,6 +253,12 @@ public class GeoAnalysisService {
      */
     public List<CellFootprint> cellFootprints(long sessionId, int minSamples, String basis,
                                               List<Integer> pcis) {
+        return cellFootprints(sessionId, minSamples, basis, pcis, null);
+    }
+
+    public List<CellFootprint> cellFootprints(long sessionId, int minSamples, String basis,
+                                              List<Integer> pcis, String filterSpec) {
+        GlobalFilter.Scope scope = GlobalFilter.scope(filterSpec, sessionId, "s");
         boolean topThree = BY_TOP3.equals(basis);
         if (!topThree && !BY_SERVING.equals(basis)) {
             throw new IllegalArgumentException("Unknown footprint basis: " + basis);
@@ -258,11 +271,11 @@ public class GeoAnalysisService {
         // top three. There is no rank column to read - V7 deliberately stores what was
         // measured and derives everything else - so the rank is computed here.
         String servingSql = """
-                SELECT serving_pci AS pci, latitude, longitude
-                FROM sample
-                WHERE session_id = ? AND serving_pci IS NOT NULL
-                ORDER BY pci, seq
-                """;
+                SELECT s.serving_pci AS pci, s.latitude, s.longitude
+                FROM sample s
+                WHERE s.session_id = ? AND s.serving_pci IS NOT NULL%s
+                ORDER BY pci, s.seq
+                """.formatted(GlobalFilter.and(scope));
         String topThreeSql = """
                 WITH ranked AS (
                     SELECT n.seq, n.pci,
@@ -273,12 +286,16 @@ public class GeoAnalysisService {
                 SELECT r.pci AS pci, s.latitude, s.longitude
                 FROM ranked r
                 JOIN sample s ON s.session_id = ? AND s.seq = r.seq
-                WHERE r.rank <= 3
+                WHERE r.rank <= 3%s
                 ORDER BY r.pci, r.seq
-                """;
+                """.formatted(GlobalFilter.and(scope));
 
         Map<Integer, List<double[]>> byPci = new LinkedHashMap<>();
-        Object[] posArgs = topThree ? new Object[]{sessionId, sessionId} : new Object[]{sessionId};
+        List<Object> pos = new ArrayList<>();
+        pos.add(sessionId);
+        if (topThree) pos.add(sessionId);
+        pos.addAll(GlobalFilter.params(scope));
+        Object[] posArgs = pos.toArray();
         jdbc.query(topThree ? topThreeSql : servingSql,
                 rs -> {
                     byPci.computeIfAbsent(rs.getInt("pci"), k -> new ArrayList<>())
@@ -304,11 +321,11 @@ public class GeoAnalysisService {
                 SELECT s.serving_pci AS pci, avg(k.value) AS v
                 FROM sample s
                 JOIN sample_kpi k ON k.session_id = s.session_id AND k.seq = s.seq
-                WHERE s.session_id = ? AND k.kpi_name = 'RSRP' AND s.serving_pci IS NOT NULL
+                WHERE s.session_id = ? AND k.kpi_name = 'RSRP' AND s.serving_pci IS NOT NULL%s
                 GROUP BY s.serving_pci
-                """, rs -> {
+                """.formatted(GlobalFilter.and(scope)), rs -> {
                     meanRsrp.put(rs.getInt("pci"), rs.getDouble("v"));
-                }, sessionId);
+                }, meanArgs(sessionId, scope));
 
         List<CellFootprint> out = new ArrayList<>();
         for (var e : byPci.entrySet()) {
@@ -470,6 +487,28 @@ public class GeoAnalysisService {
                 sessionId, overshootKm));
 
         return issues;
+    }
+
+    /**
+     * Positional order for the tile query: the filter binds last, in its own clause.
+     *
+     * Kept beside the query rather than inlined because the filter contributes a variable
+     * number of parameters, and a varargs call that silently loses one is exactly the kind
+     * of mistake this codebase writes helpers to make impossible.
+     */
+    /** The mean-level query behind a footprint's colour, under the same filter. */
+    private static Object[] meanArgs(long sessionId, GlobalFilter.Scope scope) {
+        List<Object> out = new ArrayList<>();
+        out.add(sessionId);
+        out.addAll(GlobalFilter.params(scope));
+        return out.toArray();
+    }
+
+    private static Object[] binArgs(double dLat, double dLon, long sessionId, String kpiName,
+                                    GlobalFilter.Scope scope) {
+        List<Object> out = new ArrayList<>(List.of(dLat, dLon, sessionId, kpiName));
+        out.addAll(GlobalFilter.params(scope));
+        return out.toArray();
     }
 
     private static double round2(double v) { return Math.round(v * 100.0) / 100.0; }

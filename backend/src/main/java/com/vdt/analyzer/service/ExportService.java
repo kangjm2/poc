@@ -27,6 +27,20 @@ public class ExportService {
 
     /** Wide CSV: one row per sample, one column per KPI. */
     public void exportCsv(long sessionId, OutputStream out) throws IOException {
+        exportCsv(sessionId, out, null);
+    }
+
+    /**
+     * The same, narrowed by the global filter.
+     *
+     * An export that ignores the filter is the most damaging place to ignore it: the
+     * screen is gone by the time the file is opened, so a spreadsheet holding the whole
+     * drive under a filename that says "coverage area" cannot be told from one that
+     * honoured the condition.
+     */
+    public void exportCsv(long sessionId, OutputStream out, String filterSpec)
+            throws IOException {
+        GlobalFilter.Scope scope = GlobalFilter.scope(filterSpec, sessionId, "s");
         List<String> kpis = jdbc.queryForList(
                 "SELECT DISTINCT kpi_name FROM sample_kpi WHERE session_id = ? ORDER BY kpi_name",
                 String.class, sessionId);
@@ -49,10 +63,10 @@ public class ExportService {
                 SELECT s.ts, s.seq, s.latitude, s.longitude, s.speed_kmh, s.serving_pci%s
                 FROM sample s
                 LEFT JOIN sample_kpi k ON k.session_id = s.session_id AND k.seq = s.seq
-                WHERE s.session_id = ?
+                WHERE s.session_id = ?%2$s
                 GROUP BY s.ts, s.seq, s.latitude, s.longitude, s.speed_kmh, s.serving_pci
                 ORDER BY s.seq
-                """.formatted(pivot);
+                """.formatted(pivot, GlobalFilter.and(scope));
 
         int columnCount = 6 + kpis.size();
         jdbc.query(sql, rs -> {
@@ -67,7 +81,7 @@ public class ExportService {
             } catch (IOException e) {
                 throw new IllegalStateException("Failed writing CSV export", e);
             }
-        }, sessionId);
+        }, args(scope, sessionId));
         w.flush();
     }
 
@@ -77,6 +91,12 @@ public class ExportService {
      */
     public void exportGeoJson(long sessionId, String kpiName, OutputStream out)
             throws IOException {
+        exportGeoJson(sessionId, kpiName, out, null);
+    }
+
+    public void exportGeoJson(long sessionId, String kpiName, OutputStream out,
+                              String filterSpec) throws IOException {
+        GlobalFilter.Scope scope = GlobalFilter.scope(filterSpec, sessionId, "s");
         Writer w = new OutputStreamWriter(out, StandardCharsets.UTF_8);
         w.write("{\"type\":\"FeatureCollection\",\"features\":[");
 
@@ -86,9 +106,9 @@ public class ExportService {
                 FROM sample s
                 LEFT JOIN sample_kpi k ON k.session_id = s.session_id AND k.seq = s.seq
                                       AND k.kpi_name = ?
-                WHERE s.session_id = ?
+                WHERE s.session_id = ?%s
                 ORDER BY s.seq
-                """, rs -> {
+                """.formatted(GlobalFilter.and(scope)), rs -> {
             try {
                 if (!first[0]) w.write(',');
                 first[0] = false;
@@ -102,10 +122,17 @@ public class ExportService {
             } catch (IOException e) {
                 throw new IllegalStateException("Failed writing GeoJSON export", e);
             }
-        }, kpiName, sessionId);
+        }, args(scope, kpiName, sessionId));
 
         w.write("]}");
         w.flush();
+    }
+
+    /** The fixed bindings first, then the filter's, which always sit last in the WHERE. */
+    private static Object[] args(GlobalFilter.Scope scope, Object... fixed) {
+        java.util.List<Object> out = new java.util.ArrayList<>(java.util.Arrays.asList(fixed));
+        out.addAll(GlobalFilter.params(scope));
+        return out.toArray();
     }
 
     /** KPI names are a closed vocabulary; anything else must not reach the statement. */

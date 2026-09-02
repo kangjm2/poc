@@ -10,8 +10,12 @@ import type { SeqRange, Statistics } from '../api/types'
  * like", which a mean cannot.
  */
 export function StatisticsPanel({
-  sessionId, kpi, unit, range,
-}: { sessionId: number | null; kpi: string; unit: string; range?: SeqRange | null }) {
+  sessionId, kpi, unit, range, filterSpec,
+}: {
+  sessionId: number | null; kpi: string; unit: string; range?: SeqRange | null
+  /** A refetch trigger, not a request parameter - the api module carries the filter. */
+  filterSpec?: string | null
+}) {
   const [stats, setStats] = useState<Statistics | null>(null)
   const [error, setError] = useState<string | null>(null)
   /**
@@ -31,7 +35,7 @@ export function StatisticsPanel({
     setError(null)
     api.statistics(sessionId, kpi, range, weightedBy, domain)
       .then(setStats).catch((e) => setError(String(e)))
-  }, [sessionId, kpi, range, weightedBy, domain])
+  }, [sessionId, kpi, range, weightedBy, domain, filterSpec])
 
   if (error) return <div className="error">{error}</div>
   if (!stats) return <div className="panel"><div className="loading">Loading…</div></div>

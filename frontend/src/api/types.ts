@@ -131,6 +131,8 @@ export interface KpiDefinition {
   seeded: boolean
   /** arithmetic formula over other KPIs; null for a measured KPI */
   expression: string | null
+  /** NUMERICAL bands, or a GRADIENT interpolated between them. */
+  scaleType?: string
   thresholds: Threshold[]
 }
 
@@ -440,7 +442,12 @@ export interface CellFootprint {
 
 // ------------------------------------------------------------ composed workbooks
 
-export interface WorkbookLayer { kpiName: string; visible: boolean }
+export interface WorkbookLayer {
+  kpiName: string
+  visible: boolean
+  /** A specific measurement, or null for whichever one is open. */
+  sessionId?: number | null
+}
 
 export interface WorkbookPane {
   id?: number
@@ -509,4 +516,17 @@ export interface GraphNodePreview {
   /** Over the WHOLE node, not the page: "3 rows" and "the first 3 of 41 000" differ. */
   rowCount: number
   rows: GraphPreviewRow[]
+}
+
+/**
+ * One analytic and whether the global filter reaches it.
+ *
+ * Served by the backend rather than restated here, because a list of what a feature
+ * covers that lives next to the screen it describes is a list that can drift from what
+ * the queries actually do.
+ */
+export interface FilterCoverage {
+  path: string
+  honoured: boolean
+  note: string
 }

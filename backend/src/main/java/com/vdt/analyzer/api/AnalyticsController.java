@@ -33,8 +33,9 @@ public class AnalyticsController {
     public List<GeoAnalysisService.AreaBin> bins(
             @PathVariable long id, @RequestParam String kpi,
             @RequestParam(defaultValue = "150") double sizeMeters,
-            @RequestParam(defaultValue = "AVERAGE") String statistic) {
-        return geo.areaBins(id, kpi, sizeMeters, statistic);
+            @RequestParam(defaultValue = "AVERAGE") String statistic,
+            @RequestParam(required = false) String filter) {
+        return geo.areaBins(id, kpi, sizeMeters, statistic, filter);
     }
 
     /**
@@ -64,8 +65,9 @@ public class AnalyticsController {
             @PathVariable long id,
             @RequestParam(defaultValue = "10") int minSamples,
             @RequestParam(defaultValue = "SERVING") String basis,
-            @RequestParam(required = false) List<Integer> pcis) {
-        return geo.cellFootprints(id, minSamples, basis, pcis);
+            @RequestParam(required = false) List<Integer> pcis,
+            @RequestParam(required = false) String filter) {
+        return geo.cellFootprints(id, minSamples, basis, pcis, filter);
     }
 
     @GetMapping("/coverage-issues")
@@ -86,20 +88,24 @@ public class AnalyticsController {
      * and documented as such rather than promising Excel output we do not implement.
      */
     @GetMapping(value = "/report.html", produces = "text/html; charset=UTF-8")
-    public String report(@PathVariable long id) {
-        return reports.render(id);
+    public String report(@PathVariable long id,
+                         @RequestParam(required = false) String filter) {
+        return reports.render(id, filter);
     }
 
     @GetMapping("/export.csv")
-    public void exportCsv(@PathVariable long id, HttpServletResponse response) throws IOException {
+    public void exportCsv(@PathVariable long id,
+                          @RequestParam(required = false) String filter,
+                          HttpServletResponse response) throws IOException {
         response.setContentType("text/csv; charset=UTF-8");
         response.setHeader("Content-Disposition",
                 "attachment; filename=\"session-" + id + ".csv\"");
-        export.exportCsv(id, response.getOutputStream());
+        export.exportCsv(id, response.getOutputStream(), filter);
     }
 
     @GetMapping("/export.geojson")
     public void exportGeoJson(@PathVariable long id, @RequestParam String kpi,
+                              @RequestParam(required = false) String filter,
                               HttpServletResponse response) throws IOException {
         // Every other KPI-taking endpoint rejects an unknown name with 400. Without
         // this one the export answered 200 with a null-valued property on every
@@ -108,6 +114,6 @@ public class AnalyticsController {
         response.setContentType("application/geo+json; charset=UTF-8");
         response.setHeader("Content-Disposition",
                 "attachment; filename=\"session-" + id + ".geojson\"");
-        export.exportGeoJson(id, kpi, response.getOutputStream());
+        export.exportGeoJson(id, kpi, response.getOutputStream(), filter);
     }
 }

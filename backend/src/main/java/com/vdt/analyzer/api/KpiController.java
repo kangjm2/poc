@@ -15,6 +15,7 @@ import org.springframework.web.bind.annotation.*;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 
 @RestController
 @RequestMapping("/api/kpi-definitions")
@@ -130,6 +131,27 @@ public class KpiController {
      * carry ordinals 0..n, so letting Hibernate order the statements itself collided
      * with the (kpi_name, ordinal) unique index and failed every single call.
      */
+    /**
+     * Bands or a gradient, for one KPI.
+     *
+     * Separate from the thresholds endpoint because it is a different decision: the bands
+     * say what the numbers MEAN, and this says whether the map draws the meaning in steps
+     * or in a ramp. Editing one should not require restating the other.
+     */
+    @PutMapping("/{name}/scale-type")
+    @Transactional
+    public KpiDefinitionDto updateScaleType(@PathVariable String name,
+                                            @RequestBody Map<String, String> body) {
+        String type = body.get("scaleType");
+        if (!"NUMERICAL".equals(type) && !"GRADIENT".equals(type)) {
+            throw new IllegalArgumentException(
+                    "A scale is NUMERICAL or GRADIENT, was: " + type);
+        }
+        KpiDefinition def = catalog.require(name);
+        def.setScaleType(type);
+        return toDto(repo.saveAndFlush(def));
+    }
+
     @PutMapping("/{name}/thresholds")
     @Transactional
     public KpiDefinitionDto updateThresholds(@PathVariable String name,
@@ -309,6 +331,7 @@ public class KpiController {
         }
         return new KpiDefinitionDto(d.getName(), d.getDisplayName(), d.getUnit(), d.getCategory(),
                 d.getTechnology(), d.getDirection(), d.getSource(), d.getDecimals(),
-                d.getDescription(), SEEDED.contains(d.getName()), d.getExpression(), ts);
+                d.getDescription(), SEEDED.contains(d.getName()), d.getExpression(),
+                d.getScaleType(), ts);
     }
 }

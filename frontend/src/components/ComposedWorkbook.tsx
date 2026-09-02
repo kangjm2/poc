@@ -1,9 +1,9 @@
-import { useEffect, useState } from 'react'
+import { Fragment, useEffect, useState } from 'react'
 import { api } from '../api/client'
 import { RouteMap } from './RouteMap'
 import type {
-  CellRef, KpiDefinition, Series, SeriesPoint, TrackPoint, Workbook, WorkbookLimits,
-  WorkbookPane,
+  CellRef, KpiDefinition, Series, SeriesPoint, SessionSummary, TrackPoint, Workbook,
+  WorkbookLimits, WorkbookPane,
 } from '../api/types'
 
 /**
@@ -26,9 +26,10 @@ import type {
 const TRACE = ['#30578d', '#c0392b', '#1f7a1f', '#8a2be2', '#d4783c', '#0080c0',
                '#7a6000', '#b5179e']
 
-function LayersDock({ pane, defs, maxLayers, onChange, onRemove }: {
+function LayersDock({ pane, defs, sessions, maxLayers, onChange, onRemove }: {
   pane: WorkbookPane
   defs: KpiDefinition[]
+  sessions: SessionSummary[]
   maxLayers: number | null
   onChange: (p: WorkbookPane) => void
   onRemove: () => void
@@ -56,8 +57,8 @@ function LayersDock({ pane, defs, maxLayers, onChange, onRemove }: {
         {pane.layers.map((l, i) => {
           const def = defs.find((d) => d.name === l.kpiName)
           return (
-            <div key={l.kpiName}
-                 style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '2px 0' }}>
+            <Fragment key={l.kpiName}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '2px 0' }}>
               {/* A map paints ONE colour scale, so ticking on a map pane is exclusive:
                   showing a layer hides the others rather than stacking something the map
                   cannot draw. Chart panes stack, which is the whole point of them. */}
@@ -88,6 +89,28 @@ function LayersDock({ pane, defs, maxLayers, onChange, onRemove }: {
                         ...pane, layers: pane.layers.filter((_, j) => j !== i),
                       })}>&times;</button>
             </div>
+            {/* Which MEASUREMENT this layer draws. Map panes only: a chart pane already
+                puts several traces of one drive together, and letting a trace come from
+                another drive would put two time axes on one x axis.
+                "the open one" is the default and the reason a saved workbook still
+                applies to a drive it has never seen. */}
+            {pane.kind === 'MAP' && (
+              <select value={l.sessionId ?? ''} aria-label={`Measurement for ${l.kpiName}`}
+                      style={{ width: '100%', marginBottom: 4, fontSize: 11 }}
+                      title="Which measurement this layer draws"
+                      onChange={(e) => onChange({
+                        ...pane,
+                        layers: pane.layers.map((x, j) => (j === i
+                          ? { ...x, sessionId: e.target.value ? Number(e.target.value) : null }
+                          : x)),
+                      })}>
+                <option value="">the open measurement</option>
+                {sessions.map((sess) => (
+                  <option key={sess.id} value={sess.id}>{sess.name}</option>
+                ))}
+              </select>
+            )}
+            </Fragment>
           )
         })}
 
@@ -96,7 +119,10 @@ function LayersDock({ pane, defs, maxLayers, onChange, onRemove }: {
             {`This pane is full at ${maxLayers} layers. Remove one to add another.`}
           </div>
         )}
-        <select value={adding} style={{ width: '100%', marginTop: 6 }} disabled={full}
+        {/* Named, because a per-layer measurement picker now sits above it and "the
+            select in the Layers dock" stopped identifying one control. */}
+        <select value={adding} aria-label="Add a layer to this pane"
+                style={{ width: '100%', marginTop: 6 }} disabled={full}
                 onChange={(e) => {
                   if (!e.target.value) return
                   onChange({
@@ -127,10 +153,18 @@ function LayersDock({ pane, defs, maxLayers, onChange, onRemove }: {
 }
 
 export function ComposedWorkbook({
-  workbook, sessionId, defs, cells, cursorSeq, onCursorChange, onSaved, onDeleted,
+  workbook, sessionId, sessions, defs, cells, cursorSeq, onCursorChange, onSaved, onDeleted,
+  filterSpec,
 }: {
   workbook: Workbook
   sessionId: number | null
+  sessions: SessionSummary[]
+  /**
+   * A refetch trigger, not a request parameter. A composed workbook is the screen where a
+   * stale pane hides best - panes are user-arranged, so nothing looks out of place - so
+   * both of its fetches depend on it.
+   */
+  filterSpec?: string | null
   defs: KpiDefinition[]
   cells: CellRef[]
   cursorSeq: number
@@ -163,7 +197,7 @@ export function ComposedWorkbook({
       .then((s) => { if (live) setSeries(s) })
       .catch(() => { if (live) setSeries([]) })
     return () => { live = false }
-  }, [sessionId, wantedKey])
+  }, [sessionId, wantedKey, filterSpec])
 
   /**
    * Map panes fetch their own track, for the same reason the pane fetches its own series.
@@ -174,23 +208,32 @@ export function ComposedWorkbook({
    * caption was written from the dock, the two disagreed silently and the caption was the
    * one that looked authoritative.
    */
-  const mapKpis = draft.panes
+  // A map layer names a KPI and, optionally, a MEASUREMENT. `null` session means the one
+  // that is open, which is what every layer meant before drives were nameable - and what
+  // keeps a saved workbook a reusable arrangement rather than a snapshot of one drive.
+  const sessionName = (id: number) => sessions.find((x) => x.id === id)?.name ?? `#${id}`
+  const trackKey = (kpiName: string, sid: number | null | undefined) =>
+    `${sid ?? sessionId ?? 0}|${kpiName}`
+  const mapWants = draft.panes
     .filter((p) => p.kind === 'MAP')
-    .map((p) => p.layers.find((l) => l.visible)?.kpiName)
-    .filter((k): k is string => !!k)
-  const mapKey = [...new Set(mapKpis)].sort().join(',')
+    .flatMap((p) => p.layers.filter((l) => l.visible)
+      .map((l) => ({ kpiName: l.kpiName, sid: l.sessionId ?? sessionId })))
+    .filter((w): w is { kpiName: string; sid: number } => w.sid != null)
+  const mapKey = [...new Set(mapWants.map((w) => `${w.sid}|${w.kpiName}`))].sort().join(',')
   const [tracks, setTracks] = useState<Record<string, TrackPoint[]>>({})
   useEffect(() => {
     if (sessionId == null || mapKey === '') { setTracks({}); return }
     let live = true
-    const names = mapKey.split(',')
-    Promise.all(names.map((n) => api.track(sessionId, n).catch(() => [] as TrackPoint[])))
-      .then((rows) => {
-        if (!live) return
-        setTracks(Object.fromEntries(names.map((n, i) => [n, rows[i]])))
-      })
+    const keys = mapKey.split(',')
+    Promise.all(keys.map((k) => {
+      const [sid, name] = [Number(k.split('|')[0]), k.split('|').slice(1).join('|')]
+      return api.track(sid, name).catch(() => [] as TrackPoint[])
+    })).then((rows) => {
+      if (!live) return
+      setTracks(Object.fromEntries(keys.map((k, i) => [k, rows[i]])))
+    })
     return () => { live = false }
-  }, [sessionId, mapKey])
+  }, [sessionId, mapKey, filterSpec])
 
   // Reset when the user switches tabs, or an edit to one workbook would appear to
   // follow them onto the next.
@@ -284,12 +327,19 @@ export function ComposedWorkbook({
                     </div>
                   </div>
                 ) : (
-                  <RouteMap track={tracks[visible[0].kpiName] ?? []} cells={cells}
-                            cursorSeq={cursorSeq}
-                            frameKey={`${sessionId}:${visible[0].kpiName}`}
-                            onCursorChange={onCursorChange}
-                            kpiName={defs.find((d) => d.name === visible[0].kpiName)?.displayName
-                                     ?? visible[0].kpiName} />
+                  <RouteMap
+                    track={tracks[trackKey(visible[0].kpiName, visible[0].sessionId)] ?? []}
+                    cells={cells}
+                    cursorSeq={cursorSeq}
+                    frameKey={trackKey(visible[0].kpiName, visible[0].sessionId)}
+                    onCursorChange={onCursorChange}
+                    // The measurement is named on the map when it is NOT the open one.
+                    // Without that a pane pinned to last month looks like this month, and
+                    // the only difference is that the numbers are wrong.
+                    kpiName={(defs.find((d) => d.name === visible[0].kpiName)?.displayName
+                              ?? visible[0].kpiName)
+                             + (visible[0].sessionId && visible[0].sessionId !== sessionId
+                               ? ` · ${sessionName(visible[0].sessionId)}` : '')} />
                 )
               ) : visible.length === 0 ? (
                 <div className="panel">
@@ -311,7 +361,7 @@ export function ComposedWorkbook({
                   cursorSeq={cursorSeq} onCursorChange={onCursorChange} />
               )}
             </div>
-            <LayersDock pane={pane} defs={defs}
+            <LayersDock pane={pane} defs={defs} sessions={sessions}
                         maxLayers={limits?.maxLayersPerPane ?? null} onChange={setPane}
                         onRemove={() => edit(draft.panes.filter((_, j) => j !== i))} />
           </div>

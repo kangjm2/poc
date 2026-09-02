@@ -1,4 +1,5 @@
 import { Fragment, useEffect, useRef, useState } from 'react'
+import { api } from '../api/client'
 import type {
   Degradation, Distribution, EventType, KpiDefinition, NetworkEvent, SignalingMessage, Snapshot,
 } from '../api/types'
@@ -189,6 +190,63 @@ export function PciLegend({ colors, bars, total }: {
           &mdash; drawn grey rather than sharing a colour with another cell.
         </div>
       )}
+    </div>
+  )
+}
+
+/**
+ * The string colour set: one colour per event NAME, edited where the events are read.
+ *
+ * The reference calls a scale keyed by a value RANGE a numerical colour set and one keyed
+ * by a NAME a string colour set, and we only had the first. An event type's colour was
+ * seeded and unchangeable, which matters more than it sounds: a team that has agreed
+ * handovers are blue cannot make this tool agree, and every screenshot they paste into a
+ * report then disagrees with every other tool they use.
+ *
+ * Placed in the Events dock rather than in a settings screen because the registry is the
+ * one thing that reaches the map marker, the chart tick, this list and the problem pie at
+ * once - so the change has to be made where its effect is visible, or a user cannot tell
+ * whether it took.
+ */
+export function EventColourEditor({
+  types, onRecoloured,
+}: {
+  types: Map<string, EventType>
+  onRecoloured: (t: EventType) => void
+}) {
+  const [busy, setBusy] = useState<string | null>(null)
+  const [error, setError] = useState<string | null>(null)
+
+  return (
+    <div className="event-colours">
+      {error && <div className="error" style={{ margin: '2px 0' }}>{error}</div>}
+      <table className="grid">
+        <tbody>
+          {[...types.values()].map((t) => (
+            <tr key={t.name}>
+              <td style={{ width: 22 }}>
+                <span className="ev-symbol" style={{ color: t.color }}>{t.symbol}</span>
+              </td>
+              <td>{t.displayName}</td>
+              <td style={{ width: 34 }}>
+                <input type="color" value={t.color} aria-label={`Colour for ${t.displayName}`}
+                       disabled={busy === t.name}
+                       // On change rather than on a Save button: there is one value, it is
+                       // valid by construction, and a form around a single colour well is
+                       // ceremony the reference does not ask for either.
+                       onChange={(e) => {
+                         const color = e.target.value
+                         setBusy(t.name); setError(null)
+                         api.recolourEventType(t.name, color)
+                           .then(onRecoloured)
+                           .catch((err: Error) => setError(err.message))
+                           .finally(() => setBusy(null))
+                       }} />
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
     </div>
   )
 }
