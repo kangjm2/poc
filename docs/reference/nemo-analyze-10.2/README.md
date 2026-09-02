@@ -29,6 +29,11 @@
 | `data-views.md` | 화면·뷰 인벤토리 — 어떤 화면이 존재하는가 |
 | `query-api.md` | **Appendix 5·6·7 전사.** 스칼라 함수 46개 · 저장 프로시저 16개의 signature, `T_FORMAT` 코드 21개, 레지스트리 키, 원문 결함 17건, 그리고 우리 식 언어와의 대조 |
 | `corrections.md` | 매뉴얼이 우리 기존 문서를 반박하는 지점 |
+| `call-events-and-recording.md` | **Appendix 3 · 4 전사.** Nemo 호 이벤트와 ETSI 호 이벤트의 "연결됨" 시점 차이(드롭콜 대 시도 실패), 이벤트 기반 기록 원리와 지속시간 가중 |
+| `database-schema.md` | **11장 SQL · Query Manager 전사.** 이벤트 1종 = 테이블 1개, `Event`/`Device`/`Measurement`, 동적 이벤트의 자식 테이블, `+` 뷰, 이진 타임스탬프, `MEAS()` 힌트, 값 열거, **Connection 테이블 13종과 계층**, 시간 상관 규칙, Query Manager 4종 |
+| `measurement-organization.md` | **7장 전사.** 파일명 규칙, 폴더 4종(Drag&Drop · Search · Query · Voice Quality), **Search 폴더 조건 11탭**, 조인 측정, 설명, `.gpxmod` |
+| `reports-and-workbooks.md` | **9장 · 10장 전사.** 워크북 페이지·저장·내보내기, 리포트 형식 4종과 Scope Filter, **Spreadsheet Report Designer 요소 인벤토리**(파라미터 셀 · 워크북/지도 이미지 옵션 전체 · 통계표 · `{?identifier?}` · Python 스크립트) |
+| `drilldown-timeline-notifications.md` | **p87–93 · p200–214 · p451–459 전사.** 파이·그리드·지도·이벤트 심볼에서의 드릴다운과 전후 시간 범위, Timeline의 강조·알림·범위 선택, 기타 뷰 8종, 알림 아이콘 설정, Options 중 분석에 영향을 주는 항목 |
 
 ## 이 레퍼런스가 바꾼 것
 
