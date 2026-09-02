@@ -64,7 +64,25 @@ public final class KpiGraph {
     private static final int MAX_NODES = 60;
 
     public enum Kind { SOURCE_KPI, SOURCE_NEIGHBOUR, SOURCE_SAMPLE, SOURCE_EVENT,
-                       COMBINE, EXPRESSION, FILTER, STATE_MACHINE, OUTPUT }
+                       COMBINE, EXPRESSION, FILTER, CLASSIFIER, STATE_MACHINE, OUTPUT }
+
+    /**
+     * The document version in which STATE_MACHINE started meaning the latching ladder.
+     *
+     * Version 1 documents used that name for the per-sample CASE, which is now called
+     * CLASSIFIER. The number exists for exactly one purpose: so an old document cannot be
+     * read as a new one. It never selects behaviour - it only refuses.
+     */
+    static final int LADDER_VERSION = 2;
+
+    /**
+     * The initial state plus at most three states after it.
+     *
+     * Each state costs two levels of nesting in a query that runs across every drive on
+     * every import, and three ladder states cover UC27 and every worked example in the
+     * reference. The cap is on screen, not just here.
+     */
+    static final int MAX_LADDER_STATES = 4;
 
     /**
      * What a SOURCE_SAMPLE node can read, and the column it comes from.
@@ -114,7 +132,11 @@ public final class KpiGraph {
                        // EXPRESSION / FILTER
                        String expression, String as,
                        // STATE_MACHINE
-                       List<StateRule> states, String defaultState,
+                       // CLASSIFIER: one condition per state, evaluated in order.
+                       // STATE_MACHINE: states.get(0) is the initial state and its
+                       // condition is the RETURN condition; the rest are entry conditions
+                       // in the order they must be entered.
+                       List<StateRule> states,
                        // OUTPUT
                        String column) {}
 
@@ -123,11 +145,30 @@ public final class KpiGraph {
 
     public record Edge(int from, int to) {}
 
-    public record Spec(List<Node> nodes, List<Edge> edges) {}
+    /**
+     * The document.
+     *
+     * `version` exists so a document saved before the State machine node existed cannot be
+     * read as one saved after: the name STATE_MACHINE meant the per-sample classifier in
+     * version 1 and means the latching ladder from version 2 on. Absent is version 1.
+     */
+    public record Spec(Integer version, List<Node> nodes, List<Edge> edges) {}
 
     /** A compiled graph: the SQL, what it reads, and what each node produces. */
-    public record Compiled(String sql, Set<String> referencedKpis, boolean readsNeighbours,
-                           Map<Integer, List<String>> columnsByNode, String outputColumn) {}
+    /**
+     * A compiled graph: the CTE chain, and the final SELECT that publishes one column.
+     *
+     * The two are separate because the preview needs the chain WITHOUT the tail, and it
+     * used to get it by searching the whole string for the tail's first line. That worked
+     * only while no CTE body contained the same text - which the state machine's does,
+     * several times over, so the split would have landed inside a CTE and broken every
+     * preview in a graph that used one.
+     */
+    public record Compiled(String ctes, String tail, Set<String> referencedKpis,
+                           boolean readsNeighbours, Map<Integer, List<String>> columnsByNode,
+                           String outputColumn, boolean outputIsDuration) {
+        public String sql() { return ctes + tail; }
+    }
 
     private KpiGraph() {}
 
@@ -190,6 +231,10 @@ public final class KpiGraph {
         Set<String> referenced = new LinkedHashSet<>();
         boolean[] readsNeighbours = {false};
         Map<Integer, List<String>> columns = new LinkedHashMap<>();
+        // Columns whose values are milliseconds rather than measurements. Tracked by name
+        // because Combine already forbids two inputs producing the same name, and
+        // Expression and Filter pass names through unchanged.
+        Set<String> durationColumns = new LinkedHashSet<>();
         List<String> ctes = new ArrayList<>();
 
         for (int id : order) {
@@ -197,18 +242,20 @@ public final class KpiGraph {
             List<Integer> in = inputs.getOrDefault(id, List.of());
             // Inputs are compiled before their consumers by the topological order, so a
             // node's upstream columns are always already known here.
-            ctes.add(emit(n, in, columns, knownKpis, referenced, readsNeighbours));
+            ctes.add(emit(spec, n, in, columns, knownKpis, referenced, readsNeighbours,
+                    durationColumns));
         }
 
         Node out = outputs.get(0);
         List<String> outCols = columns.get(out.id());
         String outputColumn = outCols.isEmpty() ? null : outCols.get(0);
 
-        String sql = "WITH " + String.join(",\n     ", ctes)
-                   + "\nSELECT session_id, seq, ts, " + quote(outputColumn) + " AS value\n"
-                   + "FROM n_" + out.id() + "\nWHERE " + quote(outputColumn) + " IS NOT NULL";
+        String chain = "WITH " + String.join(",\n     ", ctes);
+        String tail = "\nSELECT session_id, seq, ts, " + quote(outputColumn) + " AS value\n"
+                    + "FROM n_" + out.id() + "\nWHERE " + quote(outputColumn) + " IS NOT NULL";
 
-        return new Compiled(sql, referenced, readsNeighbours[0], columns, outputColumn);
+        return new Compiled(chain, tail, referenced, readsNeighbours[0], columns,
+                outputColumn, durationColumns.contains(outputColumn));
     }
 
     /**
@@ -252,9 +299,10 @@ public final class KpiGraph {
         return order;
     }
 
-    private static String emit(Node n, List<Integer> in, Map<Integer, List<String>> columns,
+    private static String emit(Spec spec, Node n, List<Integer> in,
+                               Map<Integer, List<String>> columns,
                                Set<String> knownKpis, Set<String> referenced,
-                               boolean[] readsNeighbours) {
+                               boolean[] readsNeighbours, Set<String> durationColumns) {
         String cte = "n_" + n.id();
         switch (n.kind()) {
             case SOURCE_KPI -> {
@@ -406,8 +454,7 @@ public final class KpiGraph {
                 List<String> cols = new ArrayList<>(upstream);
                 if (!cols.contains(alias)) cols.add(alias);
                 columns.put(n.id(), List.copyOf(cols));
-                return cte + " AS (SELECT session_id, seq, ts, " + quoteAll(upstream)
-                     + (upstream.isEmpty() ? "" : ", ")
+                return cte + " AS (SELECT session_id, seq, ts, " + project(upstream, alias)
                      + sql + " AS " + quote(alias) + " FROM n_" + in.get(0) + ")";
             }
             case FILTER -> {
@@ -417,11 +464,11 @@ public final class KpiGraph {
                 columns.put(n.id(), upstream);
                 return cte + " AS (SELECT * FROM n_" + in.get(0) + " WHERE " + cond + ")";
             }
-            case STATE_MACHINE -> {
+            case CLASSIFIER -> {
                 requireInputs(n, in, 1, 1);
                 List<String> upstream = columns.get(in.get(0));
                 if (n.states() == null || n.states().isEmpty()) {
-                    throw new IllegalArgumentException("A state machine needs at least one state");
+                    throw new IllegalArgumentException("A classifier needs at least one state");
                 }
                 String alias = column(n.as() == null ? "STATE" : n.as());
                 // Each state is a number, not a label, because the output becomes a KPI and
@@ -443,13 +490,20 @@ public final class KpiGraph {
                      .append(ColumnCondition.compile(r.condition(), Set.copyOf(upstream)))
                      .append(" THEN ").append(code++);
                 }
-                b.append(n.defaultState() == null ? " ELSE NULL END" : " ELSE 0 END");
+                // Always ELSE NULL. There was an ELSE 0 branch behind a `defaultState`
+                // field that no screen could ever set, so it was unreachable code wearing
+                // an option's name - the defect class docs/ui-testing/README.md 1.6 is
+                // about. A sample no condition claims has no state, and absence is how
+                // this application says so everywhere else.
+                b.append(" ELSE NULL END");
                 List<String> cols = new ArrayList<>(upstream);
                 if (!cols.contains(alias)) cols.add(alias);
                 columns.put(n.id(), List.copyOf(cols));
-                return cte + " AS (SELECT session_id, seq, ts, " + quoteAll(upstream)
-                     + (upstream.isEmpty() ? "" : ", ")
+                return cte + " AS (SELECT session_id, seq, ts, " + project(upstream, alias)
                      + b + " AS " + quote(alias) + " FROM n_" + in.get(0) + ")";
+            }
+            case STATE_MACHINE -> {
+                return ladder(spec, n, in, columns, durationColumns);
             }
             case OUTPUT -> {
                 requireInputs(n, in, 1, 1);
@@ -478,6 +532,189 @@ public final class KpiGraph {
             }
         }
         throw new IllegalStateException("Unhandled node kind " + n.kind());
+    }
+
+    /**
+     * `col1, col2, ` for a projection that is about to add `alias`, minus any column the
+     * alias shadows.
+     *
+     * Without the removal an expression aliased to the name of a column it reads emitted
+     * that name twice. Postgres accepts the duplicate; the next node's reference to it is
+     * ambiguous and fails at recompute with an opaque 500, after the editor had reported
+     * the graph valid. Shadowing rather than rejecting, so no graph that works today
+     * starts failing.
+     */
+    private static String project(List<String> upstream, String alias) {
+        List<String> keep = upstream.stream().filter(c -> !c.equals(alias)).toList();
+        return keep.isEmpty() ? "" : quoteAll(keep) + ", ";
+    }
+
+    /**
+     * A latching ladder that measures how long each state was held.
+     *
+     * <h3>What the reference asks for, and what fits in a row</h3>
+     * Nemo's State Machine emits one row per state occupancy carrying `start_time`,
+     * `end_time` and `time_interval` (p370). Three columns - but `end_time` is
+     * `start_time + time_interval`, so two degrees of freedom, and `sample_kpi` already
+     * carries two: `ts` and `value`. Stamping the dwell at the sample where the state was
+     * ENTERED makes `ts` literally the reference's `start_time` - the instant the manual
+     * itself names when it explains using the node to create custom events - and the whole
+     * occupancy fits an ordinary KPI row losslessly.
+     *
+     * That is why there is no second result shape, no second table and no second
+     * materialisation path. The docs in this repo argued that interval output was "the one
+     * item that requires touching the storage model"; it is not, and the consequence of it
+     * not being true is that a dwell is coloured, binned, filtered, exported and reported
+     * by every screen that already exists.
+     *
+     * <h3>The memory, and why a ladder rather than a transition table</h3>
+     * The reference's machine needs memory for two jobs: to enforce the ORDER of states,
+     * and to gather parameter values that its Union scattered across rows. Our schema does
+     * the second already - one seq carries every parameter - so only the order is left,
+     * and an order is a ladder: state k is reachable only from state k-1, and the initial
+     * state's condition is the only way back. A general transition table is a sequential
+     * fold, which Postgres expresses only with WITH RECURSIVE, per row, across every drive,
+     * on every import. The limit is stated on screen rather than hidden.
+     *
+     * <h3>The rule that must not be cut</h3>
+     * A duration is a claim about time that was measured. `"0brkrun"` is a running count,
+     * over the drive's own samples, of steps that were a gap or a glitch; an occupancy is
+     * published only when that count is the same at its start and at its end. So the check
+     * measures the CONTENT of the interval being published rather than a proxy for it, and
+     * it works whether the node's rows are every sample or five events five minutes apart.
+     * Without it, the fade that straddles this seed's 26-sample GPS outage would report a
+     * perfectly plausible 27-second dwell across ground nobody measured.
+     */
+    private static String ladder(Spec spec, Node n, List<Integer> in,
+                                 Map<Integer, List<String>> columns,
+                                 Set<String> durationColumns) {
+        requireInputs(n, in, 1, 1);
+        if (spec.version() == null || spec.version() < LADDER_VERSION) {
+            throw new IllegalArgumentException(
+                    "This graph was saved before the State machine node existed. What it"
+                  + " called a state machine is now called a Classifier, and the name State"
+                  + " machine now means a ladder that measures how long each state was"
+                  + " held. Open the graph in the workbench and save it again.");
+        }
+        List<StateRule> st = n.states();
+        if (st == null || st.size() < 2 || st.size() > MAX_LADDER_STATES) {
+            throw new IllegalArgumentException(
+                    "A state machine needs an initial state and 1 to "
+                  + (MAX_LADDER_STATES - 1) + " states after it, in the order they must be"
+                  + " entered. This one has " + (st == null ? 0 : st.size()) + ".");
+        }
+        if (st.get(0).condition() == null || st.get(0).condition().isBlank()) {
+            throw new IllegalArgumentException(
+                    "The initial state '" + st.get(0).state() + "' needs a condition. It is"
+                  + " the return condition: the only way back, and what ends a"
+                  + " measurement. The reference makes the same demand - every state must"
+                  + " have a returning transition or nothing it measures ever ends.");
+        }
+
+        List<String> upstream = columns.get(in.get(0));
+        Set<String> known = Set.copyOf(upstream);
+        String src = "n_" + in.get(0);
+        String U = upstream.isEmpty() ? "" : quoteAll(upstream) + ", ";
+
+        // Every column this node invents starts with a digit, which IDENT forbids, so a
+        // user column can never collide with one and RESERVED does not have to grow.
+        List<String> cols = new ArrayList<>(upstream);
+        List<String> dwellNames = new ArrayList<>();
+        for (int k = 1; k < st.size(); k++) {
+            String name = column(identifier(st.get(k).state(), "state name"));
+            if (cols.contains(name)) {
+                throw new IllegalArgumentException(
+                        "A state machine would produce a column named '" + name + "', but"
+                      + " its input already has one. Rename the state. Columns here: "
+                      + upstream);
+            }
+            cols.add(name);
+            dwellNames.add(name);
+        }
+        columns.put(n.id(), List.copyOf(cols));
+        durationColumns.addAll(dwellNames);
+
+        String w = "PARTITION BY session_id ORDER BY seq";
+        String we = "PARTITION BY session_id, \"0ep\"";
+
+        StringBuilder q = new StringBuilder();
+        // L0: the node's rows, each carrying how many broken steps preceded it in the
+        // DRIVE. Read from `sample`, never from the node's own rows: whether ground was
+        // measured is a property of the measurement, not of the author's Filter.
+        q.append("SELECT g.session_id, g.seq, g.ts, ").append(U).append("b.\"0brkrun\"")
+         .append(" FROM ").append(src).append(" g JOIN (")
+         .append("SELECT session_id, seq, count(*) FILTER (WHERE \"0brk\" <> ")
+         .append(RouteContinuity.CONTINUOUS)
+         .append(") OVER (PARTITION BY session_id ORDER BY seq ROWS UNBOUNDED PRECEDING)")
+         .append(" AS \"0brkrun\" FROM (SELECT session_id, seq, ")
+         .append(RouteContinuity.classify("\"0stp\"", "\"0dt\"")).append(" AS \"0brk\"")
+         .append(" FROM (SELECT session_id, seq, ")
+         .append(RouteContinuity.STEP_METRES).append(" AS \"0stp\", ")
+         .append(RouteContinuity.SECONDS_SINCE_PREV).append(" AS \"0dt\"")
+         .append(" FROM sample) s0) s1) b")
+         .append(" ON b.session_id = g.session_id AND b.seq = g.seq");
+
+        // L1: does the return condition hold here, and what comes one node row later.
+        q = new StringBuilder("SELECT *, CASE WHEN ("
+                + ColumnCondition.compile(st.get(0).condition(), known)
+                + ") THEN 1 ELSE 0 END AS \"0c1\", lead(ts) OVER (" + w + ") AS \"0nx\","
+                + " lead(\"0brkrun\") OVER (" + w + ") AS \"0nb\" FROM (" + q + ") l0");
+
+        // L2: an episode begins every time the machine returns to the initial state.
+        q = new StringBuilder("SELECT *, count(*) FILTER (WHERE \"0c1\" = 1)"
+                + " OVER (" + w + " ROWS UNBOUNDED PRECEDING) AS \"0ep\""
+                + " FROM (" + q + ") l1");
+
+        // L3: the episode's extent. Two levels rather than one because a window function
+        // may not be nested inside another window's FILTER.
+        q = new StringBuilder("SELECT *, min(seq) OVER (" + we + ") AS \"0first\","
+                + " max(seq) OVER (" + we + ") AS \"0last\" FROM (" + q + ") l2");
+
+        // L4: the instant the episode ended, and the break count there. NULL for a
+        // session's last, unclosed episode - so a state still held when the drive stopped
+        // is absence, never a number invented from the session's end time.
+        q = new StringBuilder("SELECT *, max(\"0nx\") FILTER (WHERE seq = \"0last\")"
+                + " OVER (" + we + ") AS \"0tend\", max(\"0nb\") FILTER (WHERE seq ="
+                + " \"0last\") OVER (" + we + ") AS \"0bend\" FROM (" + q + ") l3");
+
+        // Two levels per ladder state: where it was entered, then the instant and break
+        // count at that entry. Entry k is reachable only after entry k-1, which is the
+        // whole of the memory.
+        for (int k = 1; k < st.size(); k++) {
+            String prev = k == 1 ? "\"0first\"" : "\"0k" + (k - 1) + "\"";
+            q = new StringBuilder("SELECT *, min(seq) FILTER (WHERE ("
+                    + ColumnCondition.compile(st.get(k).condition(), known)
+                    + ") AND seq > " + prev + ") OVER (" + we + ") AS \"0k" + k + "\""
+                    + " FROM (" + q + ") a" + k);
+            q = new StringBuilder("SELECT *, max(ts) FILTER (WHERE seq = \"0k" + k + "\")"
+                    + " OVER (" + we + ") AS \"0t" + k + "\","
+                    + " max(\"0brkrun\") FILTER (WHERE seq = \"0k" + k + "\")"
+                    + " OVER (" + we + ") AS \"0b" + k + "\" FROM (" + q + ") b" + k);
+        }
+
+        // The publish level. A state's exit is the entry of the state after it when the
+        // ladder advanced, and the end of the episode otherwise - so every column means
+        // "until this state was left", which is the reference's own definition.
+        StringBuilder pub = new StringBuilder("SELECT session_id, seq, ts, " + U);
+        for (int k = 1; k < st.size(); k++) {
+            boolean last = k == st.size() - 1;
+            String exitT = last ? "\"0tend\""
+                    : "(CASE WHEN \"0k" + (k + 1) + "\" IS NOT NULL THEN \"0t" + (k + 1)
+                      + "\" ELSE \"0tend\" END)";
+            String exitB = last ? "\"0bend\""
+                    : "(CASE WHEN \"0k" + (k + 1) + "\" IS NOT NULL THEN \"0b" + (k + 1)
+                      + "\" ELSE \"0bend\" END)";
+            if (k > 1) pub.append(", ");
+            pub.append("CASE WHEN seq = \"0k").append(k).append("\" AND ")
+               .append(exitB).append(" = \"0b").append(k).append("\" AND ")
+               .append(exitT).append(" > \"0t").append(k).append("\"")
+               .append(" THEN extract(epoch FROM (").append(exitT)
+               .append(" - \"0t").append(k).append("\")) * 1000 END AS ")
+               .append(quote(dwellNames.get(k - 1)));
+        }
+        pub.append(" FROM (").append(q).append(") p");
+
+        return "n_" + n.id() + " AS (" + pub + ")";
     }
 
     private static void requireInputs(Node n, List<Integer> in, int min, int max) {

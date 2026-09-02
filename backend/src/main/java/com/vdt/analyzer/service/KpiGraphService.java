@@ -39,7 +39,8 @@ public class KpiGraphService {
 
     /** What a validation run found, so the editor can report before anything is saved. */
     public record Validation(boolean ok, String error, List<String> referencedKpis,
-                             boolean readsNeighbours, String outputColumn, String sql) {}
+                             boolean readsNeighbours, String outputColumn,
+                             boolean outputIsDuration, String sql) {}
 
     private final JdbcTemplate jdbc;
     private final KpiDefinitionRepo defs;
@@ -71,9 +72,9 @@ public class KpiGraphService {
         try {
             KpiGraph.Compiled c = KpiGraph.compile(spec, knownNames(excludingKpi));
             return new Validation(true, null, List.copyOf(c.referencedKpis()),
-                    c.readsNeighbours(), c.outputColumn(), c.sql());
+                    c.readsNeighbours(), c.outputColumn(), c.outputIsDuration(), c.sql());
         } catch (RuntimeException e) {
-            return new Validation(false, e.getMessage(), List.of(), false, null, null);
+            return new Validation(false, e.getMessage(), List.of(), false, null, false, null);
         }
     }
 
@@ -107,7 +108,12 @@ public class KpiGraphService {
 
         String select = cols.stream().map(KpiGraph::quoteColumn)
                 .reduce((a, b) -> a + ", " + b).orElse("*");
-        String from = c.sql().substring(0, c.sql().indexOf("\nSELECT session_id, seq, ts,"));
+        // The CTE chain, taken from the compiler rather than found by searching the
+        // whole statement for the tail's first line. The old form split on the first
+        // occurrence of that text - which a state machine's own CTE contains several
+        // times, so the split would have landed inside a CTE and broken every preview in
+        // a graph that used one.
+        String from = c.ctes();
         String where = sessionId == null ? "" : " WHERE session_id = " + sessionId.longValue();
 
         // The count is over the whole node, not over the page: "3 rows" and "the first 3

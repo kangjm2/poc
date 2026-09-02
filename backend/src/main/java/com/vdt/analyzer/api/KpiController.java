@@ -88,16 +88,29 @@ public class KpiController {
             @RequestBody GraphRequest body) {
         KpiDefinitionDto form = KpiDefinitionForm.validate(body.output());
 
+        // A state machine publishes milliseconds, so the unit and the decimals are not the
+        // author's to choose. A duration labelled "dB" with two decimals is the same class
+        // of defect as a control that does nothing: every screen that reads the catalogue
+        // would then colour a duration on a signal-level scale and print it in dB.
+        var check = graphs.validate(body.spec(), form.name());
+        boolean duration = check.ok() && check.outputIsDuration();
+
         KpiDefinition def = repo.findById(form.name()).orElseGet(KpiDefinition::new);
         def.setName(form.name());
         def.setDisplayName(form.displayName());
-        def.setUnit(form.unit());
+        def.setUnit(duration ? "ms" : form.unit());
         def.setCategory(form.category());
         def.setTechnology(form.technology());
         def.setDirection(form.direction());
         def.setSource(form.source());
-        def.setDecimals(form.decimals());
-        def.setDescription(form.description());
+        def.setDecimals(duration ? 0 : form.decimals());
+        def.setDescription(duration
+                ? ("Milliseconds the state " + check.outputColumn() + " was held, recorded"
+                   + " at the sample where it began. A state whose end was not measured"
+                   + " contributes no value."
+                   + (form.description() == null || form.description().isBlank()
+                      ? "" : " " + form.description()))
+                : form.description());
         // Left null on purpose. `expression` is the formula KPI's definition, and a graph
         // KPI is defined by its document in kpi_graph; filling both would leave two
         // definitions of one KPI that could disagree about what it means.

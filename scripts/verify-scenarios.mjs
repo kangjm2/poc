@@ -1898,6 +1898,216 @@ scenario('S20 · One condition, every screen')
   await page.waitForTimeout(2500)
 }
 
+// ─── S21 · A state machine that measures time it actually measured ───────────
+//
+// The reference's State Machine emits one row per state occupancy carrying start_time and
+// time_interval, and the whole point of it is procedure delay: "how many milliseconds did
+// this take". Ours was a per-sample CASE wearing that name, which the repo's own reference
+// notes call a Classifier. The rename freed the name for a real latching ladder.
+//
+// Two claims are worth checking and they pull in opposite directions: that the machine
+// REMEMBERS (so a run is one row, not one per sample), and that it REFUSES to measure
+// across ground nobody drove. The seed happens to be able to witness both at once.
+scenario('S21 · A state machine that measures time it actually measured')
+{
+  const post = (path, body) => page.request.post(`${API}${path}`, { data: body })
+  const ladder = (states) => ({
+    version: 2,
+    nodes: [
+      { id: 1, kind: 'SOURCE_KPI', x: 40, y: 24, kpiName: 'RSRP', as: 'RSRP' },
+      { id: 2, kind: 'STATE_MACHINE', x: 40, y: 150, states },
+      { id: 3, kind: 'OUTPUT', x: 40, y: 280, column: states[states.length - 1].state },
+    ],
+    edges: [{ from: 1, to: 2 }, { from: 2, to: 3 }],
+  })
+  const FADE = [{ state: 'RECOVERED', condition: 'RSRP > -100' },
+                { state: 'FADED', condition: 'RSRP < -110' }]
+  const outputFor = (name) => ({
+    name, displayName: 'S21 fade dwell',
+    // Deliberately wrong, to prove the server does not take it.
+    unit: 'dB', category: 'Workbench', technology: '5G NR',
+    direction: 'LOWER_IS_BETTER', source: 'UE', decimals: 2,
+    description: null, expression: null,
+  })
+
+  // A document with no version used the name STATE_MACHINE for the per-sample classifier.
+  // Compiling it as a ladder would answer 200 and change every value the KPI ever had.
+  const noVersion = ladder(FADE)
+  delete noVersion.version
+  const old = await (await post('/api/kpi-definitions/graphs/validate',
+    { name: 'x', output: null, spec: noVersion })).json()
+  step('a graph saved before the ladder existed is refused, and says why',
+    old.ok === false && /Classifier/.test(old.error ?? '') && /State machine/.test(old.error ?? ''),
+    old.error ?? 'accepted')
+
+  const ok = await (await post('/api/kpi-definitions/graphs/validate',
+    { name: 'x', output: null, spec: ladder(FADE) })).json()
+  step('with a version it validates, and says it publishes a duration',
+    ok.ok === true && ok.outputIsDuration === true && ok.outputColumn === 'FADED',
+    ok.error ?? `${ok.outputColumn} duration=${ok.outputIsDuration}`)
+
+  const saved = await (await post('/api/kpi-definitions/graphs',
+    { name: 'S21 fade', output: outputFor('S21_FADE_MS'), spec: ladder(FADE) })).json()
+  step('saving computes dwell values', saved.valuesComputed > 0,
+    `${saved.valuesComputed} occupancies across every drive`)
+
+  // ── memory, witnessed against a latch implemented independently in the generator.
+  //
+  // The seed raises a RADIO_LINK_FAILURE from a Java boolean that arms below -110 dBm and
+  // disarms above -100 - the same latch this node compiles to SQL. Two implementations of
+  // one rule, so their counts must agree; and where they DON'T, the disagreement has to be
+  // explainable by the second claim rather than by a bug.
+  const dwellSeqs = async (id, kpi) =>
+    (await apiGet(`/api/sessions/${id}/series?kpis=${kpi}&maxPoints=100000`))[0]
+      .points.filter((p) => p.value != null).map((p) => p.seq)
+  const rlfSeqs = async (id) =>
+    (await apiGet(`/api/sessions/${id}/events`))
+      .filter((e) => e.eventType === 'RADIO_LINK_FAILURE').map((e) => e.seq)
+
+  const cityB = sessions.find((s) => s.name === CITY_B).id
+  const hwy = sessions.find((s) => s.name === HIGHWAY).id
+  const cityA = sessions.find((s) => s.name === CITY_A).id
+
+  const bDwell = await dwellSeqs(cityB, 'S21_FADE_MS')
+  const bRlf = await rlfSeqs(cityB)
+  const hDwell = await dwellSeqs(hwy, 'S21_FADE_MS')
+  const hRlf = await rlfSeqs(hwy)
+  step('one occupancy per fade, not one per sample of it — on the drives with no gaps',
+    bDwell.length === bRlf.length && hDwell.length === hRlf.length && bDwell.length > 0
+    && bDwell.every((q, i) => q === bRlf[i]) && hDwell.every((q, i) => q === hRlf[i]),
+    `1.5.0 dwells [${bDwell}] vs RLF [${bRlf}]; highway [${hDwell}] vs [${hRlf}]`)
+
+  // ── and the refusal, on the one drive that has a logger gap inside a fade.
+  const aDwell = await dwellSeqs(cityA, 'S21_FADE_MS')
+  const aRlf = await rlfSeqs(cityA)
+  const aTrack = await apiGet(`/api/sessions/${cityA}/track?kpi=RSRP&maxPoints=100000`)
+  const breaks = aTrack.filter((p) => p.breakBefore > 0).map((p) => Date.parse(p.ts))
+  const missing = aRlf.filter((q) => !aDwell.includes(q))
+  step('a fade that straddles a logger gap is not measured at all',
+    aDwell.length === aRlf.length - 1 && missing.length === 1,
+    `RLF at [${aRlf}], measured [${aDwell}]`)
+
+  // The load-bearing assertion: not "one row fewer" - which a drive with its break
+  // elsewhere would not show - but that no published interval CONTAINS a break.
+  const series = (await apiGet(
+    `/api/sessions/${cityA}/series?kpis=S21_FADE_MS&maxPoints=100000`))[0].points
+    .filter((p) => p.value != null)
+  const spans = series.map((p) => [Date.parse(p.ts), Date.parse(p.ts) + p.value])
+  step('and no interval that IS published contains one',
+    spans.length > 0 && !spans.some(([a, b]) => breaks.some((t) => t > a && t <= b)),
+    `${spans.length} intervals, ${breaks.length} breaks in the drive`)
+
+  // ── a duration is never longer than the drive it is in.
+  //
+  // A BOUND, not a witness, and labelled as one. The defect it would catch - an episode
+  // closing on the next drive because a window lost its PARTITION BY session_id - cannot
+  // be produced on this corpus: seq numbers repeat across drives, so an unpartitioned
+  // window scrambles into publishing NOTHING rather than publishing something too long.
+  // Dropping the partition IS caught, by KpiGraphTest.everyWindowInTheLadderIsPartitioned-
+  // ByDrive, which reads the compiled SQL. Recorded so nobody reads this step as the guard.
+  const drives = await apiGet('/api/sessions')
+  let worst = null
+  for (const d of drives) {
+    const pts = (await apiGet(
+      `/api/sessions/${d.id}/series?kpis=S21_FADE_MS&maxPoints=100000`))[0].points
+      .filter((p) => p.value != null)
+    const span = Date.parse(d.endedAt) - Date.parse(d.startedAt)
+    for (const p of pts) if (p.value > span) worst = `${d.name}: ${p.value} ms of ${span} ms`
+  }
+  step('no occupancy is longer than the drive it sits in (a bound, not a witness)',
+    worst === null, worst ?? 'every dwell fits inside its own drive')
+
+  // ── every state is measured until it was LEFT, including one that was left without the
+  //    ladder advancing. Witnessed against the same latch computed here, in the checker,
+  //    from the drive's own RSRP - so a machine that only measured states it later
+  //    deepened out of would disagree seq for seq rather than merely count differently.
+  const three = [{ state: 'OK', condition: 'RSRP > -100' },
+                 { state: 'DIPPED', condition: 'RSRP < -105' },
+                 { state: 'FADED', condition: 'RSRP < -115' }]
+  const dipSpec = ladder(three)
+  dipSpec.nodes[2].column = 'DIPPED'
+  const dip = await (await post('/api/kpi-definitions/graphs',
+    { name: 'S21 dip', output: outputFor('S21_DIP_MS'), spec: dipSpec })).json()
+  const deepSpec = ladder(three)
+  const deep = await (await post('/api/kpi-definitions/graphs',
+    { name: 'S21 deep', output: outputFor('S21_DEEP_MS'), spec: deepSpec })).json()
+
+  /** The ladder's latch, run here over one drive's values: arm below `enter`, disarm above `back`. */
+  const latchEntries = async (id, enter, back) => {
+    const pts = (await apiGet(`/api/sessions/${id}/series?kpis=RSRP&maxPoints=100000`))[0].points
+    const out = []
+    let armed = false
+    for (const p of pts.slice().sort((a, b) => a.seq - b.seq)) {
+      if (p.value == null) continue
+      if (!armed && p.value < enter) { armed = true; out.push(p.seq) }
+      else if (armed && p.value > back) armed = false
+    }
+    return out
+  }
+  // Both drives have no logger gap, so nothing is legitimately withheld and the two
+  // implementations must agree exactly.
+  const dipB = await dwellSeqs(cityB, 'S21_DIP_MS')
+  const dipH = await dwellSeqs(hwy, 'S21_DIP_MS')
+  const expB = await latchEntries(cityB, -105, -100)
+  const expH = await latchEntries(hwy, -105, -100)
+  step('every state is measured until it was left, not only when the ladder advanced',
+    dipB.length > 0 && JSON.stringify(dipB) === JSON.stringify(expB)
+    && JSON.stringify(dipH) === JSON.stringify(expH),
+    `1.5.0 published [${dipB}] vs latch [${expB}]; highway [${dipH}] vs [${expH}]`)
+  step('and a deeper state is entered less often than the one above it',
+    dip.valuesComputed > deep.valuesComputed && deep.valuesComputed > 0,
+    `${dip.valuesComputed} dips vs ${deep.valuesComputed} deep fades`)
+
+  // ── a duration is not labelled in the author's unit.
+  const defs = await apiGet('/api/kpi-definitions')
+  const def = defs.find((d) => d.name === 'S21_FADE_MS')
+  step('the author asked for dB and got ms, because a duration is not theirs to label',
+    def != null && def.unit === 'ms' && def.decimals === 0
+    && /Milliseconds the state FADED was held/.test(def.description ?? ''),
+    `${def?.unit} / ${def?.decimals} decimals`)
+
+  // ── the preview still works inside a ladder graph. Its CTE contains the same text the
+  //    preview used to split the whole statement on, several times over.
+  const prev = await (await post(
+    `/api/kpi-definitions/graphs/preview?nodeId=2&sessionId=${cityB}&limit=5`,
+    { name: 'x', output: null, spec: ladder(FADE) })).json()
+  step('a node inside a ladder graph can still be previewed',
+    prev.rowCount > 0 && (prev.columns ?? []).includes('FADED'),
+    `${prev.rowCount} rows, columns ${(prev.columns ?? []).join(', ')}`)
+
+  // ── and the screen shows the ladder as a ladder.
+  await openMode('Import')
+  await page.waitForTimeout(1500)
+  const stored = page.locator('.panels table.grid tbody tr', { hasText: 'S21 fade' })
+  await stored.locator('button', { hasText: 'Open' }).click()
+  await page.waitForTimeout(1500)
+  // textContent, not innerText: an SVG <g> has no innerText, and allInnerTexts() hands
+  // back undefined for each one rather than failing.
+  const cardText = await page.locator('g.wb-node')
+    .evaluateAll((gs) => gs.map((g) => g.textContent ?? ''))
+  step('the canvas prints the ladder in the order that IS its meaning',
+    cardText.some((t) => t.includes('RECOVERED → FADED')), cardText.join(' | '))
+
+  await page.locator('g.wb-node', { hasText: 'RECOVERED → FADED' }).click()
+  await page.waitForTimeout(600)
+  // The panel headed "Node", not the first panel whose text happens to contain the word -
+  // the canvas panel says "3 nodes . 2 edges" and would match that.
+  const inspector = await page.locator('.panel:has(header .title:text-is("Node"))').innerText()
+  step('and the inspector states the limits rather than hiding them',
+    /only from the one above it/.test(inspector) && /no time trigger/.test(inspector)
+    && /logger gap/.test(inspector), inspector.replace(/\n/g, ' / ').slice(0, 120))
+
+  for (const g of [saved.id, dip.id, deep.id]) {
+    await page.request.delete(`${API}/api/kpi-definitions/graphs/${g}`)
+  }
+  const after = await apiGet('/api/kpi-definitions/graphs')
+  step('the scenario leaves no graph behind',
+    !after.some((g) => String(g.outputKpiName).startsWith('S21_')),
+    `${after.length} graphs remain`)
+  await page.goto(BASE, { waitUntil: 'domcontentloaded' })
+  await page.waitForTimeout(2500)
+}
+
 // ─── wrap-up ─────────────────────────────────────────────────────────────────
 const appErrors = errors.filter((e) =>
   !/tile\.openstreetmap\.org|ERR_CONNECTION|Failed to load resource|ERR_TIMED_OUT/.test(e))

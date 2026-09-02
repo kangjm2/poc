@@ -345,7 +345,7 @@ export interface PollutionSpan {
 
 export type GraphNodeKind =
   | 'SOURCE_KPI' | 'SOURCE_NEIGHBOUR' | 'SOURCE_SAMPLE' | 'SOURCE_EVENT'
-  | 'COMBINE' | 'EXPRESSION' | 'FILTER' | 'STATE_MACHINE' | 'OUTPUT'
+  | 'COMBINE' | 'EXPRESSION' | 'FILTER' | 'CLASSIFIER' | 'STATE_MACHINE' | 'OUTPUT'
 
 /** What a sample source may read. The server holds the same allow-list. */
 export const SAMPLE_FIELDS = ['LATITUDE', 'LONGITUDE', 'SPEED_KMH', 'SERVING_PCI'] as const
@@ -372,14 +372,26 @@ export interface GraphNode {
   eventType?: string | null
   expression?: string | null
   as?: string | null
+  /**
+   * CLASSIFIER: one condition per state, evaluated in order.
+   * STATE_MACHINE: [0] is the initial state and its condition is the RETURN condition;
+   * the rest are entry conditions in the order they must be entered.
+   */
   states?: GraphStateRule[] | null
-  defaultState?: string | null
   column?: string | null
 }
 
 export interface GraphEdge { from: number; to: number }
 
-export interface GraphSpec { nodes: GraphNode[]; edges: GraphEdge[] }
+/**
+ * The document.
+ *
+ * `version` exists so a graph saved before the State machine node existed cannot be read
+ * as one saved after: that name meant the per-sample classifier in version 1 and means
+ * the latching ladder from version 2. The editor always writes 2; the server refuses
+ * anything lower that uses the name.
+ */
+export interface GraphSpec { version: number; nodes: GraphNode[]; edges: GraphEdge[] }
 
 export interface GraphValidation {
   ok: boolean
@@ -387,6 +399,8 @@ export interface GraphValidation {
   referencedKpis: string[]
   readsNeighbours: boolean
   outputColumn: string | null
+  /** True when the published column is a state machine's dwell, so its unit is ms. */
+  outputIsDuration: boolean
   sql: string | null
 }
 

@@ -95,13 +95,21 @@ final class RouteContinuity {
      *
      * Glitch is tested first: an implausible jump also satisfies the gap rule, and
      * calling it a gap would credit the excursion to distance travelled.
+     *
+     * A step where the clock did not advance is a glitch too. It used to fall through to
+     * CONTINUOUS - the speed guard skipped it to avoid dividing by zero and the gap rule
+     * needs five seconds - so a log whose timestamps go backwards was drawn as an
+     * unbroken line and its metres counted. Nothing in the importer prevents that: `seq`
+     * is a bare row counter and the timestamps are parsed, never sorted or checked. A
+     * backward step is not a step; it is evidence the clock is wrong.
      */
     public static String classify(String stepMetresColumn, String secondsColumn) {
         double maxMetresPerSecond = MAX_PLAUSIBLE_KMH / 3.6;
         return """
                 CASE
                     WHEN %1$s IS NULL OR %2$s IS NULL THEN %3$d
-                    WHEN %2$s > 0 AND %1$s / %2$s > %4$s THEN %5$d
+                    WHEN %2$s <= 0 THEN %5$d
+                    WHEN %1$s / %2$s > %4$s THEN %5$d
                     WHEN %2$s >= %6$s AND %1$s >= %7$s THEN %8$d
                     ELSE %3$d
                 END""".formatted(
