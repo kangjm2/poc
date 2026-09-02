@@ -177,8 +177,20 @@ public class AnalysisController {
     @GetMapping("/sessions/{id}/spatial-diff")
     public SpatialDiffService.SpatialDiff spatialDiff(
             @PathVariable long id, @RequestParam long other, @RequestParam String kpi,
-            @RequestParam(defaultValue = "150") double sizeMeters) {
-        return spatialDiff.diff(id, other, kpi, sizeMeters);
+            @RequestParam(defaultValue = "150") double sizeMeters,
+            // Optional group members BESIDE the two named in the path and `other`, so the
+            // two-drive URL keeps working unchanged and a group is the same call with more
+            // measurements on it.
+            @RequestParam(required = false) List<Long> withA,
+            @RequestParam(required = false) List<Long> withB) {
+        if ((withA == null || withA.isEmpty()) && (withB == null || withB.isEmpty())) {
+            return spatialDiff.diff(id, other, kpi, sizeMeters);
+        }
+        List<Long> a = new java.util.ArrayList<>(List.of(id));
+        if (withA != null) for (Long x : withA) if (!a.contains(x)) a.add(x);
+        List<Long> b = new java.util.ArrayList<>(List.of(other));
+        if (withB != null) for (Long x : withB) if (!b.contains(x)) b.add(x);
+        return spatialDiff.diff(a, b, kpi, sizeMeters);
     }
 
     @GetMapping("/sessions/{id}/degradations")

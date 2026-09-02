@@ -2,6 +2,7 @@ import { Fragment, useEffect, useRef, useState } from 'react'
 import type {
   Degradation, Distribution, EventType, KpiDefinition, NetworkEvent, SignalingMessage, Snapshot,
 } from '../api/types'
+import type { LayerToggle, MapLayer } from '../view/maplayers'
 import { UNIDENTIFIED } from '../view/paint'
 
 /** Parameter grid: every KPI at the cursor, grouped by category. */
@@ -381,6 +382,48 @@ export function ParameterTree({
             ))}
           </div>
         ))}
+    </div>
+  )
+}
+
+/**
+ * The Layers dock for a map: what is being drawn, and what can be taken away.
+ *
+ * Reads `describeLayers`, which reads the map's own contents - so a row here exists
+ * because something is on the picture, not because a switch is set. Layers marked as
+ * coming with the data have no checkbox: they are listed anyway, because the question this
+ * dock exists to answer is "what am I looking at", and the overlays with no control were
+ * exactly the ones nobody could account for.
+ */
+export function MapLayerDock({ layers, onToggle }: {
+  layers: MapLayer[]
+  onToggle: (t: LayerToggle) => void
+}) {
+  if (layers.length === 0) {
+    return <div style={{ padding: 8, color: '#666' }}>Nothing drawn on the map.</div>
+  }
+  return (
+    <div className="map-layers" style={{ padding: 6 }}>
+      {layers.map((l) => (
+        <div key={l.id} className="map-layer"
+             style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '2px 0' }}>
+          <input type="checkbox" checked={l.drawn} readOnly={!l.toggle}
+                 disabled={!l.toggle}
+                 title={l.toggle
+                   ? (l.drawn ? `Stop drawing ${l.label.toLowerCase()}`
+                              : `Draw ${l.label.toLowerCase()} again`)
+                   : 'Drawn because the measurement has it'}
+                 onChange={() => l.toggle && onToggle(l.toggle)} />
+          <span style={{
+            width: 9, height: 9, borderRadius: 2, flex: '0 0 auto',
+            background: l.swatch ?? 'transparent',
+            border: l.swatch ? 'none' : '1px solid #c8c8d0',
+            opacity: l.drawn ? 1 : 0.25,
+          }} />
+          <span style={{ flex: 1, opacity: l.drawn ? 1 : 0.5 }}>{l.label}</span>
+          <span style={{ color: '#666' }}>{l.drawn ? l.count : 'off'}</span>
+        </div>
+      ))}
     </div>
   )
 }

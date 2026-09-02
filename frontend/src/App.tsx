@@ -9,8 +9,8 @@ import type {
 import { RouteMap } from './components/RouteMap'
 import { TimeSeriesChart } from './components/TimeSeriesChart'
 import {
-  DegradationPanel, EventList, LegendPanel, MessageList, ParameterGrid, ParameterTree,
-  PciLegend,
+  DegradationPanel, EventList, LegendPanel, MapLayerDock, MessageList, ParameterGrid,
+  ParameterTree, PciLegend,
 } from './components/Panels'
 import { CompareView } from './components/CompareView'
 import { CellsPage } from './components/CellBarChart'
@@ -33,6 +33,8 @@ import type { Correction } from './view/state'
 import { encodeView, parseView, reconcile } from './view/state'
 import type { ColorBy } from './view/paint'
 import { buildPciColors } from './view/paint'
+import type { LayerToggle, MapContents } from './view/maplayers'
+import { describeLayers } from './view/maplayers'
 
 /**
  * Workbook pages. Existing users switch screen sets from a tab strip along the
@@ -132,6 +134,16 @@ export function App() {
   /** What the legend's shares are weighted by. See view of AggregationBasis on the server. */
   const [legendBasis, setLegendBasis] = useState('SAMPLE')
   const [pciBars, setPciBars] = useState<NeighbourBar[]>([])
+  /**
+   * Events drawn on the map, or not.
+   *
+   * They had no control at all - they appeared because the drive had them, and on a busy
+   * measurement they are the marks most often in the way of reading the route underneath.
+   * The Layers dock is what made the absence obvious: every other row could be switched.
+   */
+  const [eventsHidden, setEventsHidden] = useState(false)
+  /** The dotted line from the cursor to the cell serving it. Listed, so switchable. */
+  const [servingLine, setServingLine] = useState(true)
   /** A shape is a question being asked now, so it lives in state and is not persisted. */
   const [drawingArea, setDrawingArea] = useState(false)
   const [areaStats, setAreaStats] = useState<AreaStats | null>(null)
@@ -407,6 +419,41 @@ export function App() {
     : (WORKBOOKS.find((w) => w.id === workbook)?.isolates ?? false)
 
   /**
+   * Everything the overview map is given, in one object.
+   *
+   * Spread into RouteMap and read by the Layers dock, so the list beside the map is
+   * describing the map's own contents rather than a second account of what ought to be on
+   * it. See view/maplayers.ts for why that distinction is the whole point of the dock.
+   */
+  const overviewContents: MapContents = {
+    track, cells, bins, footprints, showServingLine: servingLine,
+    events: eventsHidden ? [] : events,
+  }
+  // The switched-off ones, so the dock can offer them back. Everything about whether a
+  // layer IS drawn still comes from the contents above.
+  const layersOff: LayerToggle[] = [
+    ...(showFootprints ? [] : ['footprints' as LayerToggle]),
+    ...(eventsHidden ? ['events' as LayerToggle] : []),
+  ]
+  const mapLayers = describeLayers(overviewContents, layersOff)
+
+  /**
+   * The one place a layer id meets the state that controls it.
+   *
+   * The dock knows a layer can be switched; it does not know what switching it means. That
+   * stays here, so adding a layer is a row in maplayers.ts and a case here rather than a
+   * new control wired through three files.
+   */
+  const toggleLayer = (t: LayerToggle) => {
+    switch (t) {
+      case 'bins': setBinSize(0); break
+      case 'footprints': setShowFootprints((v) => !v); break
+      case 'events': setEventsHidden((v) => !v); break
+      case 'servingLine': setServingLine((v) => !v); break
+    }
+  }
+
+  /**
    * The one writer of the time cursor.
    *
    * There were fifteen call sites setting it directly and none of them clamped, so a
@@ -636,13 +683,12 @@ export function App() {
       case 'overview':
         return (
           <>
-            <RouteMap track={track} cells={cells} cursorSeq={cursorSeq}
+            <RouteMap {...overviewContents} cursorSeq={cursorSeq}
                       frameKey={String(sessionId)} refitToken={refitToken}
                       onCursorChange={moveCursor} kpiName={activeDef?.displayName ?? kpi}
-                      bins={bins} footprints={footprints}
                       colorBy={colorBy} isolate={isolate}
                       drawingArea={drawingArea} onAreaDrawn={askAboutArea}
-                      events={events} eventTypes={eventTypes} />
+                      eventTypes={eventTypes} />
             {areaStats && (
               <AreaStatsPanel data={areaStats} onClose={() => setAreaStats(null)}
                               onPick={moveCursor} />
@@ -1057,6 +1103,18 @@ export function App() {
             </div>
 
             <div className="dock right">
+              {/* Above the legend, because it answers the earlier question: the legend
+                  explains what a colour means, and this explains what the shapes are. Only
+                  where there is a map - a Layers list beside a table would be the same
+                  mistake the isolate notice was making. */}
+              {workbook === 'overview' && (
+                <div className="dock-section" style={{ maxHeight: 200 }}>
+                  <h3>Layers ({mapLayers.length})</h3>
+                  <div className="content" style={{ maxHeight: 170 }}>
+                    <MapLayerDock layers={mapLayers} onToggle={toggleLayer} />
+                  </div>
+                </div>
+              )}
               <div className="dock-section">
                 <h3>Color Legends</h3>
                 <div className="content">

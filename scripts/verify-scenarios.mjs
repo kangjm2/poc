@@ -1218,6 +1218,30 @@ scenario('S16 · A complaint about a place, not a time')
   const tiles = await page.locator('path.diff-tile').count()
   const legendText = await page.locator('.diff-legend').innerText()
   step('two drives are differenced tile by tile', tiles > 5, `${tiles} tiles`)
+
+  // One drive is one sample of a road, so the far side can be a GROUP (UC16 p159). The
+  // witness is a tile count, not the presence of the control: adding a measurement that
+  // covered different ground must add one-sided tiles, and a group that changed nothing
+  // would mean the extra measurement was never read.
+  const diffSid = sessions.find((x) => x.name === CITY_A).id
+  const others = sessions.filter((x) => x.id !== diffSid).map((x) => x.id)
+  const pair = await apiGet(
+    `/api/sessions/${diffSid}/spatial-diff?other=${others[0]}&kpi=RSRP&sizeMeters=150`)
+  const grouped = await apiGet(
+    `/api/sessions/${diffSid}/spatial-diff?other=${others[0]}&kpi=RSRP&sizeMeters=150`
+    + `&withB=${others[1]}`)
+  step('the far side can be a group of measurements',
+    pair.groupB.length === 1 && grouped.groupB.length === 2
+    && grouped.tilesOnlyB > pair.tilesOnlyB,
+    `one-sided tiles ${pair.tilesOnlyB} -> ${grouped.tilesOnlyB}`)
+
+  // A measurement on both sides would be differenced against itself and drag its tiles
+  // towards "these agree", which is a finding rather than an empty result.
+  const bothSides = await page.request.get(
+    `${API}/api/sessions/${diffSid}/spatial-diff?other=${others[0]}&kpi=RSRP`
+    + `&withB=${diffSid}`)
+  step('and a measurement cannot be on both sides', bothSides.status() === 400,
+    `HTTP ${bothSides.status()}`)
   // The legend text is printed unconditionally, so reading it proves nothing about the
   // data. The claim is about the BINS: a tile exactly one drive visited must carry no
   // delta and must say so, because a zero there states "both measured this and agreed".

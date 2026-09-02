@@ -322,6 +322,37 @@ check('격리는 숨기기가 아니라 문맥 유지',
   isoFrame != null && allFrame != null && Math.abs(isoFrame.w - allFrame.w) < 3,
   `route spans ${isoFrame?.w.toFixed(0)} isolated, ${allFrame?.w.toFixed(0)} whole`)
 
+// The Layers dock must describe the MAP, not a record of what was switched on. Its rows
+// are derived from the same object spread into RouteMap, so the witness is that the count
+// it prints matches what is actually drawn: turn the route into tiles and the dock has to
+// stop saying "Route" and start saying "Area bins" with the tile count.
+const layerRow = (name) => page
+  .locator('.dock-section:has(h3:text-matches("^Layers")) .map-layer')
+  .filter({ hasText: name })
+// Compared against the map's OWN sample count, not merely "greater than zero": a dock
+// that printed a constant would satisfy a positivity test while describing nothing.
+const routeRow = await layerRow('Route').innerText().catch(() => '')
+const dockCount = Number(routeRow.replace(/\D/g, ''))
+const mapMeta = await page.locator('.map-panel header .meta').innerText()
+const mapCount = Number((mapMeta.match(/(\d+)\s+samples/) ?? [])[1])
+check('Layers 도크가 지도가 그린 것과 같은 수를 셈',
+  /Route/.test(routeRow) && mapCount > 0 && dockCount === mapCount,
+  `dock ${dockCount} vs map ${mapCount} samples`)
+
+// Switching a layer off must take it off the map AND leave its row, unticked - a control
+// that deletes itself when used has one usable state.
+const eventsBefore = await page.locator('.event-marker').count()
+await layerRow('Events').locator('input[type=checkbox]').click()
+await page.waitForTimeout(1200)
+const eventsAfter = await page.locator('.event-marker').count()
+const eventsRowStill = await layerRow('Events').count()
+const eventsTicked = await layerRow('Events').locator('input:checked').count()
+check('레이어를 끄면 지도에서 사라지고 행은 남음',
+  eventsBefore > 0 && eventsAfter === 0 && eventsRowStill === 1 && eventsTicked === 0,
+  `${eventsBefore} -> ${eventsAfter} marks, row ${eventsRowStill}, ticked ${eventsTicked}`)
+await layerRow('Events').locator('input[type=checkbox]').click()
+await page.waitForTimeout(1200)
+
 // The legend may only OFFER isolation where something honours it. The dock renders on
 // every tab, so before this the band was clickable on all fourteen and the notice claimed
 // "the rest is drawn grey" over screens with no route on them.
