@@ -38,7 +38,20 @@ public class AreaStatsService {
     }
 
     public AreaStats inArea(long sessionId, String kpiName, String polygonSpec) {
+        return inArea(sessionId, kpiName, polygonSpec, null);
+    }
+
+    /**
+     * The shape AND the global filter, which are two different narrowings and both apply.
+     *
+     * A polygon says WHERE to look; the filter says WHICH samples count anywhere. Reading
+     * "RSRP inside this junction, over the samples where RSRQ >= -12" is the pair of them,
+     * and dropping either would answer a question the user did not ask.
+     */
+    public AreaStats inArea(long sessionId, String kpiName, String polygonSpec,
+                            String filterSpec) {
         KpiDefinition def = catalog.require(kpiName);
+        GlobalFilter.Scope scope = GlobalFilter.scope(filterSpec, sessionId, "s");
         var poly = AreaSelection.parse(polygonSpec);
         var pred = AreaSelection.inside(poly, "s.latitude", "s.longitude");
 
@@ -48,17 +61,18 @@ public class AreaStatsService {
         List<Object> args = new ArrayList<>();
         args.add(sessionId);
         args.addAll(pred.params());
+        args.addAll(GlobalFilter.params(scope));
         List<Pass> passes = jdbc.query("""
                 WITH inside AS (
                     SELECT s.seq FROM sample s
-                    WHERE s.session_id = ? AND %s
+                    WHERE s.session_id = ? AND %s%s
                 ),
                 islands AS (
                     SELECT seq, seq - row_number() OVER (ORDER BY seq) AS grp FROM inside
                 )
                 SELECT min(seq) a, max(seq) b, count(*) n
                 FROM islands GROUP BY grp ORDER BY min(seq)
-                """.formatted(pred.sql()),
+                """.formatted(pred.sql(), GlobalFilter.and(scope)),
                 (rs, i) -> new Pass(rs.getInt("a"), rs.getInt("b"), rs.getInt("n")),
                 args.toArray());
 
@@ -74,6 +88,7 @@ public class AreaStatsService {
         statArgs.add(kpiName);
         statArgs.add(sessionId);
         statArgs.addAll(pred.params());
+        statArgs.addAll(GlobalFilter.params(scope));
         Map<String, Object> agg = jdbc.queryForMap("""
                 SELECT count(*) AS n, min(k.value) AS lo, max(k.value) AS hi, avg(k.value) AS mean,
                        percentile_cont(
@@ -82,8 +97,8 @@ public class AreaStatsService {
                        ) WITHIN GROUP (ORDER BY k.value) AS curve
                 FROM sample_kpi k
                 JOIN sample s ON s.session_id = k.session_id AND s.seq = k.seq
-                WHERE k.session_id = ? AND k.kpi_name = ? AND s.session_id = ? AND %s
-                """.formatted(pred.sql()), statArgs.toArray());
+                WHERE k.session_id = ? AND k.kpi_name = ? AND s.session_id = ? AND %s%s
+                """.formatted(pred.sql(), GlobalFilter.and(scope)), statArgs.toArray());
 
         long n = ((Number) agg.get("n")).longValue();
         if (n == 0) {

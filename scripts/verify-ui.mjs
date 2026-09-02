@@ -353,6 +353,98 @@ check('레이어를 끄면 지도에서 사라지고 행은 남음',
 await layerRow('Events').locator('input[type=checkbox]').click()
 await page.waitForTimeout(1200)
 
+// ------------------------------------------- colour set types (P3-3)
+//
+// The reference distinguishes a NUMERICAL colour set - one colour per value band - from a
+// GRADIENT, which interpolates between them, and we only drew the first. For a field that
+// really is smooth, bands quantise away the shape the map is being read for: a street
+// fading from -85 to -95 dBm is one flat colour and then a step.
+//
+// The witness is deliberately two-sided. Many distinct strokes alone would also be
+// produced by a map that had lost its scale entirely, so the check also requires the
+// LEGEND to be unchanged - a gradient built from the bands must not move the bands.
+const legendText = () => page.locator('.dock.right .legend-row').allTextContents()
+const bandedCensus = await strokeCensus()
+const bandedLegend = await legendText()
+
+await page.locator('.legend-row').first().click({ button: 'left' })
+await page.locator('button', { hasText: 'Edit scale' }).first().click()
+await page.waitForTimeout(800)
+await page.locator('.modal select[aria-label="Scale type"]').selectOption('GRADIENT')
+await page.locator('.modal button', { hasText: /^Save$/ }).click()
+await page.waitForTimeout(2600)
+const rampCensus = await strokeCensus()
+const rampLegend = await legendText()
+check('그라디언트 색상 집합이 구간 사이를 보간',
+  rampCensus.colors > bandedCensus.colors * 3 && rampCensus.total > 0
+  && JSON.stringify(rampLegend) === JSON.stringify(bandedLegend),
+  `${bandedCensus.colors} -> ${rampCensus.colors} distinct strokes, legend `
+  + `${JSON.stringify(rampLegend) === JSON.stringify(bandedLegend) ? 'unchanged' : 'MOVED'}`)
+
+await page.locator('.legend-row').first().click({ button: 'left' })
+await page.locator('button', { hasText: 'Edit scale' }).first().click()
+await page.waitForTimeout(800)
+await page.locator('.modal select[aria-label="Scale type"]').selectOption('NUMERICAL')
+await page.locator('.modal button', { hasText: /^Save$/ }).click()
+await page.waitForTimeout(2600)
+check('구간으로 되돌리면 다시 구간 색',
+  (await strokeCensus()).colors === bandedCensus.colors,
+  `${(await strokeCensus()).colors} distinct strokes, was ${bandedCensus.colors}`)
+
+// The string colour set: one colour per event NAME. The claim that makes it worth having
+// is that ONE registry feeds the map marker, the chart tick and the dock, so the witness
+// is two surfaces moving together - a colour that only changed on the panel it was set in
+// would be a preference, not a colour set.
+// The type recoloured is one that is ACTUALLY on this map, read off the markers rather
+// than assumed: the registry lists types this drive may not contain, and recolouring one
+// of those would leave the map unchanged for an honest reason and fail for a dishonest
+// one.
+const dotColours = () => page.locator('.event-marker .ev-dot')
+  .evaluateAll((els) => [...new Set(els.map((e) => getComputedStyle(e).color))])
+const drawnGlyphs = await page.locator('.event-marker .ev-dot')
+  .evaluateAll((els) => [...new Set(els.map((e) => e.textContent.trim()))])
+const registry = await (await page.request.get(`${API_BASE}/api/event-types`)).json()
+const victim = registry.find((t) => t.symbol === drawnGlyphs[0])
+// The override is stored, so a fixed target colour would already be in place on a second
+// run and the "before" half of the witness would be vacuous. The probe colour is derived
+// from the current one instead, and put back at the end.
+const PROBE_COLOUR = victim?.color === '#123456' ? '#654321' : '#123456'
+const probeRgb = new RegExp(
+  PROBE_COLOUR.slice(1).match(/../g).map((h) => parseInt(h, 16)).join(',\\s*'))
+const coloursBefore = await dotColours()
+
+await page.locator('.dock-section:has(h3:text-matches("^Events")) button[aria-label="Edit event colours"]')
+  .click()
+await page.waitForTimeout(500)
+const wellRow = page.locator('.event-colours tbody tr')
+  .filter({ has: page.locator('.ev-symbol', { hasText: drawnGlyphs[0] }) }).first()
+await wellRow.locator('input[type=color]').fill(PROBE_COLOUR)
+await page.waitForTimeout(1800)
+const coloursAfter = await dotColours()
+const dockSymbolColour = await wellRow.locator('.ev-symbol')
+  .evaluate((el) => getComputedStyle(el).color)
+check('이벤트 색을 바꾸면 지도와 도크가 함께 바뀜',
+  Boolean(victim)
+  && coloursAfter.some((c) => probeRgb.test(c))
+  && !coloursBefore.some((c) => probeRgb.test(c))
+  && probeRgb.test(dockSymbolColour),
+  `${victim?.displayName}: map ${coloursBefore.join(' ')} -> ${coloursAfter.join(' ')}, `
+  + `dock ${dockSymbolColour}`)
+
+// It is stored, not held in the page - the registry is fetched once per load, so a colour
+// that did not survive a reload would be a preference on one screen rather than a colour
+// set the tool has.
+await page.reload({ waitUntil: 'domcontentloaded' })
+await page.waitForTimeout(3000)
+check('바뀐 이벤트 색이 저장됨',
+  (await dotColours()).some((c) => probeRgb.test(c)), (await dotColours()).join(' '))
+
+// Put the seeded colour back, so a second run starts where the first did.
+await page.request.put(`${API_BASE}/api/event-types/${victim.name}/color`,
+  { data: { color: victim.color } })
+await page.reload({ waitUntil: 'domcontentloaded' })
+await page.waitForTimeout(2800)
+
 // The legend may only OFFER isolation where something honours it. The dock renders on
 // every tab, so before this the band was clickable on all fourteen and the notice claimed
 // "the rest is drawn grey" over screens with no route on them.
@@ -1074,7 +1166,8 @@ check('페인·레이어·표시여부가 함께 살아남음',
 await page.locator('button', { hasText: '+ Map pane' }).click()
 await page.waitForTimeout(900)
 const mapDock = page.locator('.dock-section:has(h3:text-is("Layers"))').last()
-await mapDock.locator('select').selectOption({ label: 'RSRP (NR SpCell)' })
+await mapDock.locator('select[aria-label="Add a layer to this pane"]')
+  .selectOption({ label: 'RSRP (NR SpCell)' })
 await page.waitForTimeout(2500)
 // The witness is the ORDER of colours along the route, not the set of them. The first
 // version of this check compared distinct-colour sets and failed honestly: every KPI is
@@ -1084,12 +1177,63 @@ await page.waitForTimeout(2500)
 const paneStrokes = () => page.locator('.leaflet-overlay-pane path.route-run')
   .evaluateAll((ps) => ps.map((x) => (x.getAttribute('stroke') ?? '').toLowerCase()).join(','))
 const strokesRsrp = await paneStrokes()
-await mapDock.locator('select').selectOption({ label: 'SS-SINR' })
+await mapDock.locator('select[aria-label="Add a layer to this pane"]')
+  .selectOption({ label: 'SS-SINR' })
 await page.waitForTimeout(2500)
 const strokesSinr = await paneStrokes()
 check('지도 페인이 자기 레이어를 그림',
   strokesRsrp.length > 0 && strokesSinr.length > 0 && strokesRsrp !== strokesSinr,
   `${strokesRsrp.split(',').length} runs, sequences ${strokesRsrp === strokesSinr ? 'IDENTICAL' : 'differ'}`)
+
+// A map layer may name ANOTHER measurement, which is what makes a workbook a comparison
+// rather than a view of one drive. The witness is not the dropdown - a select that
+// remembers a value it never acts on looks identical - but the request the pane makes and
+// the geometry it then draws.
+const otherSession = (await (await page.request.get(`${API_BASE}/api/sessions`)).json())
+  .find((x) => x.name.includes('highway'))
+const drawnGeometry = () => page.locator('.leaflet-overlay-pane path.route-run')
+  .evaluateAll((ps) => ps.map((x) => x.getAttribute('d')).join('|'))
+// Aimed at the layer the map is actually DRAWING. A map pane draws one layer at a time,
+// so pointing a hidden layer at another drive changes nothing and would fail this check
+// for a reason that is not a defect - the first version of it did exactly that.
+await mapDock.locator('input[type=checkbox]').first().check()
+await page.waitForTimeout(2200)
+const geometryBefore = await drawnGeometry()
+const trackCalls = []
+const recordTrack = (r) => {
+  const m = new URL(r.url()).pathname.match(/^\/api\/sessions\/(\d+)\/track$/)
+  if (m) trackCalls.push(Number(m[1]))
+}
+page.on('request', recordTrack)
+await mapDock.locator('select[aria-label="Measurement for RSRP"]')
+  .selectOption({ label: otherSession.name })
+await page.waitForTimeout(2800)
+page.off('request', recordTrack)
+const geometryAfter = await drawnGeometry()
+check('레이어가 다른 측정을 지목하면 그 주행을 가져와 그림',
+  trackCalls.includes(otherSession.id) && geometryBefore !== geometryAfter
+  && geometryAfter.length > 0,
+  `fetched ${[...new Set(trackCalls)].join(',')} (other is ${otherSession.id}), `
+  + `geometry ${geometryBefore === geometryAfter ? 'IDENTICAL' : 'changed'}`)
+
+// And it is part of the saved arrangement, not of this session's screen. Stored in
+// workbook_layer.session_id by V12 for exactly this: a workbook that reopens onto one
+// drive after being composed across two is a different workbook.
+await page.locator('button', { hasText: /^Save$/ }).click()
+await page.waitForTimeout(2000)
+await page.reload({ waitUntil: 'domcontentloaded' })
+await page.waitForTimeout(2500)
+await page.locator('.workbook-tabs button', { hasText: PROBE }).click()
+await page.waitForTimeout(2500)
+const savedFor = await page
+  .locator('.dock-section:has(h3:text-is("Layers")) select[aria-label="Measurement for RSRP"]')
+  .inputValue()
+check('레이어가 지목한 측정이 워크북과 함께 저장됨',
+  savedFor === String(otherSession.id), `reopened on ${savedFor || 'the open measurement'}`)
+// Put it back, so the checks after this one are about the drive they think they are.
+await page.locator('.dock-section:has(h3:text-is("Layers")) select[aria-label="Measurement for RSRP"]')
+  .selectOption('')
+await page.waitForTimeout(2000)
 
 // A map paints one scale, so ticking is exclusive there. Asserted on the checkbox state
 // rather than on the drawing: two KPIs could coincidentally bin alike, but only one box

@@ -48,6 +48,17 @@ export interface ViewState {
   binSize: number
   distanceStep: number
   footprints: boolean
+  /**
+   * The global filter spec, or null.
+   *
+   * Belongs in a link for the same reason the KPI does: it changes what every number on
+   * the screen means. A view sent without it would arrive looking like the sender's and
+   * reading the whole drive - self-consistent, and not the thing that was sent. Left
+   * unvalidated here on purpose: the grammar is the server's, and reconcile() has no way
+   * to ask it, so the app validates the incoming spec against the server before applying
+   * it and reports a rejection as a correction like any other.
+   */
+  filter: string | null
 }
 
 export const DEFAULT_VIEW: ViewState = {
@@ -60,6 +71,7 @@ export const DEFAULT_VIEW: ViewState = {
   binSize: 0,
   distanceStep: 0,
   footprints: false,
+  filter: null,
 }
 
 /**
@@ -107,6 +119,7 @@ export function parseView(search: string): ViewState {
     binSize: oneOf(q.get('bin'), BIN_SIZES, 0),
     distanceStep: oneOf(q.get('dist'), DIST_STEPS, 0),
     footprints: q.get('fp') === '1',
+    filter: q.get('gf'),
   }
 }
 
@@ -129,6 +142,7 @@ export function encodeView(v: ViewState): string {
   if (v.binSize !== 0) q.set('bin', String(v.binSize))
   if (v.distanceStep !== 0) q.set('dist', String(v.distanceStep))
   if (v.footprints) q.set('fp', '1')
+  if (v.filter) q.set('gf', v.filter)
   const s = q.toString()
   return s ? `?${s}` : ''
 }

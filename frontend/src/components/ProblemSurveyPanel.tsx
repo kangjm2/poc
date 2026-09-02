@@ -67,7 +67,9 @@ export function ProblemSurveyPanel({ sessionId, onPick, events = [], eventTypes 
       .catch((e) => setError(e instanceof Error ? e.message : String(e)))
     // One fetch per session, not per case: the window is applied to the x domain, so
     // clicking through cases costs nothing.
-    api.series(sessionId, ['RSRP']).then((all) => setContext(all[0] ?? null))
+    // Unfiltered on purpose - see api.seriesUnfiltered. This page is exempt from the
+    // global filter, so its context chart has to be exempt with it.
+    api.seriesUnfiltered(sessionId, ['RSRP']).then((all) => setContext(all[0] ?? null))
       .catch(() => setContext(null))
   }, [sessionId])
 

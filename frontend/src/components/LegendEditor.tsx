@@ -34,6 +34,7 @@ export function LegendEditor({ def, proposed, onClose, onSaved, onDeleted }: {
   const [bins, setBins] = useState<Threshold[]>(start)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [scaleType, setScaleType] = useState(def.scaleType ?? 'NUMERICAL')
 
   useEffect(() => { setBins(start()) }, [def])
 
@@ -63,7 +64,12 @@ export function LegendEditor({ def, proposed, onClose, onSaved, onDeleted }: {
     setError(null)
     try {
       // Labels are left blank on purpose: the server regenerates them from the bounds.
-      const updated = await api.saveThresholds(def.name, bins.map((b) => ({ ...b, label: '' })))
+      let updated = await api.saveThresholds(def.name, bins.map((b) => ({ ...b, label: '' })))
+      // Only when it changed: the bands and the drawing are separate decisions, and a
+      // save that always wrote both would take a scale type back on every boundary edit.
+      if (scaleType !== (def.scaleType ?? 'NUMERICAL')) {
+        updated = await api.setScaleType(def.name, scaleType)
+      }
       onSaved(updated)
       onClose()
     } catch (e) {
@@ -194,6 +200,23 @@ export function LegendEditor({ def, proposed, onClose, onSaved, onDeleted }: {
         {!ascending && <div className="error">Boundaries must increase down the list.</div>}
         {!complete && <div className="error">Every boundary needs a number.</div>}
         {error && <div className="error">{error}</div>}
+
+        {/* Bands or a ramp. The bands stay either way - a gradient is interpolated FROM
+            them - so this is a question about drawing, not about what the numbers mean,
+            and it sits apart from the boundary rows for that reason. */}
+        <div className="scale-type" style={{ padding: '6px 0', whiteSpace: 'normal' }}>
+          <label style={{ marginRight: 6 }}>Drawn as</label>
+          <select value={scaleType} aria-label="Scale type"
+                  onChange={(e) => setScaleType(e.target.value)}>
+            <option value="NUMERICAL">bands</option>
+            <option value="GRADIENT">gradient</option>
+          </select>
+          <span style={{ color: '#666', marginLeft: 8 }}>
+            {scaleType === 'GRADIENT'
+              ? 'Colours run between the bands. The legend still names them.'
+              : 'One colour per band, as the legend shows.'}
+          </span>
+        </div>
 
         <footer>
           {def.seeded

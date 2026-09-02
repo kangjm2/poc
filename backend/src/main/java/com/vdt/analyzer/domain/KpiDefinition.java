@@ -18,6 +18,15 @@ public class KpiDefinition {
     private String technology;
     private String direction;
 
+    /**
+     * NUMERICAL (bands, the default) or GRADIENT (interpolated between them).
+     *
+     * The bands stay either way - a gradient is built FROM them, so the legend and the map
+     * cannot state different opinions about the same KPI. See ColourRamp.
+     */
+    @Column(name = "scale_type")
+    private String scaleType = "NUMERICAL";
+
     /** UE | DU | SCANNER - which side of the link reported this measurement. */
     private String source;
 
@@ -45,6 +54,9 @@ public class KpiDefinition {
     public void setTechnology(String technology) { this.technology = technology; }
     public String getDirection() { return direction; }
     public void setDirection(String direction) { this.direction = direction; }
+
+    public String getScaleType() { return scaleType; }
+    public void setScaleType(String scaleType) { this.scaleType = scaleType; }
     public String getSource() { return source; }
     public void setSource(String source) { this.source = source; }
     public int getDecimals() { return decimals; }

@@ -41,7 +41,21 @@ public class ReportService {
     }
 
     public String render(long sessionId) {
+        return render(sessionId, null);
+    }
+
+    /**
+     * Under a global filter, which the report both APPLIES and SAYS.
+     *
+     * Saying it is not decoration. A report is read away from the screen that produced it,
+     * often by somebody who did not set the filter, and a table of statistics over a
+     * subset of a drive is indistinguishable from one over the whole drive unless the page
+     * states the condition. So the filter appears in the metadata table, in the same place
+     * as the device and the period, and is absent when there is none.
+     */
+    public String render(long sessionId, String filterSpec) {
         SessionSummary s = analysis.getSession(sessionId);
+        String filterText = GlobalFilter.describe(filterSpec);
 
         StringBuilder b = new StringBuilder(1 << 16);
         b.append("<!doctype html><html lang=\"en\"><head><meta charset=\"utf-8\">")
@@ -59,6 +73,7 @@ public class ReportService {
         row(b, "Period", s.startedAt() + " — " + s.endedAt());
         row(b, "Duration", Duration.between(s.startedAt(), s.endedAt()).toMinutes() + " min");
         row(b, "Samples", String.valueOf(s.sampleCount()));
+        if (filterText != null) row(b, "Global filter", filterText);
         row(b, "Events", String.valueOf(s.eventCount()));
         if (s.notes() != null) row(b, "Notes", s.notes());
         b.append("</tbody></table>");
@@ -91,7 +106,8 @@ public class ReportService {
          .append("</tr></thead><tbody>");
         List<KpiDefinition> defs = catalog.all();
         for (KpiDefinition def : defs) {
-            Statistics st = analysis.statistics(sessionId, def.getName(), null, null);
+            Statistics st = analysis.statistics(sessionId, def.getName(), null, null,
+                    null, null, filterSpec);
             if (st.count() == 0) continue;   // a KPI this session never recorded
             int d = def.getDecimals();
             b.append("<tr><td>").append(esc(def.getDisplayName())).append("</td><td>")
@@ -111,7 +127,8 @@ public class ReportService {
         //     so a report that omitted it would drop the tool's central idea.
         b.append("<h2>Distribution by colour bin</h2>");
         for (KpiDefinition def : defs) {
-            Distribution dist = analysis.distribution(sessionId, def.getName(), null, null);
+            Distribution dist = analysis.distribution(sessionId, def.getName(), null, null,
+                    null, filterSpec);
             if (dist.total() == 0) continue;
             b.append("<h3>").append(esc(dist.displayName()));
             if (dist.unit() != null && !dist.unit().isBlank()) {

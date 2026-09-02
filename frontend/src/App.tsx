@@ -9,8 +9,8 @@ import type {
 import { RouteMap } from './components/RouteMap'
 import { TimeSeriesChart } from './components/TimeSeriesChart'
 import {
-  DegradationPanel, EventList, LegendPanel, MapLayerDock, MessageList, ParameterGrid,
-  ParameterTree, PciLegend,
+  DegradationPanel, EventColourEditor, EventList, LegendPanel, MapLayerDock, MessageList,
+  ParameterGrid, ParameterTree, PciLegend,
 } from './components/Panels'
 import { CompareView } from './components/CompareView'
 import { CellsPage } from './components/CellBarChart'
@@ -27,6 +27,7 @@ import { ImportView } from './components/ImportView'
 import { LegendEditor } from './components/LegendEditor'
 import { KeySheet } from './components/KeySheet'
 import { SessionFilter } from './components/SessionFilter'
+import { GlobalFilterBar } from './components/GlobalFilterBar'
 import { bindingFor, isTypingTarget } from './view/keymap'
 import { PRIORITY, dismissTop, useDismissable } from './view/dismiss'
 import type { Correction } from './view/state'
@@ -102,6 +103,21 @@ export function App() {
   // recipient a drive nobody sent them, briefly but visibly.
   const [initial] = useState(() => parseView(window.location.search))
   const [corrections, setCorrections] = useState<Correction[]>([])
+  /**
+   * The global filter, mirrored here only so the bar can render it and the effects below
+   * can depend on it. The value that reaches the network lives in the api module, which
+   * is the one place that decides which requests carry it - see `filtered` there.
+   *
+   * Pushed into the client in the same statement that initialises this state, before any
+   * effect runs, so a link carrying `gf=` never fires one unfiltered round of requests
+   * first. It is validated afterwards, and dropped with a notice if the server rejects
+   * it, exactly as a bad seq or a missing drive is.
+   */
+  const [filterSpec, setFilterSpec] = useState<string | null>(() => {
+    const spec = parseView(window.location.search).filter
+    api.setGlobalFilter(spec)
+    return spec
+  })
   const [reconciled, setReconciled] = useState(false)
 
   const [sessions, setSessions] = useState<SessionSummary[]>([])
@@ -181,6 +197,7 @@ export function App() {
   const [cursorSeq, setCursorSeq] = useState(initial.seq)
   // Session-independent, so it is fetched once rather than per drive.
   const [eventTypes, setEventTypes] = useState<Map<string, EventType>>(new Map())
+  const [eventColours, setEventColours] = useState(false)
   const [playing, setPlaying] = useState(false)
   /**
    * Playback in samples per second, and which way.
@@ -222,6 +239,39 @@ export function App() {
   const fail = useCallback((e: unknown) => setError(String(e)), [])
 
   /**
+   * Change the filter in the one place that can, and only to something the server accepts.
+   *
+   * Both writes happen together and in this order: the client module first, because the
+   * refetch that the state change triggers must already see the new value, and a filter
+   * that arrived one render late would repaint every panel with the previous condition.
+   */
+  const applyFilter = useCallback((spec: string | null) => {
+    api.setGlobalFilter(spec)
+    setFilterSpec(spec)
+  }, [])
+
+  // A spec off a link is a claim like any other and gets the same treatment: checked
+  // against the server, and reported rather than silently kept if it does not parse.
+  // Left in force while the check is in flight would mean every panel answering 400.
+  useEffect(() => {
+    if (!filterSpec) return
+    let live = true
+    api.describeFilter(filterSpec).catch((e: Error) => {
+      if (!live) return
+      api.setGlobalFilter(null)
+      setFilterSpec(null)
+      setCorrections((c) => c.some((x) => x.param === 'gf') ? c : [...c, {
+        param: 'gf', raw: filterSpec, became: 'off',
+        why: e.message.replace(/^\d+:\s*/, ''),
+      }])
+    })
+    return () => { live = false }
+    // Only when the spec itself changes; applyFilter has already validated anything the
+    // bar sets, so this is here for links and for nothing else.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filterSpec])
+
+  /**
    * True for exactly the first session the page adopts, when it came from the URL.
    *
    * A ref rather than state, and armed at CONSTRUCTION rather than by reconcile(). The
@@ -244,10 +294,14 @@ export function App() {
     if (reconciled || sessions.length === 0 || defs.length === 0) return
     const { view, corrections: fixes } = reconcile(
       { ...initial, sessionId, kpi, workbook, seq: cursorSeq, range,
-        mode, binSize, distanceStep, footprints: showFootprints },
+        mode, binSize, distanceStep, footprints: showFootprints, filter: filterSpec },
       sessions, defs)
     setReconciled(true)
-    setCorrections(fixes)
+    // Appended, not assigned. The filter check runs on mount and reconcile runs later,
+    // when the session list arrives; assigning here threw away a rejected `gf=` that had
+    // already been reported, leaving the recipient on a repaired view with no notice -
+    // the one outcome this whole mechanism exists to prevent.
+    setCorrections((c) => [...c, ...fixes])
     // Not re-armed here. When reconcile REPLACES the session - the linked drive is gone -
     // the reset is exactly what should happen, and it agrees with the seq and range this
     // function has already dropped. The flag only has to survive the reset effect's very
@@ -297,12 +351,12 @@ export function App() {
       api.events(sessionId).then(setEvents),
       api.messages(sessionId).then(setMessages),
     ]).catch(fail)
-  }, [sessionId, SERIES_KPIS, fail])
+  }, [sessionId, SERIES_KPIS, filterSpec, fail])
 
   useEffect(() => {
     if (sessionId == null) return
     api.track(sessionId, kpi, undefined, areaSpec).then(setTrack).catch(fail)
-  }, [sessionId, kpi, scaleVersion, areaSpec, fail])
+  }, [sessionId, kpi, scaleVersion, areaSpec, filterSpec, fail])
 
   useEffect(() => {
     if (sessionId == null) return
@@ -325,17 +379,17 @@ export function App() {
       })
       .catch(fail)
     api.degradations(sessionId, kpi, 5, range).then(setDegradations).catch(fail)
-  }, [sessionId, kpi, range, scaleVersion, legendBasis, fail])
+  }, [sessionId, kpi, range, scaleVersion, legendBasis, filterSpec, fail])
 
   useEffect(() => {
     if (sessionId == null || SERIES_KPIS.includes(kpi)) { setExtraSeries(null); return }
     api.series(sessionId, [kpi]).then((s) => setExtraSeries(s[0] ?? null)).catch(fail)
-  }, [sessionId, kpi, SERIES_KPIS, fail])
+  }, [sessionId, kpi, SERIES_KPIS, filterSpec, fail])
 
   useEffect(() => {
     if (sessionId == null || workbook !== 'fronthaul') return
     api.series(sessionId, ['FH_RX_LATE', 'FH_RX_ON_TIME']).then(setFhSeries).catch(fail)
-  }, [sessionId, workbook, fail])
+  }, [sessionId, workbook, filterSpec, fail])
 
   /**
    * The two fetches that follow the cursor, debounced together.
@@ -368,7 +422,7 @@ export function App() {
   useEffect(() => {
     if (sessionId == null || binSize === 0) { setBins(null); return }
     api.bins(sessionId, kpi, binSize, binStat).then(setBins).catch(fail)
-  }, [sessionId, kpi, binSize, binStat, scaleVersion, fail])
+  }, [sessionId, kpi, binSize, binStat, scaleVersion, filterSpec, fail])
 
   // Footprints are fetched only when asked for. They are per-session and change with
   // neither the KPI nor the cursor, so refetching alongside those would be pure waste.
@@ -379,7 +433,7 @@ export function App() {
       .then((f) => { if (live) setFootprints(f) })
       .catch(() => { if (live) setFootprints(null) })
     return () => { live = false }
-  }, [sessionId, showFootprints, footprintBasis])
+  }, [sessionId, showFootprints, footprintBasis, filterSpec])
 
   const reloadWorkbooks = useCallback(() => {
     api.workbooks().then(setWorkbooks).catch(() => setWorkbooks([]))
@@ -572,12 +626,13 @@ export function App() {
     if (!reconciled) return
     const url = window.location.pathname
       + encodeView({ mode, sessionId, kpi, workbook, seq: cursorSeq, range,
-                     binSize, distanceStep, footprints: showFootprints })
+                     binSize, distanceStep, footprints: showFootprints,
+                     filter: filterSpec })
     if (url !== window.location.pathname + window.location.search) {
       window.history.replaceState(null, '', url)
     }
   }, [reconciled, mode, sessionId, kpi, workbook, cursorSeq, range,
-      binSize, distanceStep, showFootprints])
+      binSize, distanceStep, showFootprints, filterSpec])
 
   // Playback belongs to the Analysis screen. Leaving it running while the user is in
   // Import means a cursor sweeping a drive they are not looking at, and two fetches a
@@ -662,7 +717,9 @@ export function App() {
           key={book.id}
           workbook={book}
           sessionId={sessionId}
+          sessions={sessions}
           defs={defs}
+          filterSpec={filterSpec}
           cells={cells}
           cursorSeq={cursorSeq}
           onCursorChange={moveCursor}
@@ -798,12 +855,13 @@ export function App() {
       case 'cells':
         return (
           <CellsPage sessionId={sessionId} kpi={kpi} range={range}
-                     scaleVersion={scaleVersion} isolate={isolate} />
+                     scaleVersion={scaleVersion} isolate={isolate}
+                     filterSpec={filterSpec} />
         )
       case 'statistics':
         return (
           <StatisticsPanel sessionId={sessionId} kpi={kpi} unit={activeDef?.unit ?? ''}
-                           range={range} />
+                           range={range} filterSpec={filterSpec} />
         )
       case 'coverage':
         return (
@@ -990,6 +1048,13 @@ export function App() {
           {session.scenario ? ` · ${session.scenario}` : ''}</span>}
       </div>
 
+      {/* Above the panels rather than inside one, because it governs all of them. Shown
+          on the Analysis screen only: Compare, Lab and Import read more than one drive or
+          none, and the filter names one drive's samples. */}
+      {mode === 'analyze' && (
+        <GlobalFilterBar spec={filterSpec} onApply={applyFilter} />
+      )}
+
       {mode === 'analyze' && session?.notes && (
         <div className="session-notes">{session.notes}</div>
       )}
@@ -1155,9 +1220,30 @@ export function App() {
                 </div>
               </div>
               <div className="dock-section" style={{ maxHeight: 190 }}>
-                <h3>Events ({events.length})</h3>
+                <h3>Events ({events.length})
+                  {/* The colours live one click away rather than on screen: they are set
+                      rarely and read constantly, and a colour well per type would crowd
+                      out the events themselves. */}
+                  <button className="dock-tool" aria-label="Edit event colours"
+                          title="Set the colour of each event type"
+                          aria-expanded={eventColours}
+                          onClick={() => setEventColours((v) => !v)}>🎨</button>
+                </h3>
                 <div className="content" style={{ maxHeight: 160 }}>
-                  <EventList events={events} types={eventTypes} onPick={jumpToSeq} />
+                  {eventColours
+                    ? (
+                      <EventColourEditor
+                        types={eventTypes}
+                        // Written straight into the registry every panel reads, so the map
+                        // marker, the chart tick and this list change together - which is
+                        // the whole claim a shared registry makes.
+                        onRecoloured={(t) => setEventTypes((m) => {
+                          const next = new Map(m)
+                          next.set(t.name, t)
+                          return next
+                        })} />
+                    )
+                    : <EventList events={events} types={eventTypes} onPick={jumpToSeq} />}
                 </div>
               </div>
             </div>

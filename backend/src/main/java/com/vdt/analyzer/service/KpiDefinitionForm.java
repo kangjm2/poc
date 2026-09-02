@@ -85,7 +85,7 @@ public final class KpiDefinitionForm {
         // identity, and only DerivedKpiService can say whether a formula is valid.
         return new KpiDefinitionDto(name, displayName, unit, category, technology,
                 direction, source, decimals, description, false, in.expression(),
-                List.of());
+                "NUMERICAL", List.of());
     }
 
     private static String required(String v, String field) {

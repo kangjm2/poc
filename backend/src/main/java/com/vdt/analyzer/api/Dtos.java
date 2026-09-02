@@ -137,7 +137,10 @@ public final class Dtos {
     public record KpiDefinitionDto(String name, String displayName, String unit, String category,
                                    String technology, String direction, String source,
                                    int decimals, String description, boolean seeded,
-                                   String expression, List<ThresholdDto> thresholds) {}
+                                   String expression,
+                                   /** NUMERICAL bands or a GRADIENT built from them. */
+                                   String scaleType,
+                                   List<ThresholdDto> thresholds) {}
 
     /** A derived KPI definition plus how many values materialising it produced. */
     public record DerivedKpiResult(KpiDefinitionDto kpi, long valuesComputed,

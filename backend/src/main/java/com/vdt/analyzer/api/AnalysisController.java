@@ -15,6 +15,7 @@ import com.vdt.analyzer.service.ProblemSurvey;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.Map;
 
 @RestController
 @RequestMapping("/api")
@@ -45,6 +46,36 @@ public class AnalysisController {
         this.eventTypes = eventTypes;
         this.areaStats = areaStats;
         this.spatialDiff = spatialDiff;
+    }
+
+    /**
+     * Which analytics the global filter reaches, and which it does not, with reasons.
+     *
+     * Served rather than documented because a document cannot be checked against the
+     * running system and this can: the status bar reads it to name the exempt screens,
+     * and `verify-scenarios` reads it to decide which endpoints it must prove respond to
+     * a filter. One list, two readers, no way for the claim and the behaviour to drift.
+     */
+    @GetMapping("/global-filter/coverage")
+    public List<com.vdt.analyzer.service.GlobalFilter.Coverage> filterCoverage() {
+        return com.vdt.analyzer.service.GlobalFilter.coverage();
+    }
+
+    /**
+     * What a filter spec means, in words, or 400 if it means nothing.
+     *
+     * The client could format the phrase itself, and then two implementations of "what
+     * this filter says" would exist and one of them would be the wrong one. It also gives
+     * the filter bar a real validation: the same parser that runs the queries decides
+     * whether the typed condition is a condition at all.
+     */
+    @GetMapping("/global-filter/describe")
+    public Map<String, Object> describeFilter(@RequestParam(required = false) String filter) {
+        // Parsed against a session id that is never used, purely to reach the same
+        // validation the analytics reach - a spec that parses here parses there.
+        com.vdt.analyzer.service.GlobalFilter.scope(filter, 0L, "s");
+        String text = com.vdt.analyzer.service.GlobalFilter.describe(filter);
+        return Map.of("active", text != null, "text", text == null ? "" : text);
     }
 
     /**
@@ -84,14 +115,16 @@ public class AnalysisController {
     @GetMapping("/sessions/{id}/track")
     public List<TrackPoint> track(@PathVariable long id, @RequestParam String kpi,
                                   @RequestParam(required = false) Integer maxPoints,
-                                  @RequestParam(required = false) String area) {
-        return analysis.track(id, kpi, maxPoints, area);
+                                  @RequestParam(required = false) String area,
+                                  @RequestParam(required = false) String filter) {
+        return analysis.track(id, kpi, maxPoints, area, filter);
     }
 
     @GetMapping("/sessions/{id}/series")
     public List<Series> series(@PathVariable long id, @RequestParam List<String> kpis,
-                               @RequestParam(required = false) Integer maxPoints) {
-        return analysis.series(id, kpis, maxPoints);
+                               @RequestParam(required = false) Integer maxPoints,
+                               @RequestParam(required = false) String filter) {
+        return analysis.series(id, kpis, maxPoints, filter);
     }
 
     @GetMapping("/sessions/{id}/snapshot")
@@ -103,8 +136,9 @@ public class AnalysisController {
     public Distribution distribution(@PathVariable long id, @RequestParam String kpi,
                                      @RequestParam(required = false) Integer fromSeq,
                                      @RequestParam(required = false) Integer toSeq,
-                                     @RequestParam(defaultValue = "SAMPLE") String weightedBy) {
-        return analysis.distribution(id, kpi, fromSeq, toSeq, weightedBy);
+                                     @RequestParam(defaultValue = "SAMPLE") String weightedBy,
+                                     @RequestParam(required = false) String filter) {
+        return analysis.distribution(id, kpi, fromSeq, toSeq, weightedBy, filter);
     }
 
     /**
@@ -139,8 +173,9 @@ public class AnalysisController {
     @GetMapping("/sessions/{id}/cell-breakdown")
     public CellBreakdown cellBreakdown(@PathVariable long id, @RequestParam String kpi,
                                        @RequestParam(required = false) Integer fromSeq,
-                                       @RequestParam(required = false) Integer toSeq) {
-        return analysis.cellBreakdown(id, kpi, fromSeq, toSeq);
+                                       @RequestParam(required = false) Integer toSeq,
+                                       @RequestParam(required = false) String filter) {
+        return analysis.cellBreakdown(id, kpi, fromSeq, toSeq, filter);
     }
 
     /**
@@ -155,8 +190,9 @@ public class AnalysisController {
                                  @RequestParam(required = false) Integer fromSeq,
                                  @RequestParam(required = false) Integer toSeq,
                                  @RequestParam(defaultValue = "SAMPLE") String weightedBy,
-                                 @RequestParam(defaultValue = "AS_RECORDED") String domain) {
-        return analysis.statistics(id, kpi, fromSeq, toSeq, weightedBy, domain);
+                                 @RequestParam(defaultValue = "AS_RECORDED") String domain,
+                                 @RequestParam(required = false) String filter) {
+        return analysis.statistics(id, kpi, fromSeq, toSeq, weightedBy, domain, filter);
     }
 
     /**
@@ -169,8 +205,9 @@ public class AnalysisController {
      */
     @GetMapping("/sessions/{id}/area-statistics")
     public AreaStatsService.AreaStats areaStatistics(
-            @PathVariable long id, @RequestParam String kpi, @RequestParam String polygon) {
-        return areaStats.inArea(id, kpi, polygon);
+            @PathVariable long id, @RequestParam String kpi, @RequestParam String polygon,
+            @RequestParam(required = false) String filter) {
+        return areaStats.inArea(id, kpi, polygon, filter);
     }
 
     /** Per-tile difference between two drives on one shared grid. */
@@ -197,8 +234,9 @@ public class AnalysisController {
     public List<Degradation> degradations(@PathVariable long id, @RequestParam String kpi,
                                           @RequestParam(defaultValue = "3") int minSamples,
                                           @RequestParam(required = false) Integer fromSeq,
-                                          @RequestParam(required = false) Integer toSeq) {
-        return analysis.degradations(id, kpi, minSamples, fromSeq, toSeq);
+                                          @RequestParam(required = false) Integer toSeq,
+                                          @RequestParam(required = false) String filter) {
+        return analysis.degradations(id, kpi, minSamples, fromSeq, toSeq, filter);
     }
 
     @GetMapping("/sessions/{id}/events")
@@ -216,6 +254,19 @@ public class AnalysisController {
                 .map(t -> new EventTypeDto(t.name(), t.displayName(), t.color(), t.symbol(),
                         t.kind()))
                 .toList();
+    }
+
+    /**
+     * Recolour one event type - the string colour set.
+     *
+     * PUT on the type itself rather than a colour-set resource, because the registry IS
+     * the colour set: one row per name, and every screen already reads it.
+     */
+    @PutMapping("/event-types/{name}/color")
+    public EventTypeDto recolourEventType(@PathVariable String name,
+                                          @RequestBody Map<String, String> body) {
+        var t = eventTypes.recolour(name, body.get("color"));
+        return new EventTypeDto(t.name(), t.displayName(), t.color(), t.symbol(), t.kind());
     }
 
     @GetMapping("/sessions/{id}/messages")

@@ -28,7 +28,12 @@ import java.util.Set;
 public class WorkbookService {
 
     /** One KPI drawn on a pane, and whether it is currently shown. */
-    public record Layer(String kpiName, boolean visible) {}
+    /**
+     * `sessionId` null means "whichever measurement is open", which is what every layer
+     * meant before it existed. Naming one pins that layer to a drive, so a map pane can
+     * hold this month beside last month.
+     */
+    public record Layer(String kpiName, boolean visible, Long sessionId) {}
 
     public record Pane(long id, String kind, String title, List<Layer> layers) {}
 
@@ -76,14 +81,15 @@ public class WorkbookService {
         Map<Long, List<Layer>> layersByPane = new LinkedHashMap<>();
 
         jdbc.query("""
-                SELECT l.pane_id, l.kpi_name, l.visible
+                SELECT l.pane_id, l.kpi_name, l.visible, l.session_id
                 FROM workbook_layer l
                 JOIN workbook_pane p ON p.id = l.pane_id
                 ORDER BY l.pane_id, l.ordinal
                 """,
                 rs -> {
                     layersByPane.computeIfAbsent(rs.getLong("pane_id"), k -> new ArrayList<>())
-                            .add(new Layer(rs.getString("kpi_name"), rs.getBoolean("visible")));
+                            .add(new Layer(rs.getString("kpi_name"), rs.getBoolean("visible"),
+                                    (Long) rs.getObject("session_id")));
                 });
 
         jdbc.query("SELECT id, workbook_id, kind, title FROM workbook_pane ORDER BY workbook_id, ordinal",
@@ -164,8 +170,10 @@ public class WorkbookService {
             List<Layer> layers = p.layers() == null ? List.of() : p.layers();
             for (int j = 0; j < layers.size(); j++) {
                 Layer l = layers.get(j);
-                jdbc.update("INSERT INTO workbook_layer (pane_id, ordinal, kpi_name, visible)"
-                        + " VALUES (?, ?, ?, ?)", paneId, j, l.kpiName(), l.visible());
+                jdbc.update("INSERT INTO workbook_layer"
+                        + " (pane_id, ordinal, kpi_name, visible, session_id)"
+                        + " VALUES (?, ?, ?, ?, ?)",
+                        paneId, j, l.kpiName(), l.visible(), l.sessionId());
             }
         }
 
