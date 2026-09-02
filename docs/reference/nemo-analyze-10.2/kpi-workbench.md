@@ -1,6 +1,10 @@
 # KPI Workbench — 노드 요소 전체 명세
 
-출처: User Guide p344–p402 (요소 정의), p403–p410 (UC27 실전 예제).
+출처: User Guide p344–p402 (요소 정의), p403–p426 (UC27 실전 예제).
+
+> 각 요소 `Properties` 대화상자의 **필드 전사**(Time trigger · `<Previous value>` · `{?변수}` · `{$상수}` ·
+> Group By의 계층 그룹핑 · Time Shift 예 등)는 [`use-cases.md` 부록](use-cases.md#부록--워크벤치-요소의-대화상자-p367p396)에
+> 있습니다(2026-09-02, 원문 p367–396).
 
 우리 `KpiGraph.java` / `KpiWorkbench.tsx`가 이 화면의 대응물입니다. **구조는 맞게
 만들었지만 의미가 여러 곳에서 다릅니다.** 아래는 매뉴얼이 정의하는 실제 동작이고,
