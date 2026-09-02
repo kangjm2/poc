@@ -27,14 +27,14 @@
 | `manual10.2_cell-footprint_p66.png` | p66 | 셀 푸트프린트 — **3위 안에 든 적 있는** 셀마다 별도 페이지 |
 | `manual10.2_drilldown-pie-with-coloured-side-tabs_p88.png` | p88 | 드릴다운 파이 + **좌측에 조각 색으로 쌓이는 세로 탭** |
 | `manual10.2_area-binning_p150.png` | p150 | 영역 비닝 |
-| `manual10.2_cell-beam-range-on-map_p162.png` | p162 | 지도 위 셀 빔 범위(섹터) |
+| `manual10.2_cell-beam-range-on-map_p162.png` | p162 | 지도 위 셀 빔 범위(섹터)로 저장했으나, **열어 보면 경로를 따라 비닝된 타일**(RSCP · Throughput `[Distance]` 범례)이 주 내용입니다. UC15/16 결과 화면일 가능성 — 원문 확인 전까지 라벨 유지 (2026-09-02) |
 | `manual10.2_pilot-pollution-connections_p172.png` | p172 | 파일럿 오염 기반 기지국 연결선 |
-| `manual10.2_cell-locator-estimated-site_p174.png` | p174 | Cell locator — 측정만으로 기지국 위치·방위 역추정 |
+| `manual10.2_cell-locator-estimated-site_p174.png` | p174 | **라벨 오류 (2026-09-02 정정).** Cell locator 결과가 아니라 **Workspace 패널** 그림입니다 — Folders · Measurements 3건 · Parameters에 `reference` 검색 → `Other › All BTS reference cells`, `Audio quality reference sample filename DL/UL`. 내용상 **UC19(BTS 참조 파라미터, p171)** 쪽. Cell locator 그림은 저장소에 없음. 원문 페이지를 확인할 수 없어 파일명은 유지 |
 | `manual10.2_workbook-pages_p216.png` | p216 | 워크북 페이지 구성 |
 | `manual10.2_kpi-workbench-canvas_p346.png` | p346 | Parameters 트리에서 캔버스로 파라미터 드래그. 우측에 요소 분류(Parameters·Correlations·Joins·Operations·Aggregates·Sorting·Filters·Math·Time·Components), Properties의 `Execute per` |
 | `manual10.2_kpi-workbench-sockets_p349.png` | p349 | Correlation 실물 예 — `Call attempt failure`(primary) + `Ec/N0 active set` → `Previous Value` → `Output`. 미설정 노드가 빨강인 색 규약이 보임 |
 | `manual10.2_state-machine-states_p368.png` | p368 | State Machine 상태 정의 대화상자 |
-| `manual10.2_uc27-state-flow_p405.png` | p405 | UC27 상태 흐름도 (OK / Bad BLER / Missing handover) |
+| `manual10.2_uc27-state-flow_p405.png` | p405 | **라벨 오류 (2026-09-02 정정).** 상태 흐름도가 아니라 UC27의 **시작 화면** — `BLER` · `Ec/No best active set` · `Ec/No 1. best` 파라미터 3개와 아직 빨간 `Output`만 놓인 캔버스. 상태 흐름도는 저장소에 없음 |
 | `manual10.2_uc27-graph-partial-union_p408.png` | p408 | UC27 **중간 단계** — Union까지 연결하고 Output은 아직 빨강(미연결). 색 규약이 보이는 그림 |
 | `manual10.2_uc27-complete-graph_p425.png` | p425 | UC27 **완성 그래프** (기존 `nemo-analyze_kpi-workbench.png`와 같은 내용, 다른 크롭) — BLER + (Ec/No best active set − 1. best) → **Union** → **Ascending time** → State Machine → Call dropped와 상관 → `Output (Column count: 19)` |
 | `manual10.2_uc27-result-grid_p426.png` | p426 | UC27 **실행 결과** — `start_time · end_time · time_interval · index · text · Event ID · Event · Measurement`. 상태 점유마다 한 행이라는 사실이 실제 값(5341 ms, `Missing handover`, `CAD`)으로 보임 |

@@ -5,7 +5,7 @@
  },
  "2": {
   "page": 68,
-  "title": "Viewing uplink voice quality server data”"
+  "title": "Viewing uplink voice quality server data"
  },
  "3": {
   "page": 69,
@@ -37,7 +37,7 @@
  },
  "10": {
   "page": 118,
-  "title": "Color sets"
+  "title": "Color sets in grids"
  },
  "11": {
   "page": 120,
@@ -48,8 +48,9 @@
   "title": "Using L3 and RRC message search parameters"
  },
  "13": {
-  "page": 150,
-  "title": "Adding map layers and saving layer"
+  "page": 147,
+  "title": "Adding map layers and saving layer combinations as geosets",
+  "note": "page 147 per toc.json (index previously said 150; UC13/14/15 run 147/148/150)"
  },
  "14": {
   "page": 148,
@@ -57,11 +58,12 @@
  },
  "15": {
   "page": 150,
-  "title": "Performing area binning”"
+  "title": "Performing area binning"
  },
  "16": {
-  "page": 469,
-  "title": "Comparing two groups of measurements from the same route on"
+  "page": 158,
+  "title": "Comparing two groups of measurements from the same route on map",
+  "note": "page inferred from the toc artifact '158 Use Case 17' (the toc has no UC16 line). The index previously said 469, which is the Delta plotting cross-reference in the Map menu. Title end 'on map' is inferred - the extracted title was truncated"
  },
  "17": {
   "page": 162,
@@ -93,7 +95,7 @@
  },
  "24": {
   "page": 190,
-  "title": "Retrieving data from minimized data sets” on page 190"
+  "title": "Retrieving data from minimized data sets"
  },
  "25": {
   "page": 307,
@@ -101,11 +103,11 @@
  },
  "26": {
   "page": 396,
-  "title": "Creating complex filters using multiple conditions”"
+  "title": "Creating complex filters using multiple conditions"
  },
  "27": {
   "page": 403,
-  "title": "Creating a KPI for dropped calls resulting from a missing"
+  "title": "Creating a KPI for dropped calls resulting from a missing handover"
  },
  "28": {
   "page": 432,
