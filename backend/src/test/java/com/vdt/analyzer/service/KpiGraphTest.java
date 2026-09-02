@@ -45,7 +45,9 @@ class KpiGraphTest {
                 (String) f.get("kpiName"), (Integer) f.get("rank"), (String) f.get("metric"),
                 (Boolean) f.get("excludeServing"), (String) f.get("field"),
                 (String) f.get("eventType"), (String) f.get("expression"),
-                (String) f.get("as"), states(f), (String) f.get("column"));
+                (String) f.get("as"), states(f),
+                (Integer) f.get("primary"), (String) f.get("correlation"),
+                (Double) f.get("withinMs"), (String) f.get("column"));
     }
 
     @SuppressWarnings("unchecked")
@@ -213,6 +215,149 @@ class KpiGraphTest {
         assertTrue(KpiGraph.compile(single, KNOWN).sql().contains("\"RSRP\" AS value"));
     }
 
+    // ------------------------------------------------ Previous / Current / Next
+
+    private static KpiGraph.Node correlate(int id, Map<String, Object> f) {
+        return node(id, KpiGraph.Kind.CORRELATE, "corr", f);
+    }
+
+    /** Event as primary, RSRP as secondary - the shape the node exists for. */
+    private static KpiGraph.Spec corrSpec(Map<String, Object> f, String pick) {
+        return new KpiGraph.Spec(2,
+                List.of(event(1, "HANDOVER", "HO"), source(2, "RSRP"), correlate(3, f),
+                        output(4, pick)),
+                List.of(new KpiGraph.Edge(1, 3), new KpiGraph.Edge(2, 3),
+                        new KpiGraph.Edge(3, 4)));
+    }
+
+    @Test
+    void previousIsTheCarriedValueOneRowBackAndNextIsOneRowForward() {
+        String prev = KpiGraph.compile(
+                corrSpec(Map.of("primary", 1, "correlation", "PREVIOUS"), "PREV_RSRP"),
+                KNOWN).sql();
+        String next = KpiGraph.compile(
+                corrSpec(Map.of("primary", 1, "correlation", "NEXT"), "NEXT_RSRP"),
+                KNOWN).sql();
+        assertAll(
+                // Carried-at-or-before, shifted one row back, is carried-strictly-before.
+                () -> assertTrue(prev.contains("lag(\"0cf\") OVER"), prev),
+                () -> assertTrue(next.contains("lead(\"0cb\") OVER"), next),
+                // Postgres has no IGNORE NULLS; the two running counts are what group each
+                // row with the nearest non-null on that side.
+                () -> assertTrue(prev.contains("count(\"0s\") OVER"), prev),
+                () -> assertTrue(prev.contains("first_value(\"0s\") OVER"), prev));
+    }
+
+    @Test
+    void theOutputExistsOnlyWhereThePrimaryHasAValue() {
+        // The reference's rule, and the opposite of Combine's. The gate is applied LAST,
+        // after the windows have seen every sample - gating first would make "previous"
+        // mean "the previous EVENT's value", which is a different question.
+        String sql = KpiGraph.compile(
+                corrSpec(Map.of("primary", 1, "correlation", "PREVIOUS"), "PREV_RSRP"),
+                KNOWN).sql();
+        int gate = sql.indexOf("WHERE \"HO\" IS NOT NULL");
+        int window = sql.indexOf("first_value(\"0s\")");
+        assertTrue(gate > 0 && window > 0 && gate > window,
+                "the gate must come after the windows:\n" + sql);
+    }
+
+    @Test
+    void everyCorrelationWindowIsPartitionedByDrive() {
+        String sql = KpiGraph.compile(
+                corrSpec(Map.of("primary", 1, "correlation", "PREVIOUS"), "PREV_RSRP"),
+                KNOWN).sql();
+        for (String w : List.of("count(\"0s\") OVER (", "lag(\"0cf\") OVER (",
+                                "lead(\"0cb\") OVER (")) {
+            int at = sql.indexOf(w);
+            assertTrue(at >= 0, w + " missing");
+            assertTrue(sql.startsWith(w + "PARTITION BY session_id", at),
+                    w + " is not partitioned by drive");
+        }
+        assertTrue(sql.contains("PARTITION BY session_id, \"0gf\""), sql);
+    }
+
+    @Test
+    void theWindowRunsOverBothInputsSoAValueTheEventNeverSawIsReachable() {
+        // The spine is the union of the two inputs, exactly as Combine's is. Without it
+        // "the last value before this event" could only see samples the event had a row
+        // for, which for an event source is almost none of them.
+        String sql = KpiGraph.compile(
+                corrSpec(Map.of("primary", 1, "correlation", "PREVIOUS"), "PREV_RSRP"),
+                KNOWN).sql();
+        assertTrue(sql.contains("SELECT session_id, seq, ts FROM n_1"
+                + " UNION ALL SELECT session_id, seq, ts FROM n_2"), sql);
+    }
+
+    @Test
+    void aBoundDropsAValueThatSatTooFarAwayRatherThanReportingItAsNear() {
+        String bounded = KpiGraph.compile(
+                corrSpec(Map.of("primary", 1, "correlation", "PREVIOUS", "withinMs", 1500.0),
+                        "PREV_RSRP"), KNOWN).sql();
+        String open = KpiGraph.compile(
+                corrSpec(Map.of("primary", 1, "correlation", "PREVIOUS"), "PREV_RSRP"),
+                KNOWN).sql();
+        assertTrue(bounded.contains("* 1000 <= 1500.0"), bounded);
+        assertFalse(open.contains("<= "), "an unbounded node must emit no bound");
+    }
+
+    @Test
+    void theOrCurrentFormsFallBackRatherThanReplacing() {
+        String sql = KpiGraph.compile(
+                corrSpec(Map.of("primary", 1, "correlation", "PREVIOUS_OR_CURRENT"),
+                        "PREV_OR_CURR_RSRP"), KNOWN).sql();
+        // The manual's wording is "the previous value, and if there is none, the current
+        // one" - so the previous wins where both exist, which coalesce in this order says
+        // and the carried-at-or-before column would not.
+        assertTrue(sql.contains("coalesce(\"0pv\", \"0s\")"), sql);
+    }
+
+    @Test
+    void aPrimaryCarryingSeveralColumnsIsRefusedRatherThanGuessedAt() {
+        var spec = new KpiGraph.Spec(2,
+                List.of(source(1, "RSRP"), source(2, "SINR"), combine(3), source(4, "RSRQ"),
+                        correlate(5, Map.of("primary", 3, "correlation", "PREVIOUS")),
+                        output(6, "PREV_RSRQ")),
+                List.of(new KpiGraph.Edge(1, 3), new KpiGraph.Edge(2, 3),
+                        new KpiGraph.Edge(3, 5), new KpiGraph.Edge(4, 5),
+                        new KpiGraph.Edge(5, 6)));
+        var e = assertThrows(IllegalArgumentException.class, () -> KpiGraph.compile(spec, KNOWN));
+        assertTrue(e.getMessage().contains("exactly one column"), e.getMessage());
+    }
+
+    @Test
+    void aPrimaryThatIsNotAnInputIsRefused() {
+        var e = assertThrows(IllegalArgumentException.class, () -> KpiGraph.compile(
+                corrSpec(Map.of("primary", 99, "correlation", "PREVIOUS"), "PREV_RSRP"), KNOWN));
+        assertTrue(e.getMessage().contains("not"), e.getMessage());
+    }
+
+    @Test
+    void anUnknownCorrelationIsRefused() {
+        var e = assertThrows(IllegalArgumentException.class, () -> KpiGraph.compile(
+                corrSpec(Map.of("primary", 1, "correlation", "SOMETIME"), "X"), KNOWN));
+        assertTrue(e.getMessage().contains("Unknown correlation"), e.getMessage());
+    }
+
+    @Test
+    void theEditorGetsEachNodesColumnsEvenWhileTheGraphIsBroken() {
+        // A "which column" control is used precisely when the graph does not compile yet,
+        // so the answer has to survive the failure - and it has to be the compiler's
+        // answer, or the dropdown offers a column the compiler will not accept.
+        var broken = new KpiGraph.Spec(2,
+                List.of(source(1, "RSRP"), source(2, "SINR"), combine(3), source(4, "RSRQ"),
+                        correlate(5, Map.of("primary", 3, "correlation", "PREVIOUS")),
+                        output(6, "X")),
+                List.of(new KpiGraph.Edge(1, 3), new KpiGraph.Edge(2, 3),
+                        new KpiGraph.Edge(3, 5), new KpiGraph.Edge(4, 5),
+                        new KpiGraph.Edge(5, 6)));
+        assertThrows(IllegalArgumentException.class, () -> KpiGraph.compile(broken, KNOWN));
+        var cols = KpiGraph.columnsOf(broken, KNOWN);
+        assertEquals(List.of("RSRP", "SINR"), cols.get(3));
+        assertEquals(List.of("RSRQ"), cols.get(4));
+        assertFalse(cols.containsKey(5), "the node that failed produces nothing yet");
+    }
+
     // -------------------------------------------------- the latching state machine
 
     private static final List<KpiGraph.StateRule> FADE = List.of(
@@ -359,8 +504,8 @@ class KpiGraphTest {
         // missing here is a field silently dropped on save. It was: a reopened graph put
         // every node at translate(undefined undefined) and sized its canvas NaN, and the
         // type that promised the round trip was the frontend's, which nothing checked.
-        var n = new KpiGraph.Node(1, KpiGraph.Kind.SOURCE_KPI, "src", 123.0, 456.0, "RSRP",
-                null, null, null, null, null, null, null, null, null);
+        var n = node(1, KpiGraph.Kind.SOURCE_KPI, "src",
+                Map.of("x", 123.0, "y", 456.0, "kpiName", "RSRP"));
         assertEquals(123.0, n.x());
         assertEquals(456.0, n.y());
     }
@@ -486,8 +631,7 @@ class KpiGraphTest {
                                   "RSRP > (SELECT max(value) FROM sample_kpi)",
                                   "1=1 OR pg_sleep(5) > 0",
                                   "RSRP")) {
-            var filter = new KpiGraph.Node(2, KpiGraph.Kind.FILTER, "f", null, null, null,
-                    null, null, null, null, null, bad, null, null, null);
+            var filter = node(2, KpiGraph.Kind.FILTER, "f", Map.of("expression", bad));
             var spec = new KpiGraph.Spec(2,
                     List.of(source(1, "RSRP"), filter, output(3, "RSRP")),
                     List.of(new KpiGraph.Edge(1, 2), new KpiGraph.Edge(2, 3)));
@@ -498,8 +642,8 @@ class KpiGraphTest {
 
     @Test
     void acceptsTheConditionsItIsSupposedTo() {
-        var filter = new KpiGraph.Node(2, KpiGraph.Kind.FILTER, "f", null, null, null,
-                null, null, null, null, null, "RSRP >= -110 AND RSRP < -80", null, null, null);
+        var filter = node(2, KpiGraph.Kind.FILTER, "f",
+                Map.of("expression", "RSRP >= -110 AND RSRP < -80"));
         var spec = new KpiGraph.Spec(2,
                 List.of(source(1, "RSRP"), filter, output(3, "RSRP")),
                 List.of(new KpiGraph.Edge(1, 2), new KpiGraph.Edge(2, 3)));

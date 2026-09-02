@@ -2108,6 +2108,144 @@ scenario('S21 · A state machine that measures time it actually measured')
   await page.waitForTimeout(2500)
 }
 
+// ─── S22 · What was happening just before this ───────────────────────────────
+//
+// "What was RSRP just before the drop" is the shape root-cause analysis is made of, and
+// the canvas could not express it: Combine relates values on the SAME sample, which is the
+// only relation it knew. The reference has a family of five for this, all built on one
+// rule - the PRIMARY input decides when there is an output at all.
+scenario('S22 · What was happening just before this')
+{
+  const post = (path, body) => page.request.post(`${API}${path}`, { data: body })
+  const cityA = sessions.find((s) => s.name === CITY_A).id
+
+  const spec = (how, primary, within) => ({
+    version: 2,
+    nodes: [
+      { id: 1, kind: 'SOURCE_EVENT', x: 40, y: 24, eventType: 'HANDOVER', as: 'HO' },
+      { id: 2, kind: 'SOURCE_KPI', x: 280, y: 24, kpiName: 'RSRP', as: 'RSRP' },
+      { id: 3, kind: 'CORRELATE', x: 40, y: 140, primary, correlation: how,
+        column: primary === 1 ? 'RSRP' : 'HO', withinMs: within ?? null },
+      { id: 4, kind: 'OUTPUT', x: 40, y: 260,
+        column: `${{ PREVIOUS: 'PREV', CURRENT: 'CURR', NEXT: 'NEXT',
+                     PREVIOUS_OR_CURRENT: 'PREV_OR_CURR' }[how]}_${primary === 1 ? 'RSRP' : 'HO'}` },
+    ],
+    edges: [{ from: 1, to: 3 }, { from: 2, to: 3 }, { from: 3, to: 4 }],
+  })
+  const output = (name) => ({
+    name, displayName: `S22 ${name}`, unit: 'dB', category: 'Workbench',
+    technology: '5G NR', direction: 'HIGHER_IS_BETTER', source: 'UE', decimals: 1,
+    description: null, expression: null,
+  })
+  const made = []
+  const build = async (name, how, primary, within) => {
+    const g = await (await post('/api/kpi-definitions/graphs',
+      { name, output: output(name), spec: spec(how, primary, within) })).json()
+    made.push(g)
+    return g
+  }
+
+  const prev = await build('S22_PREV', 'PREVIOUS', 1)
+  const curr = await build('S22_CURR', 'CURRENT', 1)
+  const next = await build('S22_NEXT', 'NEXT', 1)
+
+  // ── the gate. The output exists at the primary's moments and nowhere else, witnessed
+  //    against the event list rather than against the node's own idea of them.
+  const handovers = (await apiGet(`/api/sessions/${cityA}/events`))
+    .filter((e) => e.eventType === 'HANDOVER').map((e) => e.seq).sort((a, b) => a - b)
+  const at = async (kpi) =>
+    (await apiGet(`/api/sessions/${cityA}/series?kpis=${kpi}&maxPoints=100000`))[0].points
+      .filter((p) => p.value != null).map((p) => p.seq).sort((a, b) => a - b)
+  const prevSeqs = await at('S22_PREV')
+  step('the primary decides when there is an output, and there is one at each of its moments',
+    handovers.length > 0 && JSON.stringify(prevSeqs) === JSON.stringify(handovers),
+    `handovers [${handovers}], output at [${prevSeqs}]`)
+
+  // ── and the three fetch three different samples, checked against the drive's own RSRP.
+  //    The sample before a handover has no event row, so a window that could only see the
+  //    primary's rows could not reach it - which is the whole difficulty of this node.
+  const rsrp = Object.fromEntries(
+    (await apiGet(`/api/sessions/${cityA}/series?kpis=RSRP&maxPoints=100000`))[0].points
+      .map((p) => [p.seq, p.value]))
+  const valuesOf = async (kpi) => Object.fromEntries(
+    (await apiGet(`/api/sessions/${cityA}/series?kpis=${kpi}&maxPoints=100000`))[0].points
+      .filter((p) => p.value != null).map((p) => [p.seq, p.value]))
+  const vPrev = await valuesOf('S22_PREV')
+  const vCurr = await valuesOf('S22_CURR')
+  const vNext = await valuesOf('S22_NEXT')
+  const near = (a, b) => a != null && b != null && Math.abs(a - b) < 0.05
+  const wrong = handovers.filter((q) => !(near(vPrev[q], rsrp[q - 1])
+    && near(vCurr[q], rsrp[q]) && near(vNext[q], rsrp[q + 1])))
+  step('previous, current and next are the samples before, at and after the moment',
+    wrong.length === 0 && handovers.length > 0,
+    wrong.length === 0
+      ? `at seq ${handovers[0]}: ${vPrev[handovers[0]]} / ${vCurr[handovers[0]]}`
+        + ` / ${vNext[handovers[0]]} against ${rsrp[handovers[0] - 1]} /`
+        + ` ${rsrp[handovers[0]]} / ${rsrp[handovers[0] + 1]}`
+      : `wrong at seq ${wrong}`)
+
+  // ── the bound is ours, not the reference's, and it drops rather than reports late.
+  //    Samples are one second apart, so 500 ms reaches nothing and 1500 ms reaches
+  //    exactly the neighbouring sample.
+  const tight = await build('S22_TIGHT', 'PREVIOUS', 1, 500)
+  const loose = await build('S22_LOOSE', 'PREVIOUS', 1, 1500)
+  step('a value further away than the bound is dropped, not reported as if it were near',
+    tight.valuesComputed === 0 && loose.valuesComputed === prev.valuesComputed
+    && prev.valuesComputed > 0,
+    `500 ms reaches ${tight.valuesComputed}, 1500 ms reaches ${loose.valuesComputed},`
+    + ` unbounded ${prev.valuesComputed}`)
+
+  // ── "previous or current" falls back rather than replacing. Witnessed by making
+  //    PREVIOUS unreachable with the bound: what is left must be the current value.
+  const orCurr = await build('S22_OR_CURR', 'PREVIOUS_OR_CURRENT', 1, 500)
+  const vOr = await valuesOf('S22_OR_CURR')
+  step('previous-or-current uses the current value only when there is no previous one',
+    orCurr.valuesComputed === curr.valuesComputed
+    && handovers.every((q) => near(vOr[q], vCurr[q])),
+    `${orCurr.valuesComputed} values, all equal to the current one`)
+
+  // ── swapping the primary changes what the question is about.
+  //
+  // Measured on the NODE, through the preview, not on the published KPI: the graph's tail
+  // drops NULL values, so publishing the sparse event column either way would answer 15
+  // both times and prove nothing. The first version of this step did exactly that.
+  const rowsAt = async (primary) => (await (await post(
+    `/api/kpi-definitions/graphs/preview?nodeId=3&sessionId=${cityA}&limit=1`,
+    { name: 'x', output: null, spec: spec('CURRENT', primary) })).json()).rowCount
+  const atEvents = await rowsAt(1)
+  const atSamples = await rowsAt(2)
+  const drive = (await apiGet(`/api/sessions/${cityA}`)).sampleCount
+  step('naming the other input as primary answers at every sample instead of at the events',
+    atEvents === handovers.length && atSamples === drive,
+    `${atEvents} rows with the event as primary, ${atSamples} with the KPI,`
+    + ` ${handovers.length} handovers and ${drive} samples in the drive`)
+
+  // ── the canvas offers it, and its inspector names the primary rather than implying it
+  //    from a layout the compiler never reads.
+  await openMode('Import')
+  await page.waitForTimeout(1500)
+  const stored = page.locator('.panels table.grid tbody tr', { hasText: 'S22_PREV' })
+  await stored.locator('button', { hasText: 'Open' }).click()
+  await page.waitForTimeout(1800)
+  await page.locator('g.wb-node', { hasText: 'previous' }).click()
+  await page.waitForTimeout(700)
+  const inspector = await page.locator('.panel:has(header .title:text-is("Node"))').innerText()
+  step('the inspector names which input decides the moments',
+    /Primary/.test(inspector) && /no row/.test(inspector),
+    inspector.replace(/\n/g, ' / ').slice(0, 130))
+  const primaryPicked = await page.locator('select[aria-label="Primary input"]').inputValue()
+  step('and it is a control, not a convention about which node sits on the left',
+    primaryPicked === '1', `primary reads ${primaryPicked}`)
+
+  for (const g of made) await page.request.delete(`${API}/api/kpi-definitions/graphs/${g.id}`)
+  const after = await apiGet('/api/kpi-definitions/graphs')
+  step('the scenario leaves no graph behind',
+    !after.some((g) => String(g.outputKpiName).startsWith('S22_')),
+    `${after.length} graphs remain`)
+  await page.goto(BASE, { waitUntil: 'domcontentloaded' })
+  await page.waitForTimeout(2500)
+}
+
 // ─── wrap-up ─────────────────────────────────────────────────────────────────
 const appErrors = errors.filter((e) =>
   !/tile\.openstreetmap\.org|ERR_CONNECTION|Failed to load resource|ERR_TIMED_OUT/.test(e))

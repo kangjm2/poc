@@ -40,7 +40,16 @@ public class KpiGraphService {
     /** What a validation run found, so the editor can report before anything is saved. */
     public record Validation(boolean ok, String error, List<String> referencedKpis,
                              boolean readsNeighbours, String outputColumn,
-                             boolean outputIsDuration, String sql) {}
+                             boolean outputIsDuration,
+                             /**
+                              * What each node produces, so the editor's "which column"
+                              * controls offer the compiler's own answer rather than a
+                              * second implementation of the same rule. Present even when
+                              * the graph does not compile, because that is exactly when a
+                              * control is being used to fix it.
+                              */
+                             Map<Integer, List<String>> columnsByNode,
+                             String sql) {}
 
     private final JdbcTemplate jdbc;
     private final KpiDefinitionRepo defs;
@@ -72,9 +81,11 @@ public class KpiGraphService {
         try {
             KpiGraph.Compiled c = KpiGraph.compile(spec, knownNames(excludingKpi));
             return new Validation(true, null, List.copyOf(c.referencedKpis()),
-                    c.readsNeighbours(), c.outputColumn(), c.outputIsDuration(), c.sql());
+                    c.readsNeighbours(), c.outputColumn(), c.outputIsDuration(),
+                    c.columnsByNode(), c.sql());
         } catch (RuntimeException e) {
-            return new Validation(false, e.getMessage(), List.of(), false, null, false, null);
+            return new Validation(false, e.getMessage(), List.of(), false, null, false,
+                    KpiGraph.columnsOf(spec, knownNames(excludingKpi)), null);
         }
     }
 

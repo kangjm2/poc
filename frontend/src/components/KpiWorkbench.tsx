@@ -4,7 +4,7 @@ import type {
   EventType, GraphEdge, GraphNode, GraphNodeKind, GraphNodePreview, GraphSpec,
   GraphStateRule, GraphValidation, KpiDefinition, StoredGraph,
 } from '../api/types'
-import { SAMPLE_FIELDS } from '../api/types'
+import { CORRELATIONS, SAMPLE_FIELDS } from '../api/types'
 
 /**
  * The KPI Workbench: a KPI built by wiring nodes rather than by typing one formula.
@@ -60,6 +60,13 @@ const KIND_INFO: Record<GraphNodeKind, { label: string; hint: string; inputs: st
         + 'of them have a value.',
     inputs: '1–8 inputs',
   },
+  CORRELATE: {
+    label: 'Correlate',
+    hint: 'Fetches one value of one input relative to the moments of the other — the '
+        + 'value just before an event, at it, or just after. The primary input decides '
+        + 'when there is an output at all; where it has no value, there is no row.',
+    inputs: '2 inputs',
+  },
   EXPRESSION: {
     label: 'Expression',
     hint: 'Arithmetic over the columns reaching it, named by the alias.',
@@ -108,6 +115,9 @@ function detailOf(n: GraphNode): string {
       return (n.states ?? []).map((s) => s.state).join(' → ') || '(no states)'
     case 'OUTPUT': return n.column ? `Column: ${n.column}` : 'Column: (pick one)'
     case 'COMBINE': return 'All values within time range'
+    case 'CORRELATE':
+      return `${(n.correlation ?? 'PREVIOUS').replace(/_/g, ' ').toLowerCase()}`
+           + (n.column ? ` ${n.column}` : '')
     default: return ''
   }
 }
@@ -121,7 +131,8 @@ function detailOf(n: GraphNode): string {
  * output, which made the connecting edge double back on itself and the graph unreadable.
  */
 const TIER: Record<GraphNodeKind, number> = {
-  SOURCE_KPI: 0, SOURCE_NEIGHBOUR: 0, SOURCE_SAMPLE: 0, SOURCE_EVENT: 0, COMBINE: 1,
+  SOURCE_KPI: 0, SOURCE_NEIGHBOUR: 0, SOURCE_SAMPLE: 0, SOURCE_EVENT: 0,
+  COMBINE: 1, CORRELATE: 1,
   EXPRESSION: 2, FILTER: 2, CLASSIFIER: 3, STATE_MACHINE: 3, OUTPUT: 4,
 }
 
@@ -145,6 +156,101 @@ let nextId = 1
 const freshId = (nodes: GraphNode[]) => {
   nextId = Math.max(nextId, ...nodes.map((n) => n.id), 0) + 1
   return nextId
+}
+
+/**
+ * The Correlate node's inspector.
+ *
+ * Three questions, and the first is the one the reference answers with geometry: WHICH
+ * INPUT decides the moments. Their rule is "the leftmost input is primary", which is a
+ * layout convention nothing enforces and which our compiler could not read even if it
+ * wanted to - a node's inputs arrive as edges and are ordered by node id so the same
+ * drawing always compiles the same way. So it is a control, and the control says what it
+ * decides rather than leaving the author to infer it from the picture.
+ */
+function CorrelateEditor({ node, patch, nodes, edges, columnsOf }: {
+  node: GraphNode
+  patch: (id: number, p: Partial<GraphNode>) => void
+  nodes: GraphNode[]
+  edges: GraphEdge[]
+  columnsOf: (id: number) => string[]
+}) {
+  const inputs = edges.filter((e) => e.to === node.id).map((e) => e.from).sort((a, b) => a - b)
+  const nameOf = (id: number) => {
+    const n = nodes.find((x) => x.id === id)
+    return n ? `${n.label ?? KIND_INFO[n.kind].label}${detailOf(n) ? ` — ${detailOf(n)}` : ''}`
+             : `#${id}`
+  }
+  const primary = node.primary ?? inputs[0] ?? null
+  const secondary = inputs.find((i) => i !== primary) ?? null
+  const secCols = secondary == null ? [] : columnsOf(secondary)
+
+  if (inputs.length !== 2) {
+    return (
+      <div style={{ color: '#666', whiteSpace: 'normal' }}>
+        Wire exactly two inputs. One decides the moments; the other supplies the value.
+        This node has {inputs.length}.
+      </div>
+    )
+  }
+
+  return (
+    <div style={{ display: 'grid', gap: 8 }}>
+      <label>Primary — the input that decides when there is an output<br />
+        <select value={String(primary)} aria-label="Primary input"
+                onChange={(e) => patch(node.id, { primary: Number(e.target.value) })}
+                style={{ width: '100%' }}>
+          {inputs.map((i) => <option key={i} value={i}>{nameOf(i)}</option>)}
+        </select></label>
+      <div style={{ color: '#666', whiteSpace: 'normal', fontSize: 11 }}>
+        Where the primary has no value there is no row at all. That is the opposite of
+        Combine, which keeps a sample when only some inputs have a value — and it is the
+        point: the primary is the thing being asked about.
+      </div>
+
+      <label>Fetch<br />
+        <select value={node.correlation ?? 'PREVIOUS'} aria-label="Correlation"
+                onChange={(e) => patch(node.id, { correlation: e.target.value })}
+                style={{ width: '100%' }}>
+          {CORRELATIONS.map((c) => (
+            <option key={c} value={c}>{c.replace(/_/g, ' ').toLowerCase()}</option>
+          ))}
+        </select></label>
+
+      <label>…of this column of {secondary == null ? 'the other input' : nameOf(secondary)}<br />
+        <select value={node.column ?? ''} aria-label="Column to fetch"
+                onChange={(e) => patch(node.id, { column: e.target.value || null })}
+                style={{ width: '100%', fontFamily: 'monospace' }}>
+          <option value="">{secCols.length === 1 ? secCols[0] : '(pick one)'}</option>
+          {secCols.map((c) => <option key={c} value={c}>{c}</option>)}
+        </select></label>
+
+      <label>Within (ms) — optional<br />
+        <input value={node.withinMs ?? ''} inputMode="numeric"
+               aria-label="Within milliseconds"
+               placeholder="no bound"
+               onChange={(e) => patch(node.id, {
+                 withinMs: e.target.value.trim() === '' ? null : Number(e.target.value),
+               })}
+               style={{ width: '100%', fontFamily: 'monospace' }} /></label>
+      <div style={{ color: '#666', whiteSpace: 'normal', fontSize: 11 }}>
+        Ours, not the reference&rsquo;s. Left empty, &ldquo;just before&rdquo; can reach
+        back across a whole drive and answer with a value from twenty minutes earlier —
+        true, and useless. With a bound, a value further away than that is dropped rather
+        than reported as if it were near.
+      </div>
+
+      <label>Output column name (AS)<br />
+        <input value={node.as ?? ''}
+               onChange={(e) => patch(node.id, { as: e.target.value.toUpperCase() || null })}
+               placeholder={`${(node.correlation ?? 'PREVIOUS') === 'PREVIOUS' ? 'PREV'
+                 : (node.correlation ?? '') === 'CURRENT' ? 'CURR'
+                 : (node.correlation ?? '') === 'NEXT' ? 'NEXT'
+                 : (node.correlation ?? '') === 'PREVIOUS_OR_CURRENT' ? 'PREV_OR_CURR'
+                 : 'NEXT_OR_CURR'}_${node.column ?? secCols[0] ?? 'VALUE'}`}
+               style={{ width: '100%', fontFamily: 'monospace' }} /></label>
+    </div>
+  )
 }
 
 /** The ladder cap, matching KpiGraph.MAX_LADDER_STATES. */
@@ -728,6 +834,11 @@ export function KpiWorkbench({ defs, onChanged, eventTypes = [], sessionId = nul
               )}
 
               {sel.kind === 'STATE_MACHINE' && <LadderEditor node={sel} patch={patch} />}
+
+              {sel.kind === 'CORRELATE' && (
+                <CorrelateEditor node={sel} patch={patch} nodes={nodes} edges={edges}
+                                 columnsOf={(id) => validation?.columnsByNode?.[String(id)] ?? []} />
+              )}
 
               {sel.kind === 'OUTPUT' && (
                 <label>Column to publish<br />

@@ -87,9 +87,9 @@ sudo -u postgres createdb -O vdt vdt
 ```bash
 # 세 검사기가 서로 다른 실패 계열을 담당합니다
 node scripts/verify-ui.mjs             # 개별 동작 125개
-node scripts/verify-scenarios.mjs      # 사용자 여정 198단계 / 21 시나리오
+node scripts/verify-scenarios.mjs      # 사용자 여정 206단계 / 22 시나리오
 node tools/uxtest/api-surface.mjs      # 로직은 있는데 뷰가 없는 격차
-(cd backend && mvn test)               # SQL을 조립하는 코드·색 램프·기하 — 65개
+(cd backend && mvn test)               # SQL을 조립하는 코드·색 램프·기하 — 75개
 node tools/uxtest/measure-signals.mjs  # (선택) 검증 신호별 비용 측정
 ```
 
@@ -172,7 +172,7 @@ UE 측만 보면 "이 단말이 힘들다"와 "이 셀이 혼잡하다"를 구�
   (CSV 임포트, area binning, 랩 런 실행기, 파생 KPI 수식은 이후 구현되었습니다.)
 - **레퍼런스 대비 워크벤치**(2026-09-02 갱신): ①`SOURCE_SAMPLE`(위경도·속도·서빙 PCI)과
   ②`SOURCE_EVENT`(최근접 표본으로 이벤트를 `seq` 척추에 올림)는 **구현됐습니다.**
-  ③ **진짜 State Machine**도 구현됐고, ⓪ *그래프의 두 번째 결과 모양*은 **필요 없다는
-  것으로 판명**됐습니다 — 구간은 `ts`(=시작)와 `value`(=머문 ms) 두 열로 표본 행 하나에
-  들어갑니다. 남은 것은 **Previous·Current·Next** 상관 노드입니다.
+  ③ **진짜 State Machine**과 **Previous·Current·Next 상관**도 구현됐고, ⓪ *그래프의 두 번째
+  결과 모양*은 **필요 없다는 것으로 판명**됐습니다 — 구간은 `ts`(=시작)와 `value`(=머문 ms)
+  두 열로 표본 행 하나에 들어갑니다.
   근거와 전체 순서는 [`docs/briefs/index.html`](docs/briefs/index.html)에 있습니다.

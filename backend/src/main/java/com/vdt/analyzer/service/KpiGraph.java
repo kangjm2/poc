@@ -64,7 +64,32 @@ public final class KpiGraph {
     private static final int MAX_NODES = 60;
 
     public enum Kind { SOURCE_KPI, SOURCE_NEIGHBOUR, SOURCE_SAMPLE, SOURCE_EVENT,
-                       COMBINE, EXPRESSION, FILTER, CLASSIFIER, STATE_MACHINE, OUTPUT }
+                       COMBINE, CORRELATE, EXPRESSION, FILTER, CLASSIFIER, STATE_MACHINE,
+                       OUTPUT }
+
+    /**
+     * Which value a Correlate node brings across, relative to the primary's moment.
+     *
+     * The reference's names, because they are the reference's idea: the primary decides
+     * WHEN, and one value of the secondary is fetched relative to that instant. Ours are
+     * the five that mean something on a sample grid; the sixth, All Values Within Time
+     * Range, is what COMBINE already does.
+     */
+    public enum Correlation {
+        PREVIOUS("PREV"), CURRENT("CURR"), NEXT("NEXT"),
+        PREVIOUS_OR_CURRENT("PREV_OR_CURR"), NEXT_OR_CURRENT("NEXT_OR_CURR");
+
+        private final String prefix;
+        Correlation(String prefix) { this.prefix = prefix; }
+        public String prefix() { return prefix; }
+
+        static Correlation of(String raw) {
+            if (raw == null) return PREVIOUS;
+            for (Correlation c : values()) if (c.name().equalsIgnoreCase(raw)) return c;
+            throw new IllegalArgumentException(
+                    "Unknown correlation: " + raw + ". One of " + java.util.Arrays.toString(values()));
+        }
+    }
 
     /**
      * The document version in which STATE_MACHINE started meaning the latching ladder.
@@ -137,6 +162,10 @@ public final class KpiGraph {
                        // condition is the RETURN condition; the rest are entry conditions
                        // in the order they must be entered.
                        List<StateRule> states,
+                       // CORRELATE: which input decides the moments, which of the other
+                       // input's columns is fetched, and how far back or forward the
+                       // fetched value may sit before it stops answering the question.
+                       Integer primary, String correlation, Double withinMs,
                        // OUTPUT
                        String column) {}
 
@@ -256,6 +285,45 @@ public final class KpiGraph {
 
         return new Compiled(chain, tail, referenced, readsNeighbours[0], columns,
                 outputColumn, durationColumns.contains(outputColumn));
+    }
+
+    /**
+     * What each node produces, as far as the graph can be resolved.
+     *
+     * The editor needs this to offer "which column" controls, and a graph is INVALID for
+     * as long as it is being drawn - so the answer has to survive a compile failure. It
+     * runs the same emit path and stops at the first node it cannot resolve, returning
+     * everything upstream of that. Two column rules would be one too many: the list a
+     * dropdown offers has to be the list the compiler will accept.
+     */
+    public static Map<Integer, List<String>> columnsOf(Spec spec, Set<String> knownKpis) {
+        Map<Integer, List<String>> columns = new LinkedHashMap<>();
+        try {
+            Map<Integer, Node> byId = new LinkedHashMap<>();
+            for (Node n : spec.nodes() == null ? List.<Node>of() : spec.nodes()) {
+                byId.put(n.id(), n);
+            }
+            Map<Integer, List<Integer>> inputs = new HashMap<>();
+            for (Edge e : spec.edges() == null ? List.<Edge>of() : spec.edges()) {
+                if (byId.containsKey(e.from()) && byId.containsKey(e.to()) && e.from() != e.to()) {
+                    inputs.computeIfAbsent(e.to(), k -> new ArrayList<>()).add(e.from());
+                }
+            }
+            for (List<Integer> in : inputs.values()) in.sort(Integer::compareTo);
+            for (int id : topologicalOrder(byId.keySet(), inputs)) {
+                try {
+                    emit(spec, byId.get(id), inputs.getOrDefault(id, List.of()), columns,
+                            knownKpis, new LinkedHashSet<>(), new boolean[]{false},
+                            new LinkedHashSet<>());
+                } catch (RuntimeException stop) {
+                    // Normal while drawing. Everything upstream is still true.
+                }
+            }
+        } catch (RuntimeException e) {
+            // A graph too broken to order at all has nothing to offer, which is the honest
+            // answer rather than a partial one from an arbitrary order.
+        }
+        return columns;
     }
 
     /**
@@ -391,6 +459,9 @@ public final class KpiGraph {
                                   + " AND s.seq = n.seq AND s.serving_pci IS DISTINCT FROM n.pci"
                                 : "")
                      + ") ranked WHERE rn = " + rank + ")";
+            }
+            case CORRELATE -> {
+                return correlate(n, in, columns);
             }
             case COMBINE -> {
                 requireInputs(n, in, 1, 8);
@@ -547,6 +618,145 @@ public final class KpiGraph {
     private static String project(List<String> upstream, String alias) {
         List<String> keep = upstream.stream().filter(c -> !c.equals(alias)).toList();
         return keep.isEmpty() ? "" : quoteAll(keep) + ", ";
+    }
+
+    /**
+     * One value of one input, fetched relative to the moments of the other.
+     *
+     * <h3>The question this answers</h3>
+     * "What was RSRP just before this drop." Root-cause analysis is made of that shape and
+     * the canvas could not express it: COMBINE puts values on the SAME sample, which is
+     * the only relation it knows, so a value that sat one sample earlier was unreachable.
+     *
+     * <h3>Primary, and why it is a field rather than a position</h3>
+     * The reference's rule is that the LEFTMOST input is primary and decides when the
+     * output exists: <i>"the output will be written only when there are valid values in the
+     * primary dataset"</i> (p354). Leftmost is an x-coordinate, and this compiler never
+     * reads one - the canvas layout is stored, but a node's inputs arrive as edges and are
+     * ordered by node id so the same drawing always compiles the same way. So the primary
+     * is NAMED. A control that says which input decides the moments is a smaller thing to
+     * learn than a layout convention nothing enforces.
+     *
+     * <h3>The gate is the point, and it is the opposite of COMBINE</h3>
+     * COMBINE keeps a sample when only some inputs have a value, deliberately, because
+     * dropping it would shorten the series. This node DROPS every row where the primary has
+     * no value, deliberately, because the primary is the thing being asked about. The
+     * manual's own example is the pair: RX qual as primary answers only while a call was
+     * up; RX level as primary answers through idle too.
+     *
+     * <h3>Windows run over both inputs, the gate is applied after</h3>
+     * "The last value before this event" has to be able to see samples the primary has no
+     * row for - which is nearly all of them when the primary is an event source. So the
+     * spine is the union of both inputs, exactly as COMBINE's is, the carried values are
+     * computed over it, and only then are the non-primary rows dropped. Gating first would
+     * make PREVIOUS mean "the previous EVENT's value", which is a different question and a
+     * plausible wrong answer.
+     *
+     * <h3>`withinMs`, which the reference does not have</h3>
+     * Ours, and stated as ours. Unbounded, "just before" can reach back across a whole
+     * drive and answer with a value from twenty minutes earlier, which is true and
+     * useless. The bound is optional and off by default, so the node without it is exactly
+     * the reference's; with it, the fetched value is dropped rather than reported late.
+     */
+    private static String correlate(Node n, List<Integer> in,
+                                    Map<Integer, List<String>> columns) {
+        requireInputs(n, in, 2, 2);
+        Correlation how = Correlation.of(n.correlation());
+
+        Integer primaryId = n.primary() == null ? in.get(0) : n.primary();
+        if (!in.contains(primaryId)) {
+            throw new IllegalArgumentException(
+                    "The Correlate node's primary is node " + primaryId + ", which is not"
+                  + " one of its inputs " + in + ". The primary is the input whose moments"
+                  + " the output is written at.");
+        }
+        int secondaryId = in.get(0).equals(primaryId) ? in.get(1) : in.get(0);
+
+        List<String> pCols = columns.get(primaryId);
+        List<String> sCols = columns.get(secondaryId);
+        if (pCols.size() != 1) {
+            throw new IllegalArgumentException(
+                    "The primary input must carry exactly one column, because the output"
+                  + " exists where that column has a value. This one carries " + pCols
+                  + ". Put a Filter or an Expression between them to pick one.");
+        }
+        String pCol = pCols.get(0);
+
+        String sCol = n.column() == null
+                ? (sCols.size() == 1 ? sCols.get(0) : null)
+                : column(n.column());
+        if (sCol == null || !sCols.contains(sCol)) {
+            throw new IllegalArgumentException(
+                    "The Correlate node fetches one column of its secondary input and none"
+                  + " is picked. Choose one of: " + sCols);
+        }
+
+        String alias = column(n.as() == null ? how.prefix() + "_" + sCol : n.as());
+        if (alias.equals(pCol)) {
+            throw new IllegalArgumentException(
+                    "The fetched column would be called '" + alias + "', which is what the"
+                  + " primary already carries. Name it with AS.");
+        }
+
+        String w = "PARTITION BY session_id ORDER BY seq";
+        String wDesc = "PARTITION BY session_id ORDER BY seq DESC";
+
+        // The spine: every sample either input has a row for, so a carried value can come
+        // from a sample the primary never saw.
+        String spine = "(SELECT session_id, seq, min(ts) AS ts FROM ("
+                + "SELECT session_id, seq, ts FROM n_" + primaryId
+                + " UNION ALL SELECT session_id, seq, ts FROM n_" + secondaryId
+                + ") u GROUP BY session_id, seq)";
+
+        String c0 = "SELECT k.session_id, k.seq, k.ts, p." + quote(pCol) + ", "
+                + "s." + quote(sCol) + " AS \"0s\", "
+                + "CASE WHEN s." + quote(sCol) + " IS NOT NULL THEN k.ts END AS \"0st\" "
+                + "FROM " + spine + " k "
+                + "LEFT JOIN n_" + primaryId + " p"
+                + " ON p.session_id = k.session_id AND p.seq = k.seq "
+                + "LEFT JOIN n_" + secondaryId + " s"
+                + " ON s.session_id = k.session_id AND s.seq = k.seq";
+
+        // Two running counts of non-null secondary values - one each way - group every row
+        // with the nearest non-null on that side, which is what makes first_value pick it.
+        // Postgres has no IGNORE NULLS, and an array_agg frame would be quadratic.
+        String c1 = "SELECT *, count(\"0s\") OVER (" + w + ") AS \"0gf\","
+                + " count(\"0s\") OVER (" + wDesc + ") AS \"0gb\" FROM (" + c0 + ") c0";
+
+        String c2 = "SELECT *,"
+                + " first_value(\"0s\") OVER (PARTITION BY session_id, \"0gf\" ORDER BY seq) AS \"0cf\","
+                + " first_value(\"0st\") OVER (PARTITION BY session_id, \"0gf\" ORDER BY seq) AS \"0cft\","
+                + " first_value(\"0s\") OVER (PARTITION BY session_id, \"0gb\" ORDER BY seq DESC) AS \"0cb\","
+                + " first_value(\"0st\") OVER (PARTITION BY session_id, \"0gb\" ORDER BY seq DESC) AS \"0cbt\""
+                + " FROM (" + c1 + ") c1";
+
+        // Carried-at-or-before, shifted one row back, is carried-strictly-before. Same the
+        // other way. Doing it as a lag of the carry rather than as a second carry keeps
+        // "before" and "at or before" from ever disagreeing about the same value.
+        String c3 = "SELECT *, lag(\"0cf\") OVER (" + w + ") AS \"0pv\","
+                + " lag(\"0cft\") OVER (" + w + ") AS \"0pvt\","
+                + " lead(\"0cb\") OVER (" + w + ") AS \"0nv\","
+                + " lead(\"0cbt\") OVER (" + w + ") AS \"0nbt\" FROM (" + c2 + ") c2";
+
+        String prev = n.withinMs() == null ? "\"0pv\""
+                : "CASE WHEN extract(epoch FROM (ts - \"0pvt\")) * 1000 <= "
+                  + number(n.withinMs()) + " THEN \"0pv\" END";
+        String next = n.withinMs() == null ? "\"0nv\""
+                : "CASE WHEN extract(epoch FROM (\"0nbt\" - ts)) * 1000 <= "
+                  + number(n.withinMs()) + " THEN \"0nv\" END";
+        String picked = switch (how) {
+            case PREVIOUS -> prev;
+            case CURRENT -> "\"0s\"";
+            case NEXT -> next;
+            case PREVIOUS_OR_CURRENT -> "coalesce(" + prev + ", \"0s\")";
+            case NEXT_OR_CURRENT -> "coalesce(" + next + ", \"0s\")";
+        };
+
+        columns.put(n.id(), List.of(pCol, alias));
+        return "n_" + n.id() + " AS (SELECT session_id, seq, ts, " + quote(pCol) + ", "
+                + picked + " AS " + quote(alias) + " FROM (" + c3 + ") c3"
+                // The gate, applied last: the windows above had to see every sample.
+                + " WHERE " + quote(pCol) + " IS NOT NULL)";
     }
 
     /**
@@ -715,6 +925,20 @@ public final class KpiGraph {
         pub.append(" FROM (").append(q).append(") p");
 
         return "n_" + n.id() + " AS (" + pub + ")";
+    }
+
+    /**
+     * A number, re-emitted from a parsed double so no user text reaches the statement.
+     *
+     * The same rule KpiSql follows for a threshold boundary: the value arrives as a
+     * number, is a number in the record, and is printed back out - there is no span of
+     * the request that becomes a span of the SQL.
+     */
+    private static String number(double v) {
+        if (!Double.isFinite(v) || v < 0) {
+            throw new IllegalArgumentException("Expected a number of milliseconds, got " + v);
+        }
+        return Double.toString(v);
     }
 
     private static void requireInputs(Node n, List<Integer> in, int min, int max) {

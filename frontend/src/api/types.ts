@@ -345,7 +345,8 @@ export interface PollutionSpan {
 
 export type GraphNodeKind =
   | 'SOURCE_KPI' | 'SOURCE_NEIGHBOUR' | 'SOURCE_SAMPLE' | 'SOURCE_EVENT'
-  | 'COMBINE' | 'EXPRESSION' | 'FILTER' | 'CLASSIFIER' | 'STATE_MACHINE' | 'OUTPUT'
+  | 'COMBINE' | 'CORRELATE' | 'EXPRESSION' | 'FILTER' | 'CLASSIFIER' | 'STATE_MACHINE'
+  | 'OUTPUT'
 
 /** What a sample source may read. The server holds the same allow-list. */
 export const SAMPLE_FIELDS = ['LATITUDE', 'LONGITUDE', 'SPEED_KMH', 'SERVING_PCI'] as const
@@ -378,8 +379,19 @@ export interface GraphNode {
    * the rest are entry conditions in the order they must be entered.
    */
   states?: GraphStateRule[] | null
+  /** CORRELATE: the input whose moments the output is written at. */
+  primary?: number | null
+  /** CORRELATE: PREVIOUS | CURRENT | NEXT | PREVIOUS_OR_CURRENT | NEXT_OR_CURRENT. */
+  correlation?: string | null
+  /** CORRELATE: how far the fetched value may sit from the moment, or null for no bound. */
+  withinMs?: number | null
   column?: string | null
 }
+
+/** The correlations a Correlate node offers. The server holds the same list. */
+export const CORRELATIONS = [
+  'PREVIOUS', 'CURRENT', 'NEXT', 'PREVIOUS_OR_CURRENT', 'NEXT_OR_CURRENT',
+] as const
 
 export interface GraphEdge { from: number; to: number }
 
@@ -401,6 +413,11 @@ export interface GraphValidation {
   outputColumn: string | null
   /** True when the published column is a state machine's dwell, so its unit is ms. */
   outputIsDuration: boolean
+  /**
+   * What each node produces, keyed by node id. Comes from the compiler even when the
+   * graph does not compile - which is exactly when a "which column" control is in use.
+   */
+  columnsByNode: Record<string, string[]>
   sql: string | null
 }
 
