@@ -14,7 +14,7 @@
 | | |
 |---|---|
 | **원본 PDF** | **이 저장소에 두지 않습니다.** 라이선스 보유자 전용 배포물이며, 아래 재배포 금지 원칙이 그대로 적용됩니다 |
-| 추출한 그림 | `manual10.2_*` — 2026-09-01에 16장, **2026-09-02에 77장 추가**(아래 §0-2). 파일명 끝의 `_pNNN`이 원문 페이지 |
+| 추출한 그림 | `manual10.2_*` — 2026-09-01에 16장, **2026-09-02에 77 + 26장 추가**(아래 §0-2 · §0-3). 파일명 끝의 `_pNNN`이 원문 페이지 |
 | 텍스트 인용 | `docs/reference/nemo-analyze-10.2/`에 페이지 번호와 함께 |
 
 > 이 그림들에도 §0의 원칙이 그대로 적용됩니다: **재배포 금지 · 원본 유지 · 저장소 공개 시
@@ -33,7 +33,7 @@
 | `manual10.2_workbook-pages_p216.png` | p216 | 워크북 페이지 구성 |
 | `manual10.2_kpi-workbench-canvas_p346.png` | p346 | Parameters 트리에서 캔버스로 파라미터 드래그. 우측에 요소 분류(Parameters·Correlations·Joins·Operations·Aggregates·Sorting·Filters·Math·Time·Components), Properties의 `Execute per` |
 | `manual10.2_kpi-workbench-sockets_p349.png` | p349 | Correlation 실물 예 — `Call attempt failure`(primary) + `Ec/N0 active set` → `Previous Value` → `Output`. 미설정 노드가 빨강인 색 규약이 보임 |
-| `manual10.2_state-machine-states_p368.png` | p368 | State Machine 상태 정의 대화상자. p413의 그림과 픽셀 동일(UC27 안에서 재사용). p368 자체는 2026-09-02 제공분(p300–399 누락)에 없어 미확인 |
+| `manual10.2_state-machine-states_p368.png` | p368 | State Machine 상태 정의 대화상자. p368 원본과 픽셀 동일 확인(2026-09-02 오후, p300–399 제공 후). p413에서 재사용 |
 | `manual10.2_uc27-start-canvas_p405.png` | p405 | **2026-09-02 개명** (구 `uc27-state-flow_p405`). UC27의 **시작 캔버스** — `BLER` · `Ec/No best active set` · `Ec/No 1. best` 파라미터 3개와 아직 빨간 `Output`. p405의 상태 흐름도는 벡터 텍스트라 그림 파일이 없고 `use-cases.md`에 mermaid로 재현 |
 | `manual10.2_uc27-graph-partial-union_p408.png` | p408 | UC27 **중간 단계** — Union까지 연결하고 Output은 아직 빨강(미연결). 색 규약이 보이는 그림 |
 | `manual10.2_uc27-complete-graph_p425.png` | p425 | UC27 **완성 그래프** (기존 `nemo-analyze_kpi-workbench.png`와 같은 내용, 다른 크롭) — BLER + (Ec/No best active set − 1. best) → **Union** → **Ascending time** → State Machine → Call dropped와 상관 → `Output (Column count: 19)` |
@@ -58,7 +58,7 @@
 
 ### 0-2. 2026-09-02 추가 — 유즈케이스 그림 77장
 
-사용자가 원문 PDF(p1–299 · p400–504)를 다시 제공해, Use Case 31개의 그림을 원문에서 직접 추출했습니다
+사용자가 원문 PDF(p1–299 · p400–504, 이어서 p300–399)를 다시 제공해, Use Case 31개의 그림을 원문에서 직접 추출했습니다
 (`pymupdf`, 임베드 이미지 무손실). 각 그림이 무엇인지와 절차상 위치는
 [`docs/reference/nemo-analyze-10.2/use-cases.md`](../reference/nemo-analyze-10.2/use-cases.md)에 있습니다.
 기존 16장 중 4장은 원문과의 해시 대조로 라벨이 틀린 것이 확정돼 **개명**했습니다(위 표의 "2026-09-02 개명" 행).
@@ -143,6 +143,41 @@
 | `manual10.2_uc30-route-gradient-map_p439.jpeg` | p439 | UC30 — 그라디언트로 칠해진 경로 |
 | `manual10.2_uc31-string-properties_p441.png` | p441 | UC31 — `String Properties` (MEASUREMENT_REPORT) |
 | `manual10.2_uc31-l3-grid-colored_p443.png` | p443 | UC31 — Message Name 열이 칠해진 L3 그리드 |
+
+### 0-3. 2026-09-02 추가 — p300–399의 그림 26장
+
+같은 날 오후에 빠져 있던 p300–399가 제공되어, UC25 · UC26과 워크벤치 요소 대화상자(State Machine · Group By ·
+Aggregate · Filter · Nth · Math · Resample · Time Shift · 저장·실행)의 그림을 추출했습니다. 설명은
+[`use-cases.md`](../reference/nemo-analyze-10.2/use-cases.md)의 UC25 · UC26 · 부록.
+
+| 파일 | 원문 | 무엇 |
+|---|---|---|
+| `manual10.2_scheduler-schedule-event-batch_p294.jpeg` | p294 | Event Scheduler — `Schedule Event Batch` (Batch name · Start time · Recurrence · Events) |
+| `manual10.2_scheduler-event-recurrence_p307.png` | p307 | Event Scheduler — `Event Recurrence` (Daily / Weekly / Monthly, Range of recurrence) |
+| `manual10.2_uc25-scheduler-calendar_p308.png` | p308 | UC25 — Event scheduler 달력 뷰 |
+| `manual10.2_uc25-triggering-events-ribbon_p308.png` | p308 | UC25 — 리본의 `Triggering events` |
+| `manual10.2_uc25-triggering-events-dialog_p309.png` | p309 | UC25 — `Triggering Events` 대화상자 |
+| `manual10.2_uc25-triggering-folder-ready_p309.png` | p309 | UC25 — `Triggering folder = test_ready` |
+| `manual10.2_uc25-batch-with-events-active_p310.png` | p310 | UC25 — Run workbook · Run report 두 이벤트와 `Active` |
+| `manual10.2_workbench-transition-dialog-time-trigger_p369.png` | p369 | State Machine — `Transition` (Conditions · Time trigger · Target · Output) |
+| `manual10.2_workbench-condition-dialog_p370.png` | p370 | State Machine — `Condition` (Left Column · Operator · Right column · Value) |
+| `manual10.2_workbench-transition-two-conditions_p371.png` | p371 | State Machine — 조건 둘과 AND/OR |
+| `manual10.2_workbench-group-by-properties_p374.png` | p374 | Group By — `Properties` (Input · Group by · Aggregates · Function · Weight by · Result title) |
+| `manual10.2_workbench-group-by-example_p375.png` | p375 | Group By — bts_site_name › bts_cell_name 그룹, ec/no·tx_power 집계 6개 |
+| `manual10.2_workbench-group-by-result_p375.png` | p375 | Group By — 결과 데이터셋 |
+| `manual10.2_workbench-aggregate-properties_p377.png` | p377 | Aggregate — `Column · Group by · Weight by · Result title` |
+| `manual10.2_workbench-filter-tree-third-level_p382.png` | p382 | Filter — 셋째 조건으로 자동 추가된 레벨 |
+| `manual10.2_workbench-nth-properties_p385.png` | p385 | Top-N / Nth — `N · Column · Group by` |
+| `manual10.2_workbench-math-operator_p387.png` | p387 | Math — `Operator` 탭 |
+| `manual10.2_workbench-resample_p389.png` | p389 | Resample — `Interval` (ms/s) |
+| `manual10.2_workbench-time-shift_p390.png` | p390 | Time Shift — `Time offset` · `Duration` |
+| `manual10.2_workbench-component-type_p392.png` | p392 | `Component Type` — Single component / Multiple nodes |
+| `manual10.2_workbench-save-properties_p393.png` | p393 | Save — `Analyze Wizard – Properties` (Name · Title · Description) |
+| `manual10.2_workbench-execution-method_p395.png` | p395 | `Execute per` file / measurement / all |
+| `manual10.2_workbench-add-constant_p396.png` | p396 | `Add Constant` — `{$example}` |
+| `manual10.2_uc26-filter-tab_p397.png` | p397 | UC26 — 빈 `Filter` 탭 |
+| `manual10.2_uc26-condition_p398.png` | p398 | UC26 — 첫 조건 `scrambling_code <= 21` |
+| `manual10.2_uc26-first-pair_p399.png` | p399 | UC26 — 첫 쌍 완성 |
 
 ---
 
