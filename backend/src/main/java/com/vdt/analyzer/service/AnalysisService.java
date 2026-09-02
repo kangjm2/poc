@@ -152,6 +152,24 @@ public class AnalysisService {
      * what the map exists to show.
      */
     public List<TrackPoint> track(long sessionId, String kpiName, Integer maxPoints) {
+        return track(sessionId, kpiName, maxPoints, null);
+    }
+
+    /**
+     * The track, optionally with a drawn area marking which samples are inside it.
+     *
+     * The containment test runs HERE and not in the browser, although the browser is what
+     * drew the shape and already holds every point's coordinates. Even-odd ray casting is
+     * a rule, and this repository has one place for a rule: `AreaSelection.inside` is
+     * already what the area statistics are computed with, so a second implementation in
+     * TypeScript would be a second answer to "is this sample in the shape" - and the two
+     * would be read side by side, the statistics panel against the colours on the map.
+     *
+     * `inArea` is null on every point when no shape is drawn, which is not the same as
+     * false. False means "measured, and outside"; null means "nobody asked".
+     */
+    public List<TrackPoint> track(long sessionId, String kpiName, Integer maxPoints,
+                                  String polygonSpec) {
         KpiDefinition def = catalog.require(kpiName);
         long total = countSamples(sessionId);
         int limit = maxPoints == null ? DEFAULT_MAX_POINTS : Math.max(2, maxPoints);
@@ -163,9 +181,14 @@ public class AnalysisService {
         // a stride that skips the sample either side of a gap would hide the gap entirely -
         // the line would close back up and the break would never reach the screen. The two
         // rows bracketing every break are then pinned into the output regardless of stride.
+        AreaSelection.Predicate area = polygonSpec == null || polygonSpec.isBlank()
+                ? null
+                : AreaSelection.inside(AreaSelection.parse(polygonSpec), "latitude", "longitude");
+
         String sql = """
                 WITH geo AS (
                     SELECT seq, ts, latitude, longitude, speed_kmh, serving_pci,
+                           %5$s AS in_area,
                            %2$s AS step_m,
                            %3$s AS dt_s
                     FROM sample WHERE session_id = ?
@@ -185,7 +208,7 @@ public class AnalysisService {
                     FROM classified
                 )
                 SELECT seq, ts, latitude, longitude, speed_kmh, serving_pci, value,
-                       bin_ordinal, brk
+                       bin_ordinal, brk, in_area
                 FROM marked
                 WHERE prev_bin IS DISTINCT FROM bin_ordinal OR seq %% ? = 0
                    OR brk > 0 OR next_brk > 0
@@ -193,10 +216,21 @@ public class AnalysisService {
                 """.formatted(binExpr,
                               RouteContinuity.STEP_METRES,
                               RouteContinuity.SECONDS_SINCE_PREV,
-                              RouteContinuity.classify("step_m", "dt_s"));
+                              RouteContinuity.classify("step_m", "dt_s"),
+                              area == null ? "NULL::boolean" : "(" + area.sql() + ")");
 
         Map<Integer, KpiThreshold> byOrdinal = new HashMap<>();
         for (KpiThreshold t : scale) byOrdinal.put(t.getOrdinal(), t);
+
+        // The polygon's parameters bind inside the first CTE, so they precede the ones the
+        // later clauses take. Ordering them by hand is why they are assembled in a list
+        // rather than passed as a varargs tail.
+        List<Object> args = new ArrayList<>();
+        if (area != null) args.addAll(area.params());
+        args.add(sessionId);
+        args.add(sessionId);
+        args.add(kpiName);
+        args.add(stride);
 
         return jdbc.query(sql, (rs, i) -> {
             Double v = (Double) rs.getObject("value");
@@ -206,8 +240,8 @@ public class AnalysisService {
                     bin == null ? "#999999" : bin.getColor(),
                     bin == null ? "no data" : bin.getLabel(),
                     (Integer) rs.getObject("serving_pci"), (Double) rs.getObject("speed_kmh"),
-                    rs.getInt("brk"));
-        }, sessionId, sessionId, kpiName, stride);
+                    rs.getInt("brk"), (Boolean) rs.getObject("in_area"));
+        }, args.toArray());
     }
 
     /**

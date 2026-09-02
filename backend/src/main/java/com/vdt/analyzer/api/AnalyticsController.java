@@ -32,8 +32,9 @@ public class AnalyticsController {
     @GetMapping("/bins")
     public List<GeoAnalysisService.AreaBin> bins(
             @PathVariable long id, @RequestParam String kpi,
-            @RequestParam(defaultValue = "150") double sizeMeters) {
-        return geo.areaBins(id, kpi, sizeMeters);
+            @RequestParam(defaultValue = "150") double sizeMeters,
+            @RequestParam(defaultValue = "AVERAGE") String statistic) {
+        return geo.areaBins(id, kpi, sizeMeters, statistic);
     }
 
     /**
@@ -51,16 +52,20 @@ public class AnalyticsController {
     }
 
     /**
-     * The outline of where each cell was measured serving.
+     * The outline of where each cell was measured.
      *
      * Not the cell's configured coverage - we hold no beamwidth or range - but the ground
-     * it actually held on this drive.
+     * it actually held. `basis` chooses between where the cell SERVED and where it was
+     * among the three strongest; `pcis` narrows a drive past dozens of cells to the few
+     * being asked about.
      */
     @GetMapping("/cell-footprints")
     public List<GeoAnalysisService.CellFootprint> cellFootprints(
             @PathVariable long id,
-            @RequestParam(defaultValue = "10") int minSamples) {
-        return geo.cellFootprints(id, minSamples);
+            @RequestParam(defaultValue = "10") int minSamples,
+            @RequestParam(defaultValue = "SERVING") String basis,
+            @RequestParam(required = false) List<Integer> pcis) {
+        return geo.cellFootprints(id, minSamples, basis, pcis);
     }
 
     @GetMapping("/coverage-issues")

@@ -29,6 +29,11 @@ export interface TrackPoint {
   speedKmh: number | null
   /** How the step from the previous point may be drawn: 0 continuous, 1 gap, 2 bad fix. */
   breakBefore: number
+  /**
+   * Inside the drawn area, or null when no area was drawn. Decided by the server, which is
+   * where the containment rule lives - see AnalysisService.track.
+   */
+  inArea?: boolean | null
 }
 
 export interface SeriesPoint { seq: number; ts: string; value: number | null }
@@ -179,6 +184,8 @@ export interface TestRun {
 export interface AreaBin {
   centerLat: number; centerLon: number; sizeMeters: number; sampleCount: number
   avgValue: number; minValue: number; maxValue: number; color: string; binLabel: string
+  /** Which statistic the colour came from, and the words for it. See BinStatistic. */
+  statistic: string; statisticLabel: string; value: number
 }
 
 export interface CoverageIssue {

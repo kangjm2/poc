@@ -71,6 +71,22 @@ export interface PaintRule {
   pciColors: Map<number, string>
 }
 
+/**
+ * Whether this sample is context rather than answer.
+ *
+ * Two questions can mute a sample and they compose: a legend band isolates by VALUE, a
+ * drawn shape isolates by PLACE, and a sample outside either is context. Written once so
+ * the two cannot drift into different greys or different ideas of "outside" - the second
+ * reason arrived months after the first, and the temptation was a separate branch beside
+ * the existing one rather than the same sentence.
+ *
+ * `inArea` undefined or null means no shape was drawn, which is not the same as outside.
+ */
+function muted(p: TrackPoint, rule: PaintRule): boolean {
+  if (rule.isolate != null && p.binLabel !== rule.isolate) return true
+  return p.inArea === false
+}
+
 export interface Paint {
   color: string
   weight: number
@@ -89,10 +105,14 @@ export interface Paint {
  */
 export function paint(p: TrackPoint, rule: PaintRule): Paint {
   if (rule.colorBy === 'pci') {
+    // The shape still mutes here. Identity colouring answers "which cell", and asking it
+    // inside a drawn area is the same question narrowed - unlike the legend band, which
+    // is about a value ramp that identity colouring is not using.
+    if (p.inArea === false) return { color: MUTED, weight: 3, emphasised: false }
     const c = p.servingPci == null ? UNIDENTIFIED : (rule.pciColors.get(p.servingPci) ?? UNIDENTIFIED)
     return { color: c, weight: 6, emphasised: true }
   }
-  if (rule.isolate != null && p.binLabel !== rule.isolate) {
+  if (muted(p, rule)) {
     return { color: MUTED, weight: 3, emphasised: false }
   }
   return { color: p.color, weight: 6, emphasised: true }

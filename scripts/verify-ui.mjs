@@ -925,11 +925,55 @@ await page.waitForTimeout(800)
 check('거리 비닝을 끄면 패널이 사라짐',
   await page.locator('.panel:has(.title:text-matches("Distance profile"))').count() === 0)
 
+// A tile's colour comes from a statistic, and until now that statistic was always the
+// mean with nothing on screen saying so. Switching to the minimum must repaint AND the
+// header must say which - a switch that changed the colours while the caption still read
+// "[Average]" would be the same defect the P0 round removed six times.
+await page.locator('.toolbar select[aria-label="Area bins"]').selectOption('150')
+await page.waitForTimeout(2500)
+const tileColours = () => page.locator('.leaflet-overlay-pane path[fill-opacity="0.65"]')
+  .evaluateAll((ps) => ps.map((p) => (p.getAttribute('fill') ?? '').toLowerCase()).join(','))
+const binTitle = () => page.locator('.map-panel header .title').innerText()
+const avgColours = await tileColours()
+const avgTitle = await binTitle()
+await page.locator('.toolbar select[aria-label="Bin statistic"]').selectOption('MINIMUM')
+await page.waitForTimeout(2500)
+const minColours = await tileColours()
+const minTitle = await binTitle()
+check('타일을 칠하는 통계를 고를 수 있음',
+  avgColours.length > 0 && minColours.length > 0 && avgColours !== minColours,
+  `${avgColours.split(',').length} tiles, colours ${avgColours === minColours ? 'IDENTICAL' : 'differ'}`)
+check('그리고 화면이 어느 통계인지 말함',
+  /\[Average\]/.test(avgTitle) && /\[Minimum\]/.test(minTitle),
+  `"${avgTitle.trim()}"`)
+await page.locator('.toolbar select[aria-label="Bin statistic"]').selectOption('AVERAGE')
+await page.locator('.toolbar select[aria-label="Area bins"]').selectOption('0')
+await page.waitForTimeout(1500)
+
 await page.locator('.toolbar .group:has(label:text-is("Footprints")) button').click()
 await page.waitForTimeout(2500)
 const polys = await page.locator('.leaflet-overlay-pane path[fill-opacity="0.1"]').count()
 check('셀 커버리지 폴리곤', polys >= 3, `${polys} polygons`)
 await page.screenshot({ path: `${OUT}/28-footprints.png` })
+
+// Where a cell SERVED and where it was among the three strongest are different shapes,
+// and the second is the one that makes overspill visible. The witness is the hulls' total
+// area, not the polygon count: both bases return the same cells, so counting them would
+// pass whichever rule ran. Area cannot - a cell measured beyond where it won encloses
+// more ground.
+const hullArea = () => page.locator('.leaflet-overlay-pane path[fill-opacity="0.1"]')
+  .evaluateAll((ps) => ps.reduce((sum, p) => {
+    const b = p.getBBox(); return sum + b.width * b.height
+  }, 0))
+const servingArea = await hullArea()
+await page.locator('.toolbar select[aria-label="Footprint basis"]').selectOption('TOP3')
+await page.waitForTimeout(2500)
+const topArea = await hullArea()
+check('세 번째로 강했던 곳까지 포함하면 푸트프린트가 넓어짐',
+  servingArea > 0 && topArea > servingArea * 1.05,
+  `serving ${servingArea.toFixed(0)} -> top3 ${topArea.toFixed(0)}`)
+await page.locator('.toolbar select[aria-label="Footprint basis"]').selectOption('SERVING')
+await page.waitForTimeout(2000)
 await page.locator('.toolbar .group:has(label:text-is("Footprints")) button').click()
 await page.waitForTimeout(1200)
 check('푸트프린트를 끄면 폴리곤이 사라짐',
