@@ -37,22 +37,31 @@ import { buildPciColors } from './view/paint'
 /**
  * Workbook pages. Existing users switch screen sets from a tab strip along the
  * bottom, so the same idea is kept here rather than a side navigation.
+ *
+ * `isolates` says whether this screen draws anything the colour scale paints, and so
+ * whether clicking a legend band can do what the legend says it does.
+ *
+ * It is a column here rather than a check inside the legend because the legend cannot see
+ * the screen. Before this column the dock offered isolation on all fourteen tabs while
+ * four honoured it: on the other ten the legend answered a click with "the rest of the
+ * drive is drawn grey" over a screen that had no drive on it. Adding a screen now means
+ * answering the question in the same row that names it.
  */
 const WORKBOOKS = [
-  { id: 'overview', label: 'Overview' },
-  { id: 'radio', label: 'Radio Quality' },
-  { id: 'throughput', label: 'Throughput' },
-  { id: 'fronthaul', label: 'Fronthaul' },
-  { id: 'cells', label: 'Cells' },
-  { id: 'neighbours', label: 'Monitored Set' },
-  { id: 'mobility', label: 'Mobility' },
-  { id: 'signaling', label: 'L3 Signalling' },
-  { id: 'problems', label: 'Problem Survey' },
-  { id: 'degradation', label: 'Degradation' },
-  { id: 'coverage', label: 'Coverage Issues' },
-  { id: 'statistics', label: 'Statistics' },
-  { id: 'fieldtolab', label: 'Field-to-Lab' },
-  { id: 'spatialdiff', label: 'Compare on the Ground' },
+  { id: 'overview', label: 'Overview', isolates: true },
+  { id: 'radio', label: 'Radio Quality', isolates: false },
+  { id: 'throughput', label: 'Throughput', isolates: false },
+  { id: 'fronthaul', label: 'Fronthaul', isolates: false },
+  { id: 'cells', label: 'Cells', isolates: true },
+  { id: 'neighbours', label: 'Monitored Set', isolates: false },
+  { id: 'mobility', label: 'Mobility', isolates: true },
+  { id: 'signaling', label: 'L3 Signalling', isolates: false },
+  { id: 'problems', label: 'Problem Survey', isolates: false },
+  { id: 'degradation', label: 'Degradation', isolates: false },
+  { id: 'coverage', label: 'Coverage Issues', isolates: true },
+  { id: 'statistics', label: 'Statistics', isolates: false },
+  { id: 'fieldtolab', label: 'Field-to-Lab', isolates: false },
+  { id: 'spatialdiff', label: 'Compare on the Ground', isolates: false },
 ] as const
 type BuiltInId = (typeof WORKBOOKS)[number]['id']
 /**
@@ -112,7 +121,13 @@ export function App() {
    * serving cell is an identity, and they are not two palettes for one idea.
    */
   const [colorBy, setColorBy] = useState<ColorBy>('kpi')
-  /** One bin shown alone on the map, the rest muted. */
+  /**
+   * One bin shown alone, the rest muted.
+   *
+   * Kept across tabs rather than cleared on every switch: the user isolated a bin to ask a
+   * question, and stepping away to read a number is part of asking it. The legend simply
+   * stops offering the control where nothing would honour it - see WORKBOOKS.isolates.
+   */
   const [isolate, setIsolate] = useState<string | null>(null)
   /** What the legend's shares are weighted by. See view of AggregationBasis on the server. */
   const [legendBasis, setLegendBasis] = useState('SAMPLE')
@@ -370,6 +385,16 @@ export function App() {
   const maxSeq = Math.max(0, (session?.sampleCount ?? 1) - 1)
 
   /**
+   * Whether the screen in front of the user honours isolation.
+   *
+   * A composed workbook is not in WORKBOOKS and its map panes paint from the same scale,
+   * so it isolates too. Read off the table rather than listed here a second time.
+   */
+  const tabIsolates = typeof workbook === 'string' && workbook.startsWith('wb:')
+    ? true
+    : (WORKBOOKS.find((w) => w.id === workbook)?.isolates ?? false)
+
+  /**
    * The one writer of the time cursor.
    *
    * There were fifteen call sites setting it directly and none of them clamped, so a
@@ -575,7 +600,6 @@ export function App() {
           workbook={book}
           sessionId={sessionId}
           defs={defs}
-          track={track}
           cells={cells}
           cursorSeq={cursorSeq}
           onCursorChange={moveCursor}
@@ -609,7 +633,7 @@ export function App() {
             )}
             {distanceStep > 0 && (
               <DistanceProfile sessionId={sessionId} kpiName={kpi} stepMeters={distanceStep}
-                               cursorSeq={cursorSeq} onJump={moveCursor} />
+                               cursorSeq={cursorSeq} isolate={isolate} onJump={moveCursor} />
             )}
             {chart(kpi)}
             <ParameterGrid snapshot={snapshot} />
@@ -712,7 +736,7 @@ export function App() {
       case 'cells':
         return (
           <CellsPage sessionId={sessionId} kpi={kpi} range={range}
-                     scaleVersion={scaleVersion} />
+                     scaleVersion={scaleVersion} isolate={isolate} />
         )
       case 'statistics':
         return (
@@ -1003,7 +1027,8 @@ export function App() {
                   ) : (
                     <LegendPanel dist={dist}
                                  onEdit={activeDef ? () => setEditingScale(true) : undefined}
-                                 isolate={isolate} onIsolate={setIsolate}
+                                 isolate={isolate}
+                                 onIsolate={tabIsolates ? setIsolate : undefined}
                                  weightedBy={legendBasis} onWeightedBy={setLegendBasis} />
                   )}
                 </div>

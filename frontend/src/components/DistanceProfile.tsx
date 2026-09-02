@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { api } from '../api/client'
 import type { DistanceBin } from '../api/types'
+import { paintBar } from '../view/paint'
 
 /**
  * The drive laid out along DISTANCE rather than time.
@@ -19,11 +20,12 @@ import type { DistanceBin } from '../api/types'
  * area bins, and two different aggregations of the same route drawn the same way would
  * leave a user unable to tell which one they were reading.
  */
-export function DistanceProfile({ sessionId, kpiName, stepMeters, cursorSeq, onJump }: {
+export function DistanceProfile({ sessionId, kpiName, stepMeters, cursorSeq, isolate, onJump }: {
   sessionId: number | null
   kpiName: string
   stepMeters: number
   cursorSeq: number
+  isolate?: string | null
   onJump: (seq: number) => void
 }) {
   const [bins, setBins] = useState<DistanceBin[] | null>(null)
@@ -98,7 +100,7 @@ export function DistanceProfile({ sessionId, kpiName, stepMeters, cursorSeq, onJ
                    + `avg ${b.avgValue} (${b.minValue}…${b.maxValue}) · ${b.binLabel}`}
                 </title>
                 <rect x={x} y={y(b.avgValue)} width={Math.max(2, SLOT - 2)} height={h}
-                      fill={b.color}
+                      fill={paintBar(b.binLabel, b.color, isolate ?? null)}
                       stroke={isCursor ? 'var(--cursor)' : 'none'}
                       strokeWidth={isCursor ? 2 : 0} />
               </g>

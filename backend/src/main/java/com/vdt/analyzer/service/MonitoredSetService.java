@@ -83,6 +83,48 @@ public class MonitoredSetService {
      */
     private static final double POLLUTION_MIN_BEST_DBM = -110.0;
 
+    /**
+     * The serving link must actually be suffering for competing cells to be pollution.
+     *
+     * The reference asks four things of a polluted sample, not three (UC20, p173): the
+     * competing window, the count, an RSCP floor, and `Ec/N0 best active set < -12` - the
+     * serving pilot has to be measurably degraded. We had the first three. Without the
+     * fourth, "several cells within a few dB" is reported as pollution even where the
+     * terminal is being served perfectly well, which is a place an engineer would be sent
+     * to fix nothing.
+     *
+     * RSRQ rather than SINR, which was the first choice and the wrong one. Ec/N0 is pilot
+     * energy over TOTAL received density: the serving signal sits in its own denominator,
+     * so the scale is bounded near the top and each additional pilot pushes it down. RSRQ
+     * has that same shape (N x RSRP / RSSI) and SINR does not - SINR is signal over
+     * interference plus noise, unbounded upward, and it carries receiver quality with it.
+     * Two runs of the same route with the same pilots but different modems differ in SINR,
+     * and a pollution verdict must not. The schema agrees: sample_neighbour stores rsrp and
+     * rsrq per cell and no SINR at all, so RSRQ is the column the monitored set can
+     * actually show beside this verdict.
+     *
+     * -15 dB rather than -12 because the unit differs. It is where this application's own
+     * catalogue stops calling RSRQ normal (KpiSeed: -20..-15 is WARNING, below -20
+     * CRITICAL). -12 would sit inside the NORMAL band, so the panel would call a stretch
+     * polluted while the map painted the same samples normal.
+     *
+     * Read as a constant, not from kpi_threshold, even though it is the same number there:
+     * those bins are user-editable and AutoScale substitutes derived ones, so a colour edit
+     * would silently re-scope an analysis verdict.
+     *
+     * Note for anyone measuring the effect on seeded data: on the city drives there is
+     * almost none, and that is a property of the generator rather than of the rule.
+     * DriveTestGenerator derives rsrq from the same per-cell powers the window test reads,
+     * so there a crowded sample is always also a low-RSRQ one. On imported measurements the
+     * two are independent - quality arrives measured, carrying load and noise rise and
+     * interference from cells that never enter the monitored set - which is when this
+     * condition starts excluding things.
+     */
+    private static final double POLLUTION_MAX_SERVING_RSRQ_DB = -15.0;
+
+    /** The KPI carrying serving-link quality. Named once; the query below binds it. */
+    private static final String QUALITY_KPI = "RSRQ";
+
     private final JdbcTemplate jdbc;
 
     public MonitoredSetService(JdbcTemplate jdbc) {
@@ -221,22 +263,27 @@ public class MonitoredSetService {
                     FROM sample_neighbour n
                     WHERE n.session_id = ?
                 )
-                SELECT seq,
-                       to_char(min(ts) AT TIME ZONE 'UTC',
+                SELECT w.seq,
+                       to_char(min(w.ts) AT TIME ZONE 'UTC',
                                'YYYY-MM-DD"T"HH24:MI:SS"Z"') AS ts,
                        count(*) AS competing,
-                       max(best_rsrp) AS best_rsrp,
-                       array_agg(pci ORDER BY rsrp DESC) AS pcis
-                FROM win
-                WHERE rsrp >= best_rsrp - ? AND best_rsrp >= ?
-                GROUP BY seq
+                       max(w.best_rsrp) AS best_rsrp,
+                       array_agg(w.pci ORDER BY w.rsrp DESC) AS pcis
+                FROM win w
+                -- Inner join, so a sample with no quality reading is not called polluted:
+                -- the fourth condition is unproven there, and unproven is not satisfied.
+                JOIN sample_kpi q ON q.session_id = w.session_id AND q.seq = w.seq
+                                 AND q.kpi_name = ? AND q.value < ?
+                WHERE w.rsrp >= w.best_rsrp - ? AND w.best_rsrp >= ?
+                GROUP BY w.seq
                 HAVING count(*) >= ?
-                ORDER BY seq
+                ORDER BY w.seq
                 """,
                 (rs, i) -> new Object[]{rs.getInt("seq"), rs.getString("ts"),
                         rs.getInt("competing"), rs.getDouble("best_rsrp"),
                         (Integer[]) rs.getArray("pcis").getArray()},
-                sessionId, window, POLLUTION_MIN_BEST_DBM, need);
+                sessionId, QUALITY_KPI, POLLUTION_MAX_SERVING_RSRQ_DB,
+                window, POLLUTION_MIN_BEST_DBM, need);
 
         List<PollutionSpan> spans = new ArrayList<>();
         int i = 0;

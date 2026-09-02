@@ -554,8 +554,9 @@ export function KpiWorkbench({ defs, onChanged, eventTypes = [], sessionId = nul
                 <div style={{ display: 'grid', gap: 6 }}>
                   <div style={{ color: '#666', whiteSpace: 'normal' }}>
                     The first state whose condition holds wins. States become the numbers
-                    1, 2, 3&hellip; in this order, because a KPI value is a number; the
-                    names stay in the graph so the legend can show them.
+                    1, 2, 3&hellip; in this order, because a KPI value is a number. The
+                    names stay here on the canvas &mdash; a published state machine charts
+                    as 1, 2, 3, so note which is which before you leave this pane.
                   </div>
                   {(sel.states ?? []).map((st, i) => (
                     <div key={i} style={{ display: 'flex', gap: 6 }}>

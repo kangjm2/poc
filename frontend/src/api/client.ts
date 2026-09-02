@@ -7,7 +7,7 @@ import type {
   MonitoredSet, NeighbourBreakdown, PollutionSpan, AreaStats, SpatialDiff,
   GraphNodePreview,
   GraphRequest, GraphValidation, StoredGraph,
-  DistanceBin, CellFootprint, Workbook, WorkbookRequest, EventType,
+  DistanceBin, CellFootprint, Workbook, WorkbookLimits, WorkbookRequest, EventType,
 } from './types'
 
 const BASE = '/api'
@@ -235,6 +235,10 @@ export const api = {
     get<CellFootprint[]>(`/sessions/${id}/cell-footprints`),
 
   workbooks: () => get<Workbook[]>('/workbooks'),
+
+  // Fetched, not hardcoded: the server is the one that rejects an over-full pane, so it is
+  // the one that says how full is full.
+  workbookLimits: () => get<WorkbookLimits>('/workbooks/limits'),
 
   saveWorkbook: async (body: WorkbookRequest): Promise<Workbook> => {
     const res = await fetch(`${BASE}/workbooks`, {

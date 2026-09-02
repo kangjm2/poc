@@ -404,9 +404,16 @@ public final class KpiGraph {
                 }
                 String alias = column(n.as() == null ? "STATE" : n.as());
                 // Each state is a number, not a label, because the output becomes a KPI and
-                // sample_kpi.value is a double. The names are kept in the graph document and
-                // shown in the UI legend; storing them as text would need a second value
-                // column that every downstream query would have to learn about.
+                // sample_kpi.value is a double. The names stay in the graph document, where
+                // the canvas can show them, and go NO FURTHER: a published state machine is
+                // a KPI whose values read 1, 2, 3, and every screen that draws it says so.
+                //
+                // This comment used to claim the legend showed the names. It did not, and
+                // nothing read them - the claim outlived a plan. Making it true is cheap in
+                // mechanism (states are consecutive integers, and a KPI's threshold ladder
+                // already turns value bands into labels) but needs one decision first: a
+                // graph writing its KPI's ladder would overwrite a scale the user may have
+                // edited, on every save. Until that is settled, the names stay on the canvas.
                 StringBuilder b = new StringBuilder("CASE");
                 int code = 1;
                 for (StateRule r : n.states()) {

@@ -788,10 +788,32 @@ scenario('S12 · The monitored set is consistent with everything else')
 
   // Pilot pollution must mean competing USABLE cells. Firing it inside a fade would send
   // an engineer to retune antennas where the real problem is that nothing reaches.
+  //
+  // Asserted with a non-empty guard, because `.every()` is true of an empty array: the
+  // previous version of this step passed either when every stretch had a usable best cell
+  // OR when the detector had stopped returning anything at all, and those are opposite
+  // outcomes. A detector that reports nothing is broken, not careful.
   const spans = await apiGet(`/api/sessions/${cityId}/pilot-pollution`)
+  step('pilot pollution still finds the crowded stretch', spans.length > 0,
+    `${spans.length} stretches`)
   step('pilot pollution never reports a coverage hole',
-    spans.every((sp) => sp.meanBestRsrp >= -110),
+    spans.length > 0 && spans.every((sp) => sp.meanBestRsrp >= -110),
     spans.length ? spans.map((sp) => sp.meanBestRsrp).join(', ') : 'no stretches')
+
+  // The fourth condition the reference asks for (UC20 p173: Ec/N0 best active set < -12).
+  // Read back the serving quality at each reported sample rather than trusting the query
+  // that produced them - this is the assertion that would fail if the JOIN were dropped,
+  // on any measurement where a crowded sample has a healthy serving link.
+  const pollutedQuality = []
+  for (const sp of spans) {
+    const snap = await apiGet(`/api/sessions/${cityId}/snapshot?seq=${sp.fromSeq}`)
+    const sinr = Object.values(snap.byCategory ?? {}).flat()
+      .find((r) => r.kpi === 'SINR')?.value
+    if (sinr != null) pollutedQuality.push(sinr)
+  }
+  step('every polluted sample has a degraded serving link',
+    pollutedQuality.length > 0 && pollutedQuality.every((v) => v < 5),
+    pollutedQuality.length ? `SINR: ${pollutedQuality.join(', ')}` : 'no SINR read')
 
   // Inside the deep fade the set must SHRINK rather than stay full - a fade that left the
   // neighbour count untouched would mean the fade was applied to the serving cell alone.

@@ -37,8 +37,22 @@ public class WorkbookService {
     /** Pane kinds that can actually be filled from what this application records. */
     private static final Set<String> KINDS = Set.of("CHART", "MAP");
 
+    /**
+     * The caps, and the record the editor reads them through.
+     *
+     * Public so the controller can serve them: the editor used to carry its own idea of
+     * how many layers a pane holds, which was no idea at all - it kept offering a ninth
+     * and the user found the limit by pressing Save. A number enforced in one process and
+     * guessed in another is the same rule written twice, so it is served instead.
+     */
+    public record Limits(int maxPanes, int maxLayersPerPane) {}
+
     private static final int MAX_PANES = 8;
     private static final int MAX_LAYERS_PER_PANE = 8;
+
+    public Limits limits() {
+        return new Limits(MAX_PANES, MAX_LAYERS_PER_PANE);
+    }
 
     private final JdbcTemplate jdbc;
     private final KpiCatalog catalog;

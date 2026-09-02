@@ -97,3 +97,19 @@ export function paint(p: TrackPoint, rule: PaintRule): Paint {
   }
   return { color: p.color, weight: 6, emphasised: true }
 }
+
+/**
+ * The same isolation rule for anything that is not the route line.
+ *
+ * The bars on the Cells page and the distance profile are painted from the same colour
+ * scale as the route, so a legend band the user clicked has an obvious meaning there too.
+ * They read it through this rather than repeating the comparison, because the moment the
+ * rule exists in two places one of them is eventually the stale one - and the stale copy
+ * shows as a screen that quietly disagrees with the map beside it.
+ *
+ * Muting rather than filtering, for the reason paint() gives: a chart with only the
+ * isolated bar left loses the sense of how big a share it was.
+ */
+export function paintBar(binLabel: string, color: string, isolate: string | null): string {
+  return isolate != null && binLabel !== isolate ? MUTED : color
+}

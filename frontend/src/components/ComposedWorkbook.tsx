@@ -2,7 +2,8 @@ import { useEffect, useState } from 'react'
 import { api } from '../api/client'
 import { RouteMap } from './RouteMap'
 import type {
-  CellRef, KpiDefinition, Series, SeriesPoint, TrackPoint, Workbook, WorkbookPane,
+  CellRef, KpiDefinition, Series, SeriesPoint, TrackPoint, Workbook, WorkbookLimits,
+  WorkbookPane,
 } from '../api/types'
 
 /**
@@ -25,14 +26,18 @@ import type {
 const TRACE = ['#30578d', '#c0392b', '#1f7a1f', '#8a2be2', '#d4783c', '#0080c0',
                '#7a6000', '#b5179e']
 
-function LayersDock({ pane, defs, onChange, onRemove }: {
+function LayersDock({ pane, defs, maxLayers, onChange, onRemove }: {
   pane: WorkbookPane
   defs: KpiDefinition[]
+  maxLayers: number | null
   onChange: (p: WorkbookPane) => void
   onRemove: () => void
 }) {
   const [adding, setAdding] = useState('')
   const used = new Set(pane.layers.map((l) => l.kpiName))
+  // Null while the limit is still being fetched: better to allow the add and let the
+  // server answer than to block a control on a request the user cannot see.
+  const full = maxLayers != null && pane.layers.length >= maxLayers
 
   return (
     <div className="dock-section" style={{ minWidth: 210, maxWidth: 210 }}>
@@ -43,17 +48,32 @@ function LayersDock({ pane, defs, onChange, onRemove }: {
             Nothing on this pane yet.
           </div>
         )}
+        {pane.kind === 'MAP' && pane.layers.length > 1 && (
+          <div style={{ color: '#666', whiteSpace: 'normal', paddingBottom: 4 }}>
+            A map draws one layer at a time.
+          </div>
+        )}
         {pane.layers.map((l, i) => {
           const def = defs.find((d) => d.name === l.kpiName)
           return (
             <div key={l.kpiName}
                  style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '2px 0' }}>
+              {/* A map paints ONE colour scale, so ticking on a map pane is exclusive:
+                  showing a layer hides the others rather than stacking something the map
+                  cannot draw. Chart panes stack, which is the whole point of them. */}
               <input type="checkbox" checked={l.visible}
-                     title={l.visible ? 'Hide this trace' : 'Show this trace'}
+                     title={l.visible
+                       ? (pane.kind === 'MAP' ? 'Stop drawing this layer' : 'Hide this trace')
+                       : (pane.kind === 'MAP' ? 'Draw this layer instead' : 'Show this trace')}
                      onChange={(e) => onChange({
                        ...pane,
-                       layers: pane.layers.map((x, j) =>
-                         j === i ? { ...x, visible: e.target.checked } : x),
+                       layers: pane.layers.map((x, j) => (
+                         j === i
+                           ? { ...x, visible: e.target.checked }
+                           : (pane.kind === 'MAP' && e.target.checked
+                             ? { ...x, visible: false }
+                             : x)
+                       )),
                      })} />
               <span style={{
                 width: 9, height: 9, borderRadius: 2, flex: '0 0 auto',
@@ -71,16 +91,28 @@ function LayersDock({ pane, defs, onChange, onRemove }: {
           )
         })}
 
-        <select value={adding} style={{ width: '100%', marginTop: 6 }}
+        {full && (
+          <div style={{ color: '#666', whiteSpace: 'normal', marginTop: 6 }}>
+            {`This pane is full at ${maxLayers} layers. Remove one to add another.`}
+          </div>
+        )}
+        <select value={adding} style={{ width: '100%', marginTop: 6 }} disabled={full}
                 onChange={(e) => {
                   if (!e.target.value) return
                   onChange({
                     ...pane,
-                    layers: [...pane.layers, { kpiName: e.target.value, visible: true }],
+                    layers: [
+                      // Same exclusivity as the checkbox: adding to a map pane draws the
+                      // new layer, so the previous one stops being drawn.
+                      ...(pane.kind === 'MAP'
+                        ? pane.layers.map((x) => ({ ...x, visible: false }))
+                        : pane.layers),
+                      { kpiName: e.target.value, visible: true },
+                    ],
                   })
                   setAdding('')
                 }}>
-          <option value="">+ add layer…</option>
+          <option value="">{full ? 'Pane full' : '+ add layer…'}</option>
           {defs.filter((d) => !used.has(d.name)).map((d) => (
             <option key={d.name} value={d.name}>{d.displayName}</option>
           ))}
@@ -95,12 +127,11 @@ function LayersDock({ pane, defs, onChange, onRemove }: {
 }
 
 export function ComposedWorkbook({
-  workbook, sessionId, defs, track, cells, cursorSeq, onCursorChange, onSaved, onDeleted,
+  workbook, sessionId, defs, cells, cursorSeq, onCursorChange, onSaved, onDeleted,
 }: {
   workbook: Workbook
   sessionId: number | null
   defs: KpiDefinition[]
-  track: TrackPoint[]
   cells: CellRef[]
   cursorSeq: number
   onCursorChange: (seq: number) => void
@@ -112,6 +143,10 @@ export function ComposedWorkbook({
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [series, setSeries] = useState<Series[]>([])
+  // See WorkbookService.Limits: the server rejects an over-full workbook, so the server is
+  // asked how full is full rather than the editor keeping a second copy of the number.
+  const [limits, setLimits] = useState<WorkbookLimits | null>(null)
+  useEffect(() => { api.workbookLimits().then(setLimits).catch(() => {}) }, [])
 
   // The workbook fetches its own series rather than taking App's.
   //
@@ -129,6 +164,33 @@ export function ComposedWorkbook({
       .catch(() => { if (live) setSeries([]) })
     return () => { live = false }
   }, [sessionId, wantedKey])
+
+  /**
+   * Map panes fetch their own track, for the same reason the pane fetches its own series.
+   *
+   * A track carries the COLOUR of every sample, computed on the server against one KPI's
+   * scale. App's track is painted for App's globally selected KPI, so handing it to a pane
+   * meant the pane's Layers dock named one KPI while the map drew another - and because the
+   * caption was written from the dock, the two disagreed silently and the caption was the
+   * one that looked authoritative.
+   */
+  const mapKpis = draft.panes
+    .filter((p) => p.kind === 'MAP')
+    .map((p) => p.layers.find((l) => l.visible)?.kpiName)
+    .filter((k): k is string => !!k)
+  const mapKey = [...new Set(mapKpis)].sort().join(',')
+  const [tracks, setTracks] = useState<Record<string, TrackPoint[]>>({})
+  useEffect(() => {
+    if (sessionId == null || mapKey === '') { setTracks({}); return }
+    let live = true
+    const names = mapKey.split(',')
+    Promise.all(names.map((n) => api.track(sessionId, n).catch(() => [] as TrackPoint[])))
+      .then((rows) => {
+        if (!live) return
+        setTracks(Object.fromEntries(names.map((n, i) => [n, rows[i]])))
+      })
+    return () => { live = false }
+  }, [sessionId, mapKey])
 
   // Reset when the user switches tabs, or an edit to one workbook would appear to
   // follow them onto the next.
@@ -148,12 +210,23 @@ export function ComposedWorkbook({
     } finally { setBusy(false) }
   }
 
+  // Deleting takes the panes and their layers with it, and a workbook is the one thing here
+  // the user ASSEMBLED - everything else on screen can be re-derived from the measurement.
+  // Deleting a measurement and resetting a scale both ask first; this was the only
+  // destructive action that did not, and it destroyed the most work.
   const remove = async () => {
+    const panes = draft.panes.length
+    const layers = draft.panes.reduce((n, p) => n + p.layers.length, 0)
+    if (!window.confirm(
+      `Delete the workbook "${draft.name}" with its ${panes} pane${panes === 1 ? '' : 's'}`
+      + ` and ${layers} layer${layers === 1 ? '' : 's'}?`)) return
     setBusy(true)
     try { await api.deleteWorkbook(draft.id); onDeleted(draft.id) }
     catch (e) { setError(e instanceof Error ? e.message : String(e)) }
     finally { setBusy(false) }
   }
+
+  const panesFull = limits != null && draft.panes.length >= limits.maxPanes
 
   const addPane = (kind: 'CHART' | 'MAP') =>
     edit([...draft.panes, { kind, title: null, layers: [] }])
@@ -169,8 +242,12 @@ export function ComposedWorkbook({
             {dirty ? ' · unsaved' : ''}
           </span>
           <span style={{ marginLeft: 'auto', display: 'flex', gap: 6 }}>
-            <button onClick={() => addPane('CHART')}>+ Chart pane</button>
-            <button onClick={() => addPane('MAP')}>+ Map pane</button>
+            <button onClick={() => addPane('CHART')} disabled={panesFull}
+                    title={panesFull ? `A workbook holds at most ${limits?.maxPanes} panes`
+                                     : undefined}>+ Chart pane</button>
+            <button onClick={() => addPane('MAP')} disabled={panesFull}
+                    title={panesFull ? `A workbook holds at most ${limits?.maxPanes} panes`
+                                     : undefined}>+ Map pane</button>
             <button onClick={save} disabled={busy || !dirty}>
               {busy ? 'Saving…' : 'Save'}
             </button>
@@ -196,13 +273,24 @@ export function ComposedWorkbook({
           <div key={i} style={{ display: 'flex', gap: 8, alignItems: 'stretch' }}>
             <div style={{ flex: 1, minWidth: 0 }}>
               {pane.kind === 'MAP' ? (
-                <RouteMap track={track} cells={cells} cursorSeq={cursorSeq}
-                          frameKey={String(sessionId)}
-                          onCursorChange={onCursorChange}
-                          kpiName={visible[0]
-                            ? (defs.find((d) => d.name === visible[0].kpiName)?.displayName
-                               ?? visible[0].kpiName)
-                            : 'nothing selected'} />
+                visible.length === 0 ? (
+                  // The same answer a chart pane gives, for the same reason: with nothing
+                  // ticked there is no KPI to colour by, and drawing the route in some
+                  // other KPI's colours would answer a question nobody asked.
+                  <div className="panel">
+                    <header><span className="title">{pane.title ?? 'Map'}</span></header>
+                    <div style={{ padding: 12, color: '#666' }}>
+                      No visible layer. Tick one in the Layers dock.
+                    </div>
+                  </div>
+                ) : (
+                  <RouteMap track={tracks[visible[0].kpiName] ?? []} cells={cells}
+                            cursorSeq={cursorSeq}
+                            frameKey={`${sessionId}:${visible[0].kpiName}`}
+                            onCursorChange={onCursorChange}
+                            kpiName={defs.find((d) => d.name === visible[0].kpiName)?.displayName
+                                     ?? visible[0].kpiName} />
+                )
               ) : visible.length === 0 ? (
                 <div className="panel">
                   <header><span className="title">{pane.title ?? 'Chart'}</span></header>
@@ -223,7 +311,8 @@ export function ComposedWorkbook({
                   cursorSeq={cursorSeq} onCursorChange={onCursorChange} />
               )}
             </div>
-            <LayersDock pane={pane} defs={defs} onChange={setPane}
+            <LayersDock pane={pane} defs={defs}
+                        maxLayers={limits?.maxLayersPerPane ?? null} onChange={setPane}
                         onRemove={() => edit(draft.panes.filter((_, j) => j !== i))} />
           </div>
         )
