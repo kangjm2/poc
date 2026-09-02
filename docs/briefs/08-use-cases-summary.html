@@ -1,0 +1,238 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>⑧ Use Case 요약표 — Nemo Analyze 10.2</title>
+<link rel="stylesheet" href="brief.css">
+<style>
+table.uc{font-size:13px}
+table.uc th:nth-child(1){width:52px}
+table.uc th:nth-child(2){width:24%}
+table.uc th:nth-child(3){width:20%}
+table.uc th:nth-child(4){width:26%}
+table.uc td:nth-child(1){white-space:nowrap;font-weight:600}
+table.uc td:nth-child(1) .src{display:block;font-weight:400}
+table.uc tr.ch td{background:var(--panel);font-weight:600;color:var(--dim)}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="top">
+  <h1>⑧ Use Case 요약표</h1>
+  <div class="sub">Nemo Analyze 10.2 User Guide의 유즈케이스 31개 — 설명 · 전제 · 입력 · 출력</div>
+</header>
+
+<nav class="crumbs"><a href="index.html">← 브리프 목록</a> ·
+  상세: <a href="07-use-cases.html">⑦ Use Case 31개 상세</a></nav>
+
+<p>매뉴얼이 각 유즈케이스에서 <strong>무엇을 하는지</strong>, <strong>무엇이 갖춰져 있어야 하는지</strong>,
+<strong>무엇을 넣고</strong> <strong>무엇이 나오는지</strong>를 한 줄씩 적은 표입니다. 절차와 대화상자 값은
+<a href="07-use-cases.html">⑦</a>에 있습니다. 페이지는 원문 기준입니다.</p>
+
+<table class="uc">
+<tr><th>UC</th><th>Description</th><th>Prerequisite</th><th>Input data</th><th>Output data</th></tr>
+
+<tr class="ch"><td colspan="5">8장 Viewing Measurement Data — 지도에서 열기</td></tr>
+<tr><td>1<span class="src">p66–68</span></td>
+<td>측정 중 한 번이라도 3강 안에 든 모든 셀의 푸트프린트(Ec/N0 · RSCP · RSRP · RSRQ)를 셀마다 한 페이지로 지도에 그림</td>
+<td>측정 파일이 DB에 있음. 결과 페이지가 수백 장이면 동작하지 않으므로 SC/채널 필터로 제한</td>
+<td>단말 또는 UMTS 스캐너 측정(신호 파라미터 + 셀 식별 + GPS) · 필터: Scrambling code 또는 Channel number(예 <code>3,10-30,42,100-</code>) · 범례·전체 경로 표시 여부</td>
+<td>셀별 페이지의 지도 뷰(경로 색 + 범례), 하단 탭으로 셀 간 이동</td></tr>
+
+<tr><td>2<span class="src">p68–69</span></td>
+<td>서버 측 업링크 MOS를 단말 다운링크 로그와 자동 상관해 함께 봄</td>
+<td>서버 로그와 단말 로그 모두 DB에 로드 · 두 로그의 시각 동기(GPS/NTP, ±3 s) · 서버 전화선 번호 설정</td>
+<td>UL 음성 품질 서버 로그 + 같은 세션의 단말 로그</td>
+<td>단말 파일 기준 워크북에서 UL MOS를 포함한 음성 품질 뷰</td></tr>
+
+<tr><td>3<span class="src">p69–72</span></td>
+<td>측정 워크북과 IP 트레이스 워크북을 자동 동기화해 이벤트 전후의 IP 메시지를 봄</td>
+<td>Microsoft Network Monitor 3.4가 Analyze보다 먼저 설치(아니면 제한된 상세) · 두 파일이 같은 세션·동일 타임스탬프</td>
+<td>측정 파일 + <code>.pcap</code>(단말별 캡처)</td>
+<td>동기화된 IP trace information 워크북</td></tr>
+
+<tr><td>4<span class="src">p72–74</span></td>
+<td>칩셋 바이너리 진단 로그를 측정과 동기화해 고해상도 세부를 봄</td>
+<td>두 파일이 같은 세션·동일 타임스탬프</td>
+<td>측정 파일 + 바이너리 로그 <code>.nmfb</code> / <code>.dfl</code></td>
+<td>동기화된 binary log information 워크북</td></tr>
+
+<tr class="ch"><td colspan="5">8장 — 파라미터 필터링</td></tr>
+<tr><td>5<span class="src">p77–82</span></td>
+<td>2차 파라미터 임계로 전역 필터를 걸어 이후 모든 조작을 커버리지 영역 데이터로 제한</td>
+<td>없음(서버 불필요). Crystal Reports 템플릿에는 적용되지 않음</td>
+<td>2차 파라미터(예 <code>RSCP best active set</code>) · 연산자 · 임계값(예 <code>&gt;= -100</code>) · 저장 시 필터 이름</td>
+<td>활성 전역 필터, 저장된 필터 세트(재활성화 가능), 이후 모든 질의·워크북이 필터된 데이터셋</td></tr>
+
+<tr class="ch"><td colspan="5">8장 — 그래프</td></tr>
+<tr><td>6<span class="src">p108–109</span></td>
+<td>한 그래프에 레이어를 여럿 올리고 페이지 크기 고정과 좌·우 이중 축으로 읽기 좋게 함</td>
+<td>그래프 데이터 뷰가 열려 있음</td>
+<td>파라미터 2개 이상 · 페이지 크기(Fit to window / Fixed size px) · 좌·우 축에 배정할 레이어</td>
+<td>stacked 또는 single 모드의 다중 레이어 그래프, 양쪽 축 눈금</td></tr>
+
+<tr><td>7<span class="src">p110</span></td>
+<td>측정 이벤트를 알리는 알림 아이콘을 그래프에 표시</td>
+<td>측정 파일에 알림/마커가 기록돼 있음</td>
+<td>Pick Parameter → Notifications and markers · 표시할 알림 선택 · 픽셀 오프셋</td>
+<td>알림 아이콘이 찍힌 그래프</td></tr>
+
+<tr><td>8<span class="src">p110–112</span></td>
+<td>color grid 또는 surface 그래프로 두 파라미터를 상관시킴</td>
+<td>빈 color grid(Change Graph Type)</td>
+<td>Scope · 색상셋 · X·Y 파라미터 각각의 필터 · 최소 · 최대 · 구간 수(Steps)</td>
+<td>두 파라미터 상관 color grid / surface</td></tr>
+
+<tr><td>9<span class="src">p112</span></td>
+<td>5G 측정 결과를 별매 3D Visualizer에서 봄</td>
+<td>3D Visualizer 옵션 라이선스 · BTS 파일을 Base Stations 페이지에 놓고 활성화</td>
+<td>5G 측정 파일 · BTS 파일 · 5G 파라미터</td>
+<td>3D Visualizer 창(지원 파라미터는 셀→경로 빔 포함)</td></tr>
+
+<tr class="ch"><td colspan="5">8장 — 그리드</td></tr>
+<tr><td>10<span class="src">p118–120</span></td>
+<td>그리드 열마다 색상셋을 입혀 값을 막대 또는 셀 전체 색으로 표시</td>
+<td>쓸 색상셋이 존재</td>
+<td>그리드 열 선택 · 열별 색상셋 · <code>Color whole cell</code> 여부</td>
+<td>열이 색상셋으로 칠해진 그리드</td></tr>
+
+<tr><td>11<span class="src">p120–121</span></td>
+<td>음성 품질 측정에 저장된 수신 오디오 샘플을 재생해 원본과 비교</td>
+<td>음성 품질 측정 파일에 오디오 샘플 포함</td>
+<td>파라미터 <code>Audio Quality Sample File Name UL</code>을 그리드로 연 행</td>
+<td>오디오 재생</td></tr>
+
+<tr><td>12<span class="src">p121–122</span></td>
+<td>디코딩된 L3/RRC 시그널링에서 특정 값을 검색해 결과 데이터셋의 열로 만듦</td>
+<td>측정 파일에 디코딩 가능한 시그널링</td>
+<td>검색 파라미터(예 <code>L3 signaling parameter search</code>) · 검색 텍스트 · 대상 메시지 이름 · 결과 열 이름</td>
+<td>검색된 값이 든 새 열을 가진 데이터셋</td></tr>
+
+<tr class="ch"><td colspan="5">8장 — 지도 · MapX · BTS</td></tr>
+<tr><td>13<span class="src">p147–148</span></td>
+<td>지도에 <code>.TAB</code> 레이어를 더하고 레이어 조합을 Geoset으로 저장해 한 지도로 다시 엶</td>
+<td>MapX 지도 사용 · <code>.TAB</code>이 Workspace › Maps에 로드</td>
+<td><code>.TAB</code> 지도 파일 · Geoset 파일 이름 · Geoset 이름</td>
+<td>Geoset(<code>.GST</code>) — 레이어 조합 하나를 단일 지도로 로드</td></tr>
+
+<tr><td>14<span class="src">p148–149</span></td>
+<td>한 기지국의 Ec/N0·RSCP 값으로 경로를 칠해 그 기지국의 커버리지를 봄</td>
+<td>좌표 있는 측정 · BTS 파일 · 지도가 DB에 있음 · 경로를 BTS와 연결</td>
+<td>측정 파일 · BTS 파일 · 기지국 선택(Color Layers Based On Scrambling Code)</td>
+<td>선택 기지국 기준으로 색칠된 경로</td></tr>
+
+<tr><td>15<span class="src">p150–157</span></td>
+<td>지도에서 고른 영역을 격자로 나눠 빈별 집계(영역 비닝), 또는 이동 거리 구간별 집계(거리 비닝)</td>
+<td>좌표 있는 측정 · 거리 가중을 쓰려면 Options › Statistics를 <code>&lt;Ask every time&gt;</code></td>
+<td>영역 · 측정 파일(들) · 파라미터 · 필터(단일 BTS면 SC/채널) · 통계 기준(Time/Distance/Sample) · X/Y steps · Statistic(Average · Min · Max · Count · Std · Var · Mode)</td>
+<td>빈별 집계 레이어(색상셋·투명도·값 인쇄) · Excel/txt/MapInfo/KML 내보내기</td></tr>
+
+<tr><td>16<span class="src">p158–162</span></td>
+<td>같은 경로의 두 측정 그룹 평균 차이를 빈별로 지도에 그림(Delta plotting)</td>
+<td>같은 경로 · 좌표 · 두 그룹에 같은 파라미터</td>
+<td>영역 · 그룹 1·2의 측정 파일(그룹당 1개 이상) · 파라미터 · 필터 · 통계 기준</td>
+<td>그룹 평균 차이 레이어</td></tr>
+
+<tr><td>17<span class="src">p162–168</span></td>
+<td>선택한 셀의 빔 범위를 지도에 섹터로 표시</td>
+<td>BTS 파일에 빔 범위 데이터, 없으면 Options › BTS의 기본 빔 길이·각도 또는 안테나 높이·틸트 추정</td>
+<td>셀 선택 · Beam range(m) · Default beam angle · 추정 옵션</td>
+<td>지도 위 빔 섹터(투명도 조절)</td></tr>
+
+<tr><td>18<span class="src">p168–171</span></td>
+<td>BTS 데이터 그리드에서 셀을 고르면 지도가 그 셀로 줌하도록 동기화</td>
+<td>측정 파일과 BTS 파일이 지도에 열려 있음</td>
+<td>Data View Split · Insert Grid · <code>.nbf</code> 드래그</td>
+<td>지도 + BTS 그리드 분할 뷰, 행 선택 → 지도 줌</td></tr>
+
+<tr><td>19<span class="src">p171–172</span></td>
+<td>활성 BTS 파일에 근거해 서빙·이웃 셀 정보를 주는 BTS reference 파라미터 사용</td>
+<td>BTS 파일이 DB에 있고 활성화(날짜 버전은 <code>_YYYY-MM-DD.nbf</code> 규약 또는 수동 활성화)</td>
+<td>측정 파일 · Parameters 필터 <code>reference</code></td>
+<td>서빙 셀 이름 등 BTS 참조 파라미터 — 뷰 · Launchpad 통계 · KPI workbench 입력(셀별 그룹핑)</td></tr>
+
+<tr><td>20<span class="src">p172–174</span></td>
+<td>측정 지점에서 보이는 파일럿들과 기지국을 선으로 이어 파일럿 오염을 지도에 표시</td>
+<td>BTS 파일 · carrier number가 BTS 파일 값과 일치</td>
+<td><code>Pilot pollution</code> 파라미터 · 필터 5개(폴루터 창 −6 dB · Ec/N0 상한 −12 · RSCP 하한 −95 · 개수 3 · carrier) · 경로 열 · BTS 파일 · 그릴 선 종류</td>
+<td>기지국 연결선 + <code>Number of cells</code> 범례</td></tr>
+
+<tr><td>21<span class="src">p174–176</span></td>
+<td>셀별 신호 강도만으로 사이트 위치와 안테나 방향을 추정</td>
+<td>옥외 WCDMA/LTE/5G 스캐너 또는 단말 측정 · 기지국 양쪽에서 수집돼야 &lt;100 m 정확도</td>
+<td>셀별 신호 강도 + 좌표 · Minimum accuracy(0–10) · Carrier number · Minimum received power(LTE −120 · UMTS −100 dBm)</td>
+<td>추정 위치·방향 + confidence 1–10 — BTS 참조 오버레이, 그리드, KML/MapInfo/Excel</td></tr>
+
+<tr><td>22<span class="src">p177</span></td>
+<td>5G 경로의 모든 점에서 best beam의 셀로 선을 그려 빔을 시각화</td>
+<td>관련 BTS 파일 로드·활성화</td>
+<td>5G 측정(단말 또는 스캐너) 경로 · Beam lines</td>
+<td>빔 인덱스별 색의 서빙 빔 선</td></tr>
+
+<tr><td>23<span class="src">p177–179</span></td>
+<td>측정점과 서빙 BTS를 잇는 서빙 셀 선을 Google Earth로 내보냄</td>
+<td>측정에 맞는 BTS 파일이 활성 BTS로 설정</td>
+<td>지도에 연 파라미터 · Serving Cell Lines</td>
+<td>Google KML 파일</td></tr>
+
+<tr class="ch"><td colspan="5">8장 — 스프레드시트 그리드</td></tr>
+<tr><td>24<span class="src">p190–191</span></td>
+<td>셀 하나로 최소화한 데이터셋의 값을 수식으로 참조해 계산</td>
+<td>스프레드시트에 파라미터 데이터셋이 열려 있고 최소화됨 · 질의 이름을 앎</td>
+<td>함수 · 질의 이름 · 열(첫 열 = A) · 행 범위 — 예 <code>=AVG(*BLER DL!A1:A15)</code></td>
+<td>수식 결과 셀</td></tr>
+
+<tr class="ch"><td colspan="5">10장 Reports — 리포트 자동화</td></tr>
+<tr><td>25<span class="src">p307–310</span></td>
+<td>FTP 폴더 이름에 <code>_ready</code>가 붙으면 예약된 이벤트 배치(리포트·워크북 등)를 자동 실행</td>
+<td>Nemo Analyze Server 연결 · 서버의 Backup&amp;Retrieve · Autoload(<code>.nmf</code>·<code>.zip</code>) · FTP 재귀 로드·로드 후 삭제</td>
+<td>FTP 폴더의 측정 파일 · 배치(이벤트 목록 · Triggering folder <code>이름_ready</code> · Active)</td>
+<td>자동 생성된 리포트·워크북(PDF/Excel/Word/HTML 등, 이메일 전송 가능). 실행 후 배치는 inactive</td></tr>
+
+<tr class="ch"><td colspan="5">11장 Customization — KPI Workbench</td></tr>
+<tr><td>26<span class="src">p396–403</span></td>
+<td>이진 트리 Filter 요소로 여러 값 범위(12–21 · 29–30 · 74–88)를 한 필터로 만듦</td>
+<td>KPI Workbench(Troubleshooting Toolkit 옵션) · 입력 데이터셋 연결</td>
+<td>조건들(열 · 연산자 · 값 또는 <code>&lt;Previous value&gt;</code> · <code>{?변수}</code>) · 노드별 AND/OR</td>
+<td>조건을 만족하는 행만 남은 데이터셋(Output에 연결해 Run Script)</td></tr>
+
+<tr><td>27<span class="src">p403–426</span></td>
+<td>BLER 상승과 Ec/N0 역전을 상태 기계로 격리하고 Call dropped와 상관시켜 핸드오버 누락 드롭콜 KPI를 만듦</td>
+<td>UMTS 측정에 active set과 monitored set 측정 · 입력을 시간순 정렬(Union 뒤 Sort)</td>
+<td><code>BLER</code> · <code>Ec/N0 best active set</code> · <code>Ec/N0 Nth best</code>(N=1) · <code>Call dropped</code> · 임계(BLER 20, 차이 0) · 상태·전이·Output 정의</td>
+<td>Missing handover 구간 행(<code>start_time</code> · <code>end_time</code> · <code>time_interval</code> ms)과 그 안의 드롭콜 이벤트, 19열 · User 파라미터로 저장된 KPI</td></tr>
+
+<tr class="ch"><td colspan="5">12장 Other tasks — 색상셋</td></tr>
+<tr><td>28<span class="src">p432–434</span></td>
+<td>이산값 파라미터(셀 ID · SC · BSIC)의 값 범위에 색을 자동 배정</td>
+<td>빈 지도에 경로가 그려져 있음(Draw Mode = Line)</td>
+<td>파라미터(예 <code>Cell identification</code>) · Add Range: From · To · Step</td>
+<td>값별 색이 채워진 색상셋과 그것으로 칠해진 경로</td></tr>
+
+<tr><td>29<span class="src">p434–436</span></td>
+<td>Color set editor에서 numerical 색상셋을 새로 만듦</td>
+<td>없음</td>
+<td>이름 · short name · Groups · Type · 범위별 색 · 상·하한(연산자 포함) · 설명</td>
+<td>편집기에 등록된 색상셋</td></tr>
+
+<tr><td>30<span class="src">p436–439</span></td>
+<td>gradient 색상셋을 만들어 지도 경로에 적용</td>
+<td>값을 최솟값부터 순서대로 정의</td>
+<td>gradient 색상셋(최소·최대 값과 색) · 경로 파라미터(예 <code>Ec/N0 best active set</code>) · Route Properties › Color: Based on value</td>
+<td>그라디언트로 칠해진 경로와 범례</td></tr>
+
+<tr><td>31<span class="src">p440–443</span></td>
+<td>string 색상셋을 만들어 시그널링 그리드의 메시지 이름 열에 적용</td>
+<td>색상셋 이름이 기존과 겹치지 않음</td>
+<td>string 색상셋(문자열 · 색 · 설명) · L3 signaling 그리드 · 열 <code>Message Name</code></td>
+<td>해당 문자열 셀이 칠해진 그리드</td></tr>
+</table>
+
+<footer>출처: Nemo Analyze User Guide · NTN00000A-90013 · Edition 1, 2023-11-27. 절차·대화상자 값·그림은
+<a href="07-use-cases.html">⑦ Use Case 31개 상세</a>, 우리 구현과의 대조는
+<a href="../use-case-coverage.md">대조표</a>.</footer>
+</div>
+</body>
+</html>
