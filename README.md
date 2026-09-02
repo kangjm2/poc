@@ -17,7 +17,7 @@ VDT 장비·소프트웨어 자체는 별도 저장소에서 개발되었으며,
 | [`docs/ui-gap-vs-reference.md`](docs/ui-gap-vs-reference.md) | **UI 격차 분석.** 실제 제품 스크린샷 대비 우리 화면을 요소 단위로 대조 |
 | [`docs/briefs/index.html`](docs/briefs/index.html) | **기존 툴 분석 브리프 (HTML).** Nemo Analyze 10.2 사용자 가이드 기반 — 메뉴 설명·유저 시나리오·우리 구현에 어떻게 반영됐는가 |
 | [`docs/use-case-coverage.md`](docs/use-case-coverage.md) | **Use Case 31개 대조표.** 매뉴얼 유즈케이스 전부를 한 표에서 우리 구현과 맞춰 본 것. 브리프의 "남은 일" 표가 *판단*의 기록이라면 이 표는 *현재 상태*의 기록입니다 |
-| [`docs/reference/nemo-analyze-10.2/use-cases.md`](docs/reference/nemo-analyze-10.2/use-cases.md) | **Use Case 31개 상세.** 매뉴얼이 각 유즈케이스에서 *무엇을 하라고 하는지* — 목적·절차·원문 인용·그림 — 를 장 순서대로. 대조표가 *우리 상태*라면 이쪽은 *레퍼런스의 내용*입니다 |
+| [`docs/reference/nemo-analyze-10.2/use-cases.md`](docs/reference/nemo-analyze-10.2/use-cases.md) · [HTML](docs/briefs/07-use-cases.html) | **Use Case 31개 상세.** 매뉴얼이 각 유즈케이스에서 *무엇을 하라고 하는지* — 목적·**필요한 입력**·절차·대화상자 값·원문 인용·그림 — 를 장 순서대로. 대조표가 *우리 상태*라면 이쪽은 *레퍼런스의 내용*입니다 |
 | [`docs/reference/nemo-analyze-10.2/`](docs/reference/nemo-analyze-10.2/) | **구현 작업용 레퍼런스.** 노드 요소 명세, 화면 인벤토리, **질의 API 전사**(스칼라 46 + 프로시저 16), 목차·Use Case 인덱스, 기존 문서 정정 목록 |
 | [`docs/keysight-vdt-research.md`](docs/keysight-vdt-research.md) | 기존 솔루션 리서치. 제품 구성, 아키텍처, KPI, 경쟁 지형, UI 구조, 시각 디자인 언어 |
 | [`docs/requirements-analysis.md`](docs/requirements-analysis.md) | 기능 인벤토리(FR-xx), 추가 기능(NEW-xx), 화면 명세, 데이터 모델, 검증 기준 |
