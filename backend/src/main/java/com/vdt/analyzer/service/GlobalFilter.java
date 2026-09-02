@@ -176,6 +176,24 @@ public final class GlobalFilter {
                         "Two drives, for the same reason"));
     }
 
+    /**
+     * How the condition behaves when a screen holds more than one drive.
+     *
+     * It is evaluated against EACH drive's own samples: `RSRQ >= -12` on two drives
+     * selects two different sample sets, and `cell:101` names whatever PCI 101 was in
+     * each. That is the answer a user means by "the condition, everywhere", and it is
+     * also the only one this filter can give - `scope()` resolves a spec against one
+     * session id, because the sub-select it emits is a session's seq set.
+     *
+     * Stated because a composed workbook can pin a map layer to another measurement,
+     * which makes one filter produce two sample sets on one screen with nothing to say
+     * so. An unstated behaviour that is correct is still a screen the reader cannot
+     * check.
+     */
+    public static final String PER_MEASUREMENT =
+            "Applied to each measurement separately: on a screen holding more than one"
+            + " drive, the condition selects each drive's own samples.";
+
     /** A short phrase for the screen, so the filter is never silently in force. */
     public static String describe(String spec) {
         if (spec == null || spec.isBlank()) return null;

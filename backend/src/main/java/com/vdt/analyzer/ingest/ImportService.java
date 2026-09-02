@@ -41,17 +41,14 @@ public class ImportService {
     private final JdbcTemplate jdbc;
     private final KpiCatalog catalog;
     private final ImportJobLog jobLog;
-    private final com.vdt.analyzer.service.DerivedKpiService derived;
-    private final com.vdt.analyzer.service.KpiGraphService graphs;
+    private final com.vdt.analyzer.service.ComputedKpis computed;
 
     public ImportService(JdbcTemplate jdbc, KpiCatalog catalog, ImportJobLog jobLog,
-                         com.vdt.analyzer.service.DerivedKpiService derived,
-                         com.vdt.analyzer.service.KpiGraphService graphs) {
+                         com.vdt.analyzer.service.ComputedKpis computed) {
         this.jdbc = jdbc;
         this.catalog = catalog;
         this.jobLog = jobLog;
-        this.derived = derived;
-        this.graphs = graphs;
+        this.computed = computed;
     }
 
     public record ImportResult(
@@ -101,8 +98,10 @@ public class ImportService {
             // session has none of their values until they are computed. Doing it here means
             // an import never leaves a computed KPI silently absent from the session it
             // should cover.
-            derived.recomputeAll();
-            graphs.recomputeAll();
+            // One call, in dependency order. Two calls in a fixed order left a KPI
+            // that reads another computed KPI materialised from its input's previous
+            // values - stale rather than absent, which nothing on any screen contradicts.
+            computed.recomputeAll();
 
             log.info("Imported {} samples / {} KPI values from {}",
                     counters.samples, counters.kpis, file.getOriginalFilename());

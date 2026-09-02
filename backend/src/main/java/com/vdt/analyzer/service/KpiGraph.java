@@ -92,6 +92,19 @@ public final class KpiGraph {
      * deserialisation for no gain over an explicit switch that has to exist anyway.
      */
     public record Node(int id, Kind kind, String label,
+                       /**
+                        * Where the author put this node on the canvas.
+                        *
+                        * The compiler never reads these - they reach no SQL and change no
+                        * result - but they have to be HERE, because the document that is
+                        * stored is this record, not the request body. Leaving them off the
+                        * record meant Jackson dropped them on the way in, so a saved graph
+                        * reopened with every node at translate(undefined undefined): a
+                        * heap at the origin, canvas size NaN, and no way to iterate on a
+                        * graph you had already saved. The editor comment claimed they
+                        * round-tripped; nothing checked it, and they never did.
+                        */
+                       Double x, Double y,
                        // SOURCE_KPI
                        String kpiName,
                        // SOURCE_NEIGHBOUR: which ranked cell, and which quantity
@@ -157,6 +170,14 @@ public final class KpiGraph {
             }
             inputs.computeIfAbsent(e.to(), k -> new ArrayList<>()).add(e.from());
         }
+
+        // Input order decides which columns a Combine emits first, and therefore which
+        // column an Output with no explicit pick would take. Left as edge-array order it
+        // came from the sequence the AUTHOR HAPPENED TO DRAW THE WIRES IN, which nothing
+        // shows and nothing preserves: two canvases that look identical compiled to
+        // different KPIs. Ordering by node id makes the compiled SQL a function of the
+        // drawing, which is what the determinism note below has always claimed.
+        for (List<Integer> in : inputs.values()) in.sort(Integer::compareTo);
 
         List<Node> outputs = spec.nodes().stream().filter(n -> n.kind() == Kind.OUTPUT).toList();
         if (outputs.size() != 1) {
@@ -433,8 +454,20 @@ public final class KpiGraph {
             case OUTPUT -> {
                 requireInputs(n, in, 1, 1);
                 List<String> upstream = columns.get(in.get(0));
-                String pick = n.column() == null
-                        ? upstream.get(upstream.size() - 1) : column(n.column());
+                // A graph that reaches the Output with several columns has to SAY which
+                // one it publishes. Taking the last silently made the KPI a function of
+                // an order the canvas never showed - and with the inputs now sorted by id
+                // rather than by wire-drawing order, "the last" would be a different
+                // column than it was before for the same drawing. Asking is the only
+                // answer that cannot quietly change what a saved KPI means.
+                String pick = n.column() != null ? column(n.column())
+                        : upstream.size() == 1 ? upstream.get(0)
+                        : null;
+                if (pick == null) {
+                    throw new IllegalArgumentException(
+                            "The Output node has " + upstream.size() + " columns to choose"
+                            + " from and none is picked. Choose one of: " + upstream);
+                }
                 if (!upstream.contains(pick)) {
                     throw new IllegalArgumentException("The Output node reads column '" + pick
                             + "', which its input does not produce. Available: " + upstream);

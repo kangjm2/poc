@@ -105,22 +105,6 @@ public class DerivedKpiService {
         return n;
     }
 
-    /** Recomputes every derived KPI. Used after an import brings in a new session. */
-    public void recomputeAll() {
-        List<KpiDefinition> derived = defs.findAll().stream()
-                .filter(d -> d.getExpression() != null && !d.getExpression().isBlank())
-                .toList();
-        for (KpiDefinition d : derived) {
-            try {
-                recompute(d.getName());
-            } catch (RuntimeException e) {
-                // One broken formula must not stop the others, and must not fail the
-                // import that triggered this.
-                log.warn("Could not recompute derived KPI {}: {}", d.getName(), e.getMessage());
-            }
-        }
-    }
-
     /** True when any derived KPI reads this one, so it cannot be deleted yet. */
     public List<String> dependentsOf(String kpiName) {
         return defs.findAll().stream()

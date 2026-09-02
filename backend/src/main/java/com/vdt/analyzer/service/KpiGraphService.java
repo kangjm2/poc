@@ -153,19 +153,6 @@ public class KpiGraphService {
         return n;
     }
 
-    /** Recomputes every graph. Used after an import brings in a new session. */
-    public void recomputeAll() {
-        for (Long id : jdbc.queryForList("SELECT id FROM kpi_graph ORDER BY id", Long.class)) {
-            try {
-                recompute(id);
-            } catch (RuntimeException e) {
-                // One broken graph must not stop the others, and must not fail the import
-                // that triggered this.
-                log.warn("Could not recompute KPI graph {}: {}", id, e.getMessage());
-            }
-        }
-    }
-
     @Transactional
     public StoredGraph save(String name, String outputKpiName, KpiGraph.Spec spec) {
         // Compiled before anything is written, so an invalid graph never leaves a row

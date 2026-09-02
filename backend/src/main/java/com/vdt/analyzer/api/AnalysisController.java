@@ -75,7 +75,8 @@ public class AnalysisController {
         // validation the analytics reach - a spec that parses here parses there.
         com.vdt.analyzer.service.GlobalFilter.scope(filter, 0L, "s");
         String text = com.vdt.analyzer.service.GlobalFilter.describe(filter);
-        return Map.of("active", text != null, "text", text == null ? "" : text);
+        return Map.of("active", text != null, "text", text == null ? "" : text,
+                "scope", com.vdt.analyzer.service.GlobalFilter.PER_MEASUREMENT);
     }
 
     /**

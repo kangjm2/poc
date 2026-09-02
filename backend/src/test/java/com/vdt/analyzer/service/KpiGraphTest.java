@@ -30,37 +30,37 @@ class KpiGraphTest {
     private static final Set<String> KNOWN = Set.of("RSRP", "RSRQ", "SINR", "DL_BLER");
 
     private static KpiGraph.Node source(int id, String kpi) {
-        return new KpiGraph.Node(id, KpiGraph.Kind.SOURCE_KPI, "src", kpi,
+        return new KpiGraph.Node(id, KpiGraph.Kind.SOURCE_KPI, "src", null, null, kpi,
                 null, null, null, null, null, null, null, null, null, null);
     }
 
     private static KpiGraph.Node expr(int id, String formula, String as) {
-        return new KpiGraph.Node(id, KpiGraph.Kind.EXPRESSION, "expr", null,
+        return new KpiGraph.Node(id, KpiGraph.Kind.EXPRESSION, "expr", null, null, null,
                 null, null, null, null, null, formula, as, null, null, null);
     }
 
     private static KpiGraph.Node combine(int id) {
-        return new KpiGraph.Node(id, KpiGraph.Kind.COMBINE, "combine", null,
+        return new KpiGraph.Node(id, KpiGraph.Kind.COMBINE, "combine", null, null, null,
                 null, null, null, null, null, null, null, null, null, null);
     }
 
     private static KpiGraph.Node output(int id, String column) {
-        return new KpiGraph.Node(id, KpiGraph.Kind.OUTPUT, "out", null,
+        return new KpiGraph.Node(id, KpiGraph.Kind.OUTPUT, "out", null, null, null,
                 null, null, null, null, null, null, null, null, null, column);
     }
 
     private static KpiGraph.Node sample(int id, String field, String as) {
-        return new KpiGraph.Node(id, KpiGraph.Kind.SOURCE_SAMPLE, "smp", null,
+        return new KpiGraph.Node(id, KpiGraph.Kind.SOURCE_SAMPLE, "smp", null, null, null,
                 null, null, null, field, null, null, as, null, null, null);
     }
 
     private static KpiGraph.Node event(int id, String type, String as) {
-        return new KpiGraph.Node(id, KpiGraph.Kind.SOURCE_EVENT, "evt", null,
+        return new KpiGraph.Node(id, KpiGraph.Kind.SOURCE_EVENT, "evt", null, null, null,
                 null, null, null, null, type, null, as, null, null, null);
     }
 
     private static KpiGraph.Node neighbour(int id, int rank, String metric, String as) {
-        return new KpiGraph.Node(id, KpiGraph.Kind.SOURCE_NEIGHBOUR, "nbr", null,
+        return new KpiGraph.Node(id, KpiGraph.Kind.SOURCE_NEIGHBOUR, "nbr", null, null, null,
                 rank, metric, true, null, null, null, as, null, null, null);
     }
 
@@ -140,21 +140,67 @@ class KpiGraphTest {
     void theSameGraphAlwaysCompilesToTheSameSql() {
         // Not cosmetic: if compilation were order-dependent, a value that moved after a
         // recompute could not be attributed to a graph edit rather than to the compiler.
-        var spec = new KpiGraph.Spec(
-                List.of(source(2, "SINR"), source(1, "RSRP"), combine(3),
-                        expr(4, "RSRP + SINR", "SUM"), output(5, "SUM")),
+        //
+        // This used to compile ONE Spec object twice, which cannot fail for any defect
+        // that exists - the same object gives the same lists in the same order however
+        // the compiler reads them. It was an existence check wearing a determinism
+        // check's name. What follows compiles two DIFFERENT documents that describe the
+        // same drawing, which is the only form in which the claim has content.
+        var nodes = List.of(source(2, "SINR"), source(1, "RSRP"), combine(3),
+                            expr(4, "RSRP + SINR", "SUM"), output(5, "SUM"));
+        var a = new KpiGraph.Spec(nodes,
                 List.of(new KpiGraph.Edge(1, 3), new KpiGraph.Edge(2, 3),
                         new KpiGraph.Edge(3, 4), new KpiGraph.Edge(4, 5)));
+        // The same wires, drawn in the other order. A canvas shows no difference; before
+        // the inputs were sorted, this compiled a Combine whose columns came out
+        // reversed - and an Output that took "the last column" then published a
+        // different KPI from an identical-looking graph.
+        var b = new KpiGraph.Spec(List.of(nodes.get(1), nodes.get(0), nodes.get(2),
+                                          nodes.get(3), nodes.get(4)),
+                List.of(new KpiGraph.Edge(2, 3), new KpiGraph.Edge(1, 3),
+                        new KpiGraph.Edge(4, 5), new KpiGraph.Edge(3, 4)));
 
-        assertEquals(KpiGraph.compile(spec, KNOWN).sql(),
-                     KpiGraph.compile(spec, KNOWN).sql());
+        assertEquals(KpiGraph.compile(a, KNOWN).sql(), KpiGraph.compile(b, KNOWN).sql());
+    }
+
+    @Test
+    void anOutputWithSeveralColumnsMustSayWhichOneItPublishes() {
+        // Taking the last column silently made the published KPI a function of an order
+        // the canvas never showed. Refusing is the only answer that cannot change what a
+        // saved KPI means without the author touching it.
+        var ambiguous = new KpiGraph.Spec(
+                List.of(source(1, "RSRP"), source(2, "SINR"), combine(3), output(4, null)),
+                List.of(new KpiGraph.Edge(1, 3), new KpiGraph.Edge(2, 3),
+                        new KpiGraph.Edge(3, 4)));
+        var e = assertThrows(IllegalArgumentException.class,
+                () -> KpiGraph.compile(ambiguous, KNOWN));
+        assertTrue(e.getMessage().contains("RSRP") && e.getMessage().contains("SINR"),
+                e.getMessage());
+
+        // One column is not ambiguous, so the common two-node graph still needs no pick.
+        var single = new KpiGraph.Spec(
+                List.of(source(1, "RSRP"), output(2, null)),
+                List.of(new KpiGraph.Edge(1, 2)));
+        assertTrue(KpiGraph.compile(single, KNOWN).sql().contains("\"RSRP\" AS value"));
+    }
+
+    @Test
+    void theCanvasLayoutSurvivesTheRoundTripThroughTheCompilersOwnRecord() {
+        // The document that is STORED is this record, not the request body, so a field
+        // missing here is a field silently dropped on save. It was: a reopened graph put
+        // every node at translate(undefined undefined) and sized its canvas NaN, and the
+        // type that promised the round trip was the frontend's, which nothing checked.
+        var n = new KpiGraph.Node(1, KpiGraph.Kind.SOURCE_KPI, "src", 123.0, 456.0, "RSRP",
+                null, null, null, null, null, null, null, null, null, null);
+        assertEquals(123.0, n.x());
+        assertEquals(456.0, n.y());
     }
 
     @Test
     void stateMachineNumbersItsStatesInRuleOrder() {
         var states = List.of(new KpiGraph.StateRule("BAD_BLER", "DL_BLER > 10"),
                              new KpiGraph.StateRule("OK", "DL_BLER <= 10"));
-        var sm = new KpiGraph.Node(2, KpiGraph.Kind.STATE_MACHINE, "sm", null,
+        var sm = new KpiGraph.Node(2, KpiGraph.Kind.STATE_MACHINE, "sm", null, null, null,
                 null, null, null, null, null, null, "STATE", states, "UNKNOWN", null);
         var spec = new KpiGraph.Spec(
                 List.of(source(1, "DL_BLER"), sm, output(3, "STATE")),
@@ -272,7 +318,7 @@ class KpiGraphTest {
                                   "RSRP > (SELECT max(value) FROM sample_kpi)",
                                   "1=1 OR pg_sleep(5) > 0",
                                   "RSRP")) {
-            var filter = new KpiGraph.Node(2, KpiGraph.Kind.FILTER, "f", null,
+            var filter = new KpiGraph.Node(2, KpiGraph.Kind.FILTER, "f", null, null, null,
                     null, null, null, null, null, bad, null, null, null, null);
             var spec = new KpiGraph.Spec(
                     List.of(source(1, "RSRP"), filter, output(3, "RSRP")),
@@ -284,7 +330,7 @@ class KpiGraphTest {
 
     @Test
     void acceptsTheConditionsItIsSupposedTo() {
-        var filter = new KpiGraph.Node(2, KpiGraph.Kind.FILTER, "f", null,
+        var filter = new KpiGraph.Node(2, KpiGraph.Kind.FILTER, "f", null, null, null,
                 null, null, null, null, null, "RSRP >= -110 AND RSRP < -80", null, null, null, null);
         var spec = new KpiGraph.Spec(
                 List.of(source(1, "RSRP"), filter, output(3, "RSRP")),

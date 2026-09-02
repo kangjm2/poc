@@ -289,6 +289,9 @@ td.sev-WARNING  { background: var(--warning-bg); color: #262626; }
   flex-basis: 100%; display: flex; gap: 24px; padding: 6px 0 2px;
   border-top: 1px dashed var(--border); margin-top: 4px;
 }
+.globalfilter .gf-scope {
+  flex-basis: 100%; color: #6b5310; padding-bottom: 4px;
+}
 .globalfilter .gf-reach-list .col { flex: 1; min-width: 0; }
 .globalfilter .gf-reach-list h4 { margin: 2px 0; font-size: 12px; }
 .globalfilter .gf-reach-list ul { margin: 0; padding-left: 16px; }

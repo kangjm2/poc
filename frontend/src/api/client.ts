@@ -82,7 +82,7 @@ export const api = {
   filterCoverage: () => get<FilterCoverage[]>('/global-filter/coverage'),
   /** What a spec says, in words. Throws with the server's message when it says nothing. */
   describeFilter: (spec: string) =>
-    get<{ active: boolean; text: string }>(
+    get<{ active: boolean; text: string; scope: string }>(
       `/global-filter/describe?filter=${encodeURIComponent(spec)}`),
 
   sessions: () => get<SessionSummary[]>('/sessions'),
@@ -333,6 +333,13 @@ export const api = {
       method: 'PUT', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ color }),
     })
+    if (!res.ok) throw new Error((await res.text()) || res.statusText)
+    return res.json()
+  },
+
+  /** Recompute one stored graph's KPI. The values are a snapshot; this refreshes it. */
+  recomputeKpiGraph: async (id: number): Promise<{ valuesComputed: number }> => {
+    const res = await fetch(`${BASE}/kpi-definitions/graphs/${id}/recompute`, { method: 'POST' })
     if (!res.ok) throw new Error((await res.text()) || res.statusText)
     return res.json()
   },

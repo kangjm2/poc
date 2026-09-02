@@ -273,6 +273,26 @@ export function KpiWorkbench({ defs, onChanged, eventTypes = [], sessionId = nul
     setResult(null); setSaveError(null)
   }
 
+  /**
+   * Recompute one saved graph against the data as it is now.
+   *
+   * A graph KPI's values are a SNAPSHOT - computed when the graph is saved, and again
+   * when an import brings in a drive - and this screen says so. Saying so without
+   * offering a way to refresh one made the statement a dead end: the only way to
+   * recompute a graph you had not edited was to open it and press Save, which also
+   * rewrites the stored document. The endpoint existed all along and nothing called it.
+   */
+  const recompute = async (g: StoredGraph) => {
+    setBusy(true); setSaveError(null)
+    try {
+      const r = await api.recomputeKpiGraph(g.id)
+      setResult(`${g.outputKpiName}: ${r.valuesComputed} values computed`)
+      reloadStored(); onChanged()
+    } catch (e) {
+      setSaveError(e instanceof Error ? e.message : String(e))
+    } finally { setBusy(false) }
+  }
+
   const remove = async (g: StoredGraph) => {
     setBusy(true)
     try { await api.deleteKpiGraph(g.id); reloadStored(); onChanged() }
@@ -643,6 +663,9 @@ export function KpiWorkbench({ defs, onChanged, eventTypes = [], sessionId = nul
                     <td className="num">{g.valuesComputed}</td>
                     <td>
                       <button disabled={busy} onClick={() => load(g)}>Open</button>{' '}
+                      <button disabled={busy} onClick={() => recompute(g)}
+                              title="Recompute this KPI against the measurements as they are now"
+                      >Recompute</button>{' '}
                       <button disabled={busy} onClick={() => remove(g)}>Delete</button>
                     </td>
                   </tr>
