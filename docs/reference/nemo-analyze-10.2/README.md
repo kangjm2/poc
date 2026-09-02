@@ -24,7 +24,7 @@
 |---|---|
 | `toc.json` | 목차 321개 항목 (제목 + 페이지) — 기계 판독용 |
 | `use-cases.json` | Use Case 31개 인덱스 (번호 · 페이지 · 제목). 페이지는 `toc.json` 기준 |
-| `use-cases.md` | **Use Case 31개 상세 — 원문 전사판.** 장 순서대로 목적 · 전제 · 단계별 절차 · 대화상자 필드와 예시 값 · 원문 인용 · 그림 77장 · 우리와의 관계. 31개 전부 원문 페이지에서 직접 옮김(●). 부록에 State Machine · Group By · Filter · Time Shift 등 요소 대화상자 |
+| `use-cases.md` (HTML: [`../../briefs/07-use-cases.html`](../../briefs/07-use-cases.html)) | **Use Case 31개 상세 — 원문 전사판.** 유즈케이스마다 필요한 입력 데이터와 우리 데이터 모델 대조 포함. 장 순서대로 목적 · 전제 · 단계별 절차 · 대화상자 필드와 예시 값 · 원문 인용 · 그림 77장 · 우리와의 관계. 31개 전부 원문 페이지에서 직접 옮김(●). 부록에 State Machine · Group By · Filter · Time Shift 등 요소 대화상자 |
 | `kpi-workbench.md` | **가장 중요.** 노드 요소 전체 명세와 우리 구현과의 차이 |
 | `data-views.md` | 화면·뷰 인벤토리 — 어떤 화면이 존재하는가 |
 | `query-api.md` | **Appendix 5·6·7 전사.** 스칼라 함수 46개 · 저장 프로시저 16개의 signature, `T_FORMAT` 코드 21개, 레지스트리 키, 원문 결함 17건, 그리고 우리 식 언어와의 대조 |
