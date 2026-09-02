@@ -88,6 +88,12 @@ export function RouteMap({
   frameKey = '', refitToken = 0, colorBy = 'kpi', isolate = null,
   drawingArea = false, onAreaDrawn, diffBins = null,
 }: Props) {
+  // Read off the track rather than taken as a prop, so the caption and the colours are
+  // answering from the same rows. A separate "an area is active" flag could be true while
+  // the track in hand was fetched without one, and then the map would say it was narrowed
+  // while drawing the whole drive in full colour.
+  const areaFiltered = track.some((p) => p.inArea === false)
+
   const hostRef = useRef<HTMLDivElement>(null)
   const mapRef = useRef<L.Map | null>(null)
   const routeLayer = useRef<L.LayerGroup | null>(null)
@@ -248,7 +254,12 @@ export function RouteMap({
          [b.centerLat + dLat / 2, b.centerLon + dLon / 2]],
         { color: b.color, weight: 1, fillColor: b.color, fillOpacity: 0.65 },
       ).bindTooltip(
-        `${b.sampleCount} samples<br/>avg ${b.avgValue}<br/>${b.binLabel}`,
+        // The painted value first and named, because it is the one the colour came from.
+        // The other two follow so a tile coloured by its minimum still says how it
+        // averaged - which is the comparison the switch was added to make.
+        `${b.sampleCount} samples<br/>`
+        + `<b>${b.statisticLabel ?? '[Average]'} ${b.value ?? b.avgValue}</b><br/>`
+        + `avg ${b.avgValue} · min ${b.minValue} · max ${b.maxValue}<br/>${b.binLabel}`,
       ).addTo(layer)
     }
   }, [bins])
@@ -552,8 +563,17 @@ export function RouteMap({
       <header>
         <span className="title">
           Map &mdash; {bins && bins.length > 0
-            ? `${bins.length} area bins of ${bins[0].sizeMeters} m`
+            ? `${bins.length} area bins of ${bins[0].sizeMeters} m `
+              + `${bins[0].statisticLabel ?? '[Average]'}`
             : `route coloured by ${kpiName}`}
+          {areaFiltered && (
+            // Said on the map itself, not only in the statistics panel beside it: the
+            // route outside the shape is grey, and grey already means "another bin is
+            // isolated" here. Without this line the two look identical.
+            <span style={{ color: '#666', fontWeight: 400 }}>
+              {' '}&mdash; coloured inside the drawn area only
+            </span>
+          )}
         </span>
         <span className="meta">
           {basemapFailed && (

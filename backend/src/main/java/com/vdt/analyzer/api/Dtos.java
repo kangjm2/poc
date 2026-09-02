@@ -22,7 +22,12 @@ public final class Dtos {
     public record TrackPoint(
             int seq, Instant ts, double latitude, double longitude,
             Double value, String color, String binLabel, Integer servingPci, Double speedKmh,
-            int breakBefore) {}
+            int breakBefore,
+            /**
+             * Whether the sample falls inside the drawn area, or null if none was drawn.
+             * Null and false are different answers: null is "nobody asked".
+             */
+            Boolean inArea) {}
 
     /**
      * A network event, placed on the sample grid.

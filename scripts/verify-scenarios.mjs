@@ -1173,6 +1173,41 @@ scenario('S16 · A complaint about a place, not a time')
     /-?\d/.test(meanShown), meanShown.replace(/\n/g, ' ').slice(0, 60))
   step('a pass is addressable', /^\d+$/.test(anySeq.trim()), `pass starts at seq ${anySeq}`)
 
+  // The shape now narrows the COLOURING as well as producing the statistics, and the two
+  // must be answering about the same shape. Asserted by making the two endpoints agree on
+  // a count: the track marks each sample inside or outside, the statistics count the ones
+  // inside, and both go through AreaSelection.inside. A second containment rule written
+  // in the browser would show up here as two different numbers.
+  const areaSid = sessions.find((x) => x.name === CITY_A).id
+  const bbox = await page.request.get(
+    `${API}/api/sessions/${areaSid}/track?kpi=RSRP&maxPoints=4000`).then((r) => r.json())
+  // The southern edge is the MEDIAN latitude, not the midpoint of the range. This drive
+  // carries a deliberate bad GPS fix (S1 is the one that proves the glitch guard), and it
+  // sets the maximum latitude far north of any real sample - so a midpoint rectangle
+  // enclosed empty sky and selected nothing. A median splits the samples in half whatever
+  // the outliers do.
+  const lats = bbox.map((p) => p.latitude), lons = bbox.map((p) => p.longitude)
+  const sortedLats = [...lats].sort((a, b) => a - b)
+  const midLat = sortedLats[Math.floor(sortedLats.length / 2)]
+  const north = Math.max(...lats) + 0.01
+  const half = [`${midLat},${Math.min(...lons) - 0.01}`, `${north},${Math.min(...lons) - 0.01}`,
+                `${north},${Math.max(...lons) + 0.01}`, `${midLat},${Math.max(...lons) + 0.01}`]
+    .join(';')
+  const marked = await page.request.get(
+    `${API}/api/sessions/${areaSid}/track?kpi=RSRP&maxPoints=4000`
+    + `&area=${encodeURIComponent(half)}`).then((r) => r.json())
+  const inside = marked.filter((p) => p.inArea === true).length
+  const outside = marked.filter((p) => p.inArea === false).length
+  const statsForHalf = await page.request.get(
+    `${API}/api/sessions/${areaSid}/area-statistics`
+    + `?kpi=RSRP&polygon=${encodeURIComponent(half)}`).then((r) => r.json())
+  step('the drawn shape decides the colouring, by the same rule that computes its statistics',
+    inside > 0 && outside > 0 && inside === statsForHalf.sampleCount,
+    `${inside} inside / ${outside} outside, statistics over ${statsForHalf.sampleCount}`)
+  // Without a shape, "outside" is not a thing that can be said about any sample.
+  step('with no shape drawn, no sample is called outside one',
+    bbox.every((p) => p.inArea == null), `${bbox.length} points, all unmarked`)
+
   await page.locator('.area-stats button', { hasText: 'Close' }).click()
   await page.waitForTimeout(300)
 

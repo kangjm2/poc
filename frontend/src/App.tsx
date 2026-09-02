@@ -135,6 +135,18 @@ export function App() {
   /** A shape is a question being asked now, so it lives in state and is not persisted. */
   const [drawingArea, setDrawingArea] = useState(false)
   const [areaStats, setAreaStats] = useState<AreaStats | null>(null)
+  /**
+   * The shape currently narrowing the map, as the server's "lat,lon;..." spec.
+   *
+   * Held beside areaStats rather than derived from it: the statistics are one answer about
+   * the shape and the colouring is another, and closing the panel should not silently
+   * restore the whole route's colours underneath it.
+   */
+  const [areaSpec, setAreaSpec] = useState<string | null>(null)
+  /** Which statistic paints a tile. The server bins on it - see BinStatistic. */
+  const [binStat, setBinStat] = useState('AVERAGE')
+  /** Whether a footprint is where the cell served or where it was among the three best. */
+  const [footprintBasis, setFootprintBasis] = useState('SERVING')
   const [footprints, setFootprints] = useState<CellFootprint[] | null>(null)
   const [workbooks, setWorkbooks] = useState<Workbook[]>([])
   const [issues, setIssues] = useState<CoverageIssue[]>([])
@@ -277,8 +289,8 @@ export function App() {
 
   useEffect(() => {
     if (sessionId == null) return
-    api.track(sessionId, kpi).then(setTrack).catch(fail)
-  }, [sessionId, kpi, scaleVersion, fail])
+    api.track(sessionId, kpi, undefined, areaSpec).then(setTrack).catch(fail)
+  }, [sessionId, kpi, scaleVersion, areaSpec, fail])
 
   useEffect(() => {
     if (sessionId == null) return
@@ -343,19 +355,19 @@ export function App() {
 
   useEffect(() => {
     if (sessionId == null || binSize === 0) { setBins(null); return }
-    api.bins(sessionId, kpi, binSize).then(setBins).catch(fail)
-  }, [sessionId, kpi, binSize, scaleVersion, fail])
+    api.bins(sessionId, kpi, binSize, binStat).then(setBins).catch(fail)
+  }, [sessionId, kpi, binSize, binStat, scaleVersion, fail])
 
   // Footprints are fetched only when asked for. They are per-session and change with
   // neither the KPI nor the cursor, so refetching alongside those would be pure waste.
   useEffect(() => {
     if (sessionId == null || !showFootprints) { setFootprints(null); return }
     let live = true
-    api.cellFootprints(sessionId)
+    api.cellFootprints(sessionId, footprintBasis)
       .then((f) => { if (live) setFootprints(f) })
       .catch(() => { if (live) setFootprints(null) })
     return () => { live = false }
-  }, [sessionId, showFootprints])
+  }, [sessionId, showFootprints, footprintBasis])
 
   const reloadWorkbooks = useCallback(() => {
     api.workbooks().then(setWorkbooks).catch(() => setWorkbooks([]))
@@ -570,6 +582,10 @@ export function App() {
   const askAboutArea = useCallback((rings: [number, number][] | null) => {
     setDrawingArea(false)
     if (rings == null || sessionId == null) return
+    // The shape does two things now: it produces the statistics, and it narrows what the
+    // route is coloured for. Both go through the same spec string so the panel and the
+    // map cannot end up describing different shapes.
+    setAreaSpec(rings.map(([a, b]) => `${a},${b}`).join(';'))
     api.areaStatistics(sessionId, kpi, rings).then(setAreaStats).catch(fail)
   }, [sessionId, kpi, fail])
 
@@ -837,6 +853,12 @@ export function App() {
                       onClick={() => { setDrawingArea((v) => !v); setAreaStats(null) }}>
                 {drawingArea ? 'Drawing…' : 'Ask an area'}
               </button>
+              {areaSpec && !drawingArea && (
+                <button title="Colour the whole drive again"
+                        onClick={() => { setAreaSpec(null); setAreaStats(null) }}>
+                  Clear area
+                </button>
+              )}
             </div>
             <div className="group">
               <label>Colour by</label>
@@ -856,6 +878,15 @@ export function App() {
                 <option value={150}>150 m</option>
                 <option value={500}>500 m</option>
               </select>
+              {binSize > 0 && (
+                <select value={binStat} aria-label="Bin statistic"
+                        title="Which statistic of a tile's samples decides its colour"
+                        onChange={(e) => { setBinStat(e.target.value); e.currentTarget.blur() }}>
+                  <option value="AVERAGE">average</option>
+                  <option value="MINIMUM">minimum</option>
+                  <option value="MAXIMUM">maximum</option>
+                </select>
+              )}
             </div>
             <div className="group">
               <label title="Averages per unit of road travelled, so a stop at a light stops
@@ -870,12 +901,20 @@ export function App() {
               </select>
             </div>
             <div className="group">
-              <label title="The outline of where each cell was measured serving">
+              <label title="The outline of where each cell was measured">
                 Footprints</label>
               <button onClick={() => setShowFootprints((v) => !v)}
                       style={showFootprints ? { fontWeight: 600 } : undefined}>
                 {showFootprints ? 'on' : 'off'}
               </button>
+              {showFootprints && (
+                <select value={footprintBasis} aria-label="Footprint basis"
+                        title="Where the cell served, or where it was among the three strongest"
+                        onChange={(e) => { setFootprintBasis(e.target.value); e.currentTarget.blur() }}>
+                  <option value="SERVING">where it served</option>
+                  <option value="TOP3">where it was top 3</option>
+                </select>
+              )}
             </div>
             <div className="group">
               <label>Export</label>

@@ -35,8 +35,12 @@ export const api = {
   sessions: () => get<SessionSummary[]>('/sessions'),
   // maxPoints caps the payload; the server decimates while preserving bin changes
   // and per-bucket extremes.
-  track: (id: number, kpi: string, maxPoints = 4000) =>
-    get<TrackPoint[]>(`/sessions/${id}/track?kpi=${kpi}&maxPoints=${maxPoints}`),
+  // `area` asks the server which points fall inside a drawn shape. Sent rather than
+  // tested here: the containment rule is the server's, and a second copy in TypeScript
+  // would eventually disagree with the statistics panel beside it.
+  track: (id: number, kpi: string, maxPoints = 4000, area?: string | null) =>
+    get<TrackPoint[]>(`/sessions/${id}/track?kpi=${kpi}&maxPoints=${maxPoints}`
+      + (area ? `&area=${encodeURIComponent(area)}` : '')),
   series: (id: number, kpis: string[], maxPoints = 2000) =>
     get<Series[]>(`/sessions/${id}/series?kpis=${kpis.join(',')}&maxPoints=${maxPoints}`),
   snapshot: (id: number, seq?: number) =>
@@ -132,8 +136,9 @@ export const api = {
     get<Comparison>(`/compare?a=${a}&b=${b}&kpis=${kpis.join(',')}`
       + `&weightedBy=${weightedBy}&domain=${domain}`),
 
-  bins: (id: number, kpi: string, sizeMeters: number) =>
-    get<AreaBin[]>(`/sessions/${id}/bins?kpi=${kpi}&sizeMeters=${sizeMeters}`),
+  bins: (id: number, kpi: string, sizeMeters: number, statistic = 'AVERAGE') =>
+    get<AreaBin[]>(`/sessions/${id}/bins?kpi=${kpi}&sizeMeters=${sizeMeters}`
+      + `&statistic=${statistic}`),
   coverageIssues: (id: number) => get<CoverageIssue[]>(`/sessions/${id}/coverage-issues`),
 
   channelModels: () => get<ChannelModel[]>('/lab/channel-models'),
@@ -231,8 +236,9 @@ export const api = {
   distanceBins: (id: number, kpi: string, stepMeters: number) =>
     get<DistanceBin[]>(`/sessions/${id}/distance-bins?kpi=${kpi}&stepMeters=${stepMeters}`),
 
-  cellFootprints: (id: number) =>
-    get<CellFootprint[]>(`/sessions/${id}/cell-footprints`),
+  cellFootprints: (id: number, basis = 'SERVING', pcis?: number[]) =>
+    get<CellFootprint[]>(`/sessions/${id}/cell-footprints?basis=${basis}`
+      + (pcis && pcis.length ? `&pcis=${pcis.join(',')}` : '')),
 
   workbooks: () => get<Workbook[]>('/workbooks'),
 

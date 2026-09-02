@@ -6,6 +6,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -36,7 +37,9 @@ public class GeoAnalysisService {
 
     public record AreaBin(
             double centerLat, double centerLon, double sizeMeters, long sampleCount,
-            double avgValue, double minValue, double maxValue, String color, String binLabel) {}
+            double avgValue, double minValue, double maxValue, String color, String binLabel,
+            /** The statistic this tile's colour was chosen from. See BinStatistic. */
+            String statistic, String statisticLabel, double value) {}
 
     /**
      * Averages samples into a fixed-size geographic grid.
@@ -45,7 +48,22 @@ public class GeoAnalysisService {
      * centre latitude, so tiles stay near-square at the latitudes being surveyed.
      */
     public List<AreaBin> areaBins(long sessionId, String kpiName, double sizeMeters) {
+        return areaBins(sessionId, kpiName, sizeMeters, BinStatistic.AVERAGE);
+    }
+
+    /**
+     * Tiles drawn as the chosen statistic of their samples rather than always the mean.
+     *
+     * The statistic reaches the SERVER because the colour does. `catalog.binFor` turns a
+     * value into a threshold band here, so a tile painted from its minimum has to be
+     * binned on its minimum - re-binning in the browser would put the KPI's threshold
+     * ladder in a second place, and the two copies would answer differently the first time
+     * somebody edited a scale.
+     */
+    public List<AreaBin> areaBins(long sessionId, String kpiName, double sizeMeters,
+                                  String statisticName) {
         KpiDefinition def = catalog.require(kpiName);
+        BinStatistic stat = BinStatistic.of(statisticName);
         List<KpiThreshold> scale = autoScale.effective(sessionId, def);
         if (sizeMeters < 5 || sizeMeters > 20_000) {
             throw new IllegalArgumentException("Bin size must be between 5 and 20000 metres");
@@ -63,21 +81,27 @@ public class GeoAnalysisService {
                 SELECT floor(s.latitude / ?) AS gy,
                        floor(s.longitude / ?) AS gx,
                        count(*) AS n,
-                       avg(k.value) AS avg_v, min(k.value) AS min_v, max(k.value) AS max_v
+                       avg(k.value) AS avg_v, min(k.value) AS min_v, max(k.value) AS max_v,
+                       %s AS paint_v
                 FROM sample s
                 JOIN sample_kpi k ON k.session_id = s.session_id AND k.seq = s.seq
                 WHERE s.session_id = ? AND k.kpi_name = ?
                 GROUP BY gy, gx
                 ORDER BY n DESC
-                """, (rs, i) -> {
+                """.formatted(stat.sqlExpr()), (rs, i) -> {
             double lat = (rs.getDouble("gy") + 0.5) * dLat;
             double lon = (rs.getDouble("gx") + 0.5) * dLon;
             double avg = rs.getDouble("avg_v");
-            Optional<KpiThreshold> bin = catalog.binFor(scale, avg);
+            // Binned on the PAINTED value, not on the average. Those are the same tile
+            // until the user asks for the minimum, at which point a tile coloured green by
+            // its mean while its worst sample is a hole is the whole reason for the switch.
+            double painted = rs.getDouble("paint_v");
+            Optional<KpiThreshold> bin = catalog.binFor(scale, painted);
             return new AreaBin(round6(lat), round6(lon), sizeMeters, rs.getLong("n"),
                     round2(avg), round2(rs.getDouble("min_v")), round2(rs.getDouble("max_v")),
                     bin.map(KpiThreshold::getColor).orElse("#999999"),
-                    bin.map(KpiThreshold::getLabel).orElse("no data"));
+                    bin.map(KpiThreshold::getLabel).orElse("no data"),
+                    stat.name(), stat.bracket(), round2(painted));
         }, dLat, dLon, sessionId, kpiName);
 
         return bins;
@@ -189,20 +213,83 @@ public class GeoAnalysisService {
     public record CellFootprint(int pci, Integer arfcn, String band, long sampleCount,
                                 double avgRsrp, List<double[]> hull) {}
 
+    /** Which samples a cell's footprint is drawn from. */
+    public static final String BY_SERVING = "SERVING";
+    /**
+     * Every sample where the cell was among the three strongest the terminal could see.
+     *
+     * This is the reference's rule (UC1 p66: "for every cell whose signal has been among
+     * the three strongest at some point"), and it answers a different question from
+     * BY_SERVING. Serving shows where a cell WON; three-strongest shows where it was
+     * usable, which is the shape that makes overspill visible - a cell reaching far past
+     * the area it actually carries is invisible under the serving rule, because out there
+     * something else was winning.
+     *
+     * Not the default, though it is the reference's. BY_SERVING footprints are already on
+     * screens and in reports; silently widening every one of them would change what a
+     * delivered shape claims without anyone asking. The two are offered side by side and
+     * the screen says which is drawn.
+     */
+    public static final String BY_TOP3 = "TOP3";
+
     public List<CellFootprint> cellFootprints(long sessionId, int minSamples) {
-        // Positions grouped by the cell that served them, ordered so the hull is built from
-        // a deterministic sequence and one session always yields the same shape.
-        Map<Integer, List<double[]>> byPci = new LinkedHashMap<>();
-        jdbc.query("""
-                SELECT serving_pci, latitude, longitude
+        return cellFootprints(sessionId, minSamples, BY_SERVING, null);
+    }
+
+    /**
+     * Footprints, optionally narrowed to some cells and by either inclusion rule.
+     *
+     * `pcis` exists because the only knob here used to be minSamples, and a drive past
+     * forty cells draws forty overlapping hulls with no way to see fewer. We keep drawing
+     * them overlaid rather than one per page as the reference does - the overlap IS the
+     * pilot-pollution picture - but overlaid only works if you can choose what to overlay.
+     */
+    public List<CellFootprint> cellFootprints(long sessionId, int minSamples, String basis,
+                                              List<Integer> pcis) {
+        boolean topThree = BY_TOP3.equals(basis);
+        if (!topThree && !BY_SERVING.equals(basis)) {
+            throw new IllegalArgumentException("Unknown footprint basis: " + basis);
+        }
+
+        // Positions grouped by cell, ordered so the hull is built from a deterministic
+        // sequence and one session always yields the same shape.
+        //
+        // The three-strongest form ranks each sample's neighbours by level and keeps the
+        // top three. There is no rank column to read - V7 deliberately stores what was
+        // measured and derives everything else - so the rank is computed here.
+        String servingSql = """
+                SELECT serving_pci AS pci, latitude, longitude
                 FROM sample
                 WHERE session_id = ? AND serving_pci IS NOT NULL
-                ORDER BY serving_pci, seq
-                """,
+                ORDER BY pci, seq
+                """;
+        String topThreeSql = """
+                WITH ranked AS (
+                    SELECT n.seq, n.pci,
+                           row_number() OVER (PARTITION BY n.seq ORDER BY n.rsrp DESC) AS rank
+                    FROM sample_neighbour n
+                    WHERE n.session_id = ?
+                )
+                SELECT r.pci AS pci, s.latitude, s.longitude
+                FROM ranked r
+                JOIN sample s ON s.session_id = ? AND s.seq = r.seq
+                WHERE r.rank <= 3
+                ORDER BY r.pci, r.seq
+                """;
+
+        Map<Integer, List<double[]>> byPci = new LinkedHashMap<>();
+        Object[] posArgs = topThree ? new Object[]{sessionId, sessionId} : new Object[]{sessionId};
+        jdbc.query(topThree ? topThreeSql : servingSql,
                 rs -> {
-                    byPci.computeIfAbsent(rs.getInt("serving_pci"), k -> new ArrayList<>())
+                    byPci.computeIfAbsent(rs.getInt("pci"), k -> new ArrayList<>())
                             .add(new double[]{rs.getDouble("latitude"), rs.getDouble("longitude")});
-                }, sessionId);
+                }, posArgs);
+
+        // Narrowing AFTER collection rather than in the SQL: the filter is a viewing
+        // choice, and doing it here keeps one query shape whether or not one is applied.
+        if (pcis != null && !pcis.isEmpty()) {
+            byPci.keySet().retainAll(new HashSet<>(pcis));
+        }
 
         Map<Integer, Object[]> refs = new LinkedHashMap<>();
         jdbc.query("SELECT pci, arfcn, band FROM cell_ref WHERE session_id = ?",

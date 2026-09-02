@@ -83,8 +83,9 @@ public class AnalysisController {
 
     @GetMapping("/sessions/{id}/track")
     public List<TrackPoint> track(@PathVariable long id, @RequestParam String kpi,
-                                  @RequestParam(required = false) Integer maxPoints) {
-        return analysis.track(id, kpi, maxPoints);
+                                  @RequestParam(required = false) Integer maxPoints,
+                                  @RequestParam(required = false) String area) {
+        return analysis.track(id, kpi, maxPoints, area);
     }
 
     @GetMapping("/sessions/{id}/series")
