@@ -8,8 +8,7 @@
 | | |
 |---|---|
 | 출처 | Nemo Analyze User Guide · `NTN00000A-90013` · Edition 1, 2023-11-27 · 문서화 대상 SW 10.1.0 · 505p |
-| 이 판의 근거 | **2026-09-02, 사용자가 원문 PDF를 다시 제공**(p1–299, p400–504). 이 문서의 절차·값·인용은 그 원문에서 직접 옮겼습니다 |
-| 원문에 없던 구간 | **p300–399**는 이번 제공분에 들어 있지 않았습니다. 그 구간의 UC25(p307)와 UC26 앞부분(p396–399)은 2026-09-01 추출본(브리프 ④ · [`kpi-workbench.md`](kpi-workbench.md))에서 옮겼고, 아래에 표시했습니다 |
+| 이 판의 근거 | **2026-09-02, 사용자가 원문 PDF를 다시 제공**(p1–504 전체, 두 번에 나눠). 이 문서의 절차·값·인용은 전부 그 원문에서 직접 옮겼습니다 |
 | 기계 판독 인덱스 | [`use-cases.json`](use-cases.json) · [`toc.json`](toc.json) |
 | 현재 구현 상태 | [`../../use-case-coverage.md`](../../use-case-coverage.md) — **상태는 그쪽에서 셉니다.** 이 문서는 *레퍼런스가 무엇을 하라고 하는가*의 기록입니다 |
 | 그림 | `docs/assets/screenshots/manual10.2_*` — 파일명 끝 `_pNNN`이 원문 페이지. 재배포하지 않습니다([`NOTICE.md`](../../assets/NOTICE.md)) |
@@ -22,8 +21,11 @@
 
 | 등급 | 뜻 | 해당 UC |
 |---|---|---|
-| **●** | 원문 페이지를 직접 읽고 절차 전체를 옮김 | 1–24 · 27–31 (29개) |
-| **◐** | 원문 페이지가 이번 제공분에 없어 2026-09-01 추출본으로 옮김 | 25 · 26(앞부분) |
+| **●** | 원문 페이지를 직접 읽고 절차 전체를 옮김 | **1–31 전부** |
+
+(2026-09-02 오후 판까지는 p300–399가 없어 UC25·26을 ◐로 두었습니다. 같은 날 그 구간이 추가로
+제공되어 두 항목을 원문으로 다시 썼고, UC27이 쓰는 워크벤치 요소의 대화상자(p367–396)를
+[부록](#부록--워크벤치-요소의-대화상자-p367p396)으로 옮겼습니다.)
 
 ## 페이지 번호
 
@@ -61,8 +63,8 @@ UC27은 p403–426입니다.
 | 22 | 177 | 8 · MapX/BTS | 5G beam visualization | ● | ✕ 미구현 |
 | 23 | 177–179 | 8 · MapX/BTS | Exporting Serving Cell Lines to Google Earth | ● | ◐ |
 | 24 | 190–191 | 8 · 스프레드시트 | Retrieving data from minimized data sets | ● | ✕ 해당 없음 |
-| 25 | 307 | 10 · 리포트 자동화 | Triggering events | ◐ | ◐ |
-| 26 | 396–403 | 11 · KPI Workbench | Creating complex filters using multiple conditions | ◐/● | ✅ |
+| 25 | 307–310 | 10 · 리포트 자동화 | Triggering events | ● | ◐ |
+| 26 | 396–403 | 11 · KPI Workbench | Creating complex filters using multiple conditions | ● | ✅ |
 | 27 | 403–426 | 11 · KPI Workbench | Creating a KPI for dropped calls resulting from a missing handover | ● | ◐ |
 | 28 | 432–434 | 12 · 색상셋 | Automatic generation of color set for a value range | ● | ✅ |
 | 29 | 434–436 | 12 · 색상셋 | Creating a color set | ● | ◐ |
@@ -787,27 +789,74 @@ Excel · `.tab`.
 
 ## 10장 — Reports (UC25)
 
-#### UC25 · p307 · 이벤트 트리거 — ◐ (원문 p300–399 미제공, 2026-09-01 추출본)
+#### UC25 · p307–310 · 이벤트 트리거 — ●
 
-리포트 장의 `Report Automation`(p293) → `Scheduling events with Nemo Analyze client`(p294) 안.
+**Event Scheduler의 배경 (p294–307).** `Tools | Event scheduler` → 달력 뷰. 달력을 클릭하면
+동적 리본에 `View`·`Time scale`(기본값은 `View | Options | Scheduler`). 시간대 우클릭 → `Add
+Event` → **`Schedule Event Batch`**: `Batch name` · `Start time` · `Recurrence` · `Events` 목록
+(`Use custom settings` · `Use default MapX map` · `Delete` · `Up` · `Down` · `Add…`). 배치 하나에
+이벤트 여러 개가 **순서대로** 실행됩니다. `Schedule Event`의 `Event type`:
 
-> *"Triggering events enables report automation with server autoload, making running final
-> measurement reports more convenient for the end-user. … please note that triggering events
-> is not possible without a server connection."*
+| Event type | 설정 (`Configure`) |
+|---|---|
+| **Run Report** | `Workspace folder` · `Update folder before report execution` · `Do not run event for empty folder` · `Report per measurement` · `Report file` · `Export`(PDF · Excel · Word · RTF · text · HTML) · `Autogenerate name` · `Export folder` · `Additional Report Scope Settings`(Scope Filter — `System` · `Band` · `Time & Area`: `Begin/End time`, `Area` → `Define Area`(폴리곤), `Filter out events marked as scheduled`) · `Save report to Nemo Cloud`(+ connection · project) · `Close workbook when report ready` · `Send email when report ready` · `Attach report` · `Configure email`(`To` · `Subject` · `Message`) |
+| **Run Workbook** | 위와 같은 폴더 옵션 + `Workbook` · `Export to`(페이지별 이미지 / PDF) · `Export folder` · `Autogenerate name` · `Export name` · 이메일 |
+| **Run Office report** | `Report type`(PowerPoint / Word) · `Template file`(미리 있어야 함) · `Export folder` · `Report file` · `Scope filter` · 이메일 |
+| **Load files in folder** | `Load folder` · `Include subfolders` · `Download files x last days` · `File types` · `Other extensions` |
+| **FTP autoload** | `Protocol`(FTP / SFTP) · `Use active mode` · `Host` · `Port` · `Username` · `Password` · `SSH key file` · `Remote folder` · `Other folders`(`\|`로 구분) · `Local folder` · `Use remote folder structure` · `File types` · `Other extensions` · **`Load files recursively from subfolders`** · **`Delete files from server after load`** |
+| **Nemo Cloud autoload** | `Nemo Cloud connection` · `Project` · `Login` · `Local folder` · `Download files X last days` · `File types` |
+| **KPI Threshold Alarm** | `Measurement folder` · 폴더 옵션 · `Check threshold for each measurement in folder` · **`KPI threshold`**(`Add` → 파라미터 → 필터(AND/OR로 여러 트리거) → `Condition`: left/right column · operator · value) · `Run script`(.bat) · `Send email` |
+
+FTP 로드는 2단계입니다 — 서버에서 로컬 폴더로 받은 뒤 DB에 적재. *"the measurements files are
+removed from the FTP server's autoload folder after loading."* 반복은 `Recurrence` → `Event
+Recurrence`(`Event time` Start/End · `Recurrence pattern` Daily / Weekly / Monthly / every N week(s) on
+[weekday(s)] · `Range of recurrence` 날짜 또는 `End after N occurrences`).
+
+**목적.** *"Triggering events enables report automation with server autoload, making running final
+measurement reports more convenient for the end-user. It is possible to trigger events and event
+batches when connected to the Nemo Analyze Server – please note that triggering events is not
+possible without a server connection."*
+
+**전제 — Nemo Analyze Server 설정** (상세는 Nemo Analyze Database Server Administration Guide):
+
+| 서버 설정 | 켤 것 |
+|---|---|
+| Backup & Retrieve | `Nemo measurements (*.nmf)` · `Zip archives (*.zip)` |
+| Autoload | `Nemo measurements (*.nmf)` · `Zip archives (*.zip)` |
+| FTP | `Load files recursively from subfolders` · `Delete files from server after load` |
 
 **절차.**
 
-1. Nemo Analyze **Server**에서 backup/retrieve, autoload, FTP autoload를 켬.
-2. `Backup & Retrieve`와 `Autoload`에서 `*.nmf`와 `*.zip`을 선택.
-3. FTP 설정에서 하위 폴더 재귀 로드와 로드 후 서버에서 삭제를 선택.
-4. FTP 서버에 폴더(예: `test`)를 만들고 측정 파일을 넣음 → 자동 로드되어 클라이언트의 같은 이름
-   폴더에 나타남.
-5. 클라이언트에서 `Tools | Event scheduler` → 달력 → `Triggering events` → `Add`.
-6. `Schedule Event Batch`의 `Triggering folder`에 FTP와 같은 폴더 이름을 입력.
+1. FTP 서버에 폴더를 만듭니다(예: `test`). 여기 넣은 측정 파일은 자동 로드되어 클라이언트의
+   **server folders**에 같은 이름의 폴더로 나타납니다.
+2. 클라이언트에서 `Tools | Event scheduler` → 달력 클릭 → 리본의 **`Triggering events`** →
+   `Triggering Events` 대화상자 → `Add`.
+3. `Schedule Event Batch`의 **`Triggering folder`**에 FTP 폴더와 같은 이름을 쓰되, 트리거 시점을
+   알리는 **마커 `_ready`를 붙입니다** — 이 예에서는 **`test_ready`**.
+4. `Add`로 배치에 이벤트를 평소처럼 추가합니다(예제는 `Run workbook`과 `Run report` 둘).
+   `Up`/`Down`으로 순서, `Delete`로 제거.
+5. *"As event triggering is not time-related but event-related, you cannot set a start time for
+   the event."* **`Active`**(기본 선택)를 켜고 `Close`. 이 사전 설정이 있어야 트리거가 동작합니다.
+6. 포함할 측정 파일을 로컬에서 FTP 서버의 `test` 폴더로 올립니다. **FTP 폴더가 비워질 때까지**
+   (서버 적재 완료) 기다립니다.
+7. FTP 서버에서 폴더 이름을 **`test` → `test_ready`**로 바꿉니다. Nemo Analyze는 모든 파일이
+   DB에 올라간 뒤에 트리거합니다. 이름 변경이 클라이언트에 닿기까지 **수 분** 걸릴 수 있습니다.
+8. 바뀐 이름의 폴더가 클라이언트의 server folders에 나타나면 배치가 **자동 실행**되고, 실행 후
+   배치는 **inactive**가 됩니다. 다시 쓰려면 `Schedule Event Batch`에서 재활성화합니다.
 
-**우리.** ◐ — 이벤트 스케줄러도 자동 로드도 없습니다. 구조는 오히려 가깝습니다 — 우리는
-처음부터 서버가 임포트하고 서버가 리포트를 만듭니다(`report.html`이 HTTP 엔드포인트). 없는 것은
-**트리거뿐**입니다.
+**Enterprise 쪽 (p310).** Nemo Analyze Enterprise 서버에서는 서버 리포트 템플릿(`.ssrt`, 지도는
+로컬에서 추가)을 서버에 올려 클라이언트 없이 서버가 직접 생성합니다.
+
+**그림.** `scheduler-schedule-event-batch_p294`, `scheduler-event-recurrence_p307`,
+`uc25-scheduler-calendar_p308`, `uc25-triggering-events-ribbon_p308`, `uc25-triggering-events-dialog_p309`,
+`uc25-triggering-folder-ready_p309`, `uc25-batch-with-events-active_p310`.
+
+**우리.** ◐ — 이벤트 스케줄러도 자동 로드도 없고, 임포트는 사람이 파일을 올려 시작합니다.
+구조는 오히려 가깝습니다 — 우리는 처음부터 서버가 임포트하고 서버가 리포트를 만듭니다
+(`report.html`이 HTTP 엔드포인트). 레퍼런스의 트리거가 "폴더 이름에 `_ready`가 붙으면"이라는
+**파일시스템 규약**이라는 점이 사양으로 남습니다 — 우리에게는 "임포트 잡 완료" 이벤트가 이미
+있어 그것을 트리거로 쓰면 됩니다. `KPI Threshold Alarm`(임계 위반 시 스크립트·메일)은 우리
+`run_criterion`의 합불 기준과 같은 개념입니다.
 
 ---
 
@@ -817,7 +866,22 @@ Excel · `.tab`.
 UC26이 Filter 요소 설명의 끝(p396)에, UC27이 24페이지짜리 실전 예제(p403–426)로 붙어 있습니다.
 요소별 명세는 [`kpi-workbench.md`](kpi-workbench.md).
 
-#### UC26 · p396–403 · 다중 조건으로 복합 필터 만들기 — ◐(p396–399) / ●(p400–403)
+#### UC26 · p396–403 · 다중 조건으로 복합 필터 만들기 — ●
+
+**Filter 요소의 배경 (p379–383).** *"a filter for Scrambling Code <= 2 would AND Scrambling Code
+> 0 would filter out all other scrambling codes than 1 and 2."* 요소를 놓고 데이터셋의 출력 소켓에서
+입력 소켓으로 선을 끈 뒤 우클릭 `Properties` → `Filter` 탭 → `Add` → **`Condition`** 대화상자:
+
+| 필드 | 뜻 |
+|---|---|
+| `Left column` | 비교할 입력 열 |
+| `Operator` | 조건. 불충족 값이 걸러짐 |
+| `Right column` | `<Value>`(아래 `Value`와 비교) · **`<Previous value>`**(같은 열의 직전 값과 비교) · 입력 데이터셋의 다른 파라미터 열 |
+| `Value` | 한계값. **`{?<variable name>}`** 을 쓰면 KPI 실행 때마다 사용자에게 묻는 변수가 됨 |
+
+트리 규칙: 이진 트리라 노드당 자식 둘. 셋째 조건을 더하면 **레벨이 자동 추가**. 노드는 레벨·노드
+사이로 **드래그 앤 드롭** 가능. 연산자 우클릭 → `AND` / `OR`. 여러 필터를 선택해 우클릭 `Group` /
+`Ungroup`(좌측에 선으로 표시).
 
 **예제.** scrambling code를 **12–21, 29–30, 74–88** 세 범위로 거릅니다.
 
@@ -825,31 +889,35 @@ UC26이 Filter 요소 설명의 끝(p396)에, UC27이 24페이지짜리 실전 �
 (scr<=21 AND scr>11) OR (scr<=30 AND scr>=29) OR (scr<=88 AND scr>=74)
 ```
 
-**제약.** *"The logic of the filter element follows that of a binary tree, and thus one node can
-always have only two child nodes."* Filter 요소의 `Properties` → `Filter` 탭의 트리에서
-`Add` / `Modify` / `Remove`로 조건을 하나씩 붙이고, 노드의 논리 연산자는 **우클릭 → AND / OR**로
-바꿉니다. 아래 줄에 완성된 식이 텍스트로 표시됩니다.
+이진 트리에는 최상위 노드 자리가 둘뿐이라 첫 쌍이 하나를 차지하면 남는 자리는 하나입니다. 세
+범위가 **대등**해야 하므로 나머지 두 쌍을 남은 상위 노드의 **자식**으로 넣어 식을 이렇게 재구성
+합니다:
 
-**p400–403 절차(원문).**
+```
+(scr<=21 AND scr>11) OR ( (scr<=30 AND scr>=29) OR (scr<=88 AND scr>=74) )
+```
 
-1. 첫 쌍 `scrambling_code <= 21 AND scrambling_code > 11`이 만들어진 뒤 `scrambling_code <= 30`을
-   더하면 트리는 `AND( AND(<=21, >11), <=30 )`. 한쪽 범위의 값만 있는 상황도 받아야 하므로
-   **상위 노드의 연산자를 우클릭 → `OR`**로 변경.
-2. 둘째 쌍 완성: `scr. code <= 30` 선택 → `Add` → `Condition` 대화상자에 `scr. code >= 29` → `OK`.
-   새로 생긴 노드의 연산자도 `OR` → 필요한 곳은 `AND`로(그림 p401: `OR( AND(<=21,>11),
-   AND(<=30,>=29) )`).
-3. 셋째 쌍: 마지막 쌍의 조건 하나 선택 → `Add` → `scr. code >= 74` → `OK` → **트리에 새 레벨이
-   자동 추가**. `scr. code >= 74` 선택 → `Add` → `scr. code <= 88` → `OK`.
-4. `OK`로 Workbench에 복귀 → Filter 요소가 **빨강에서 초록**으로 바뀜(동작 가능).
-5. 이 시점에서 테스트: Output에 연결 → Workspace `Measurements`에서 측정 선택 → 캔버스 배경
-   우클릭 → **`Run Script`** ("Running and testing KPIs").
+**절차 (p397–403).**
 
-**그림.** `uc26-filter-tree-operator_p401`, `uc26-filter-tree-complete_p403`.
+1. Filter 요소를 놓고 데이터셋을 연결 → `Properties` → `Filter` 탭 → `Add` → `scr. code <= 21` →
+   `OK`. 다시 `Add` → `scr. code > 11` → `OK`. 첫 범위(12–21) 완성.
+2. 둘째 상위 노드 만들기: 기존 조건 하나를 선택하고 `Add` → `scr. code <= 30` → `OK`. 선택했던
+   노드가 이미 자식 둘을 가졌으므로 **새 조건이 자동으로 둘째 상위 노드**가 됩니다.
+3. 한쪽 범위의 값만 있는 상황도 받아야 하므로 두 상위 노드 사이의 연산자를 **우클릭 → `OR`**.
+4. 둘째 쌍 완성: `scr. code <= 30` 선택 → `Add` → `scr. code >= 29` → `OK`. 이 노드의 연산자도
+   `OR`로(p401 그림: `OR( AND(<=21,>11), AND(<=30,>=29) )`).
+5. 셋째 쌍: 마지막 쌍의 조건 하나 선택 → `Add` → `scr. code >= 74` → `OK` → **새 레벨 자동 추가**.
+   `scr. code >= 74` 선택 → `Add` → `scr. code <= 88` → `OK`.
+6. `OK` → Filter 요소가 **빨강에서 초록**으로. Output에 연결하고 측정을 골라 배경 우클릭 →
+   **`Run Script`**로 중간 테스트.
+
+**그림.** `uc26-filter-tab_p397`, `uc26-condition_p398`, `uc26-first-pair_p399`,
+`uc26-filter-tree-operator_p401`, `uc26-filter-tree-complete_p403`, `workbench-filter-tree-third-level_p382`.
 
 **우리.** ✅ — 여기는 우리가 낫습니다. `FILTER` 노드는 조건식을 텍스트 한 줄로 쓰고 파서
 (`ColumnCondition`)가 AND/OR/괄호를 지원해 중첩 깊이 제한이 없습니다. 안전성은 파싱 방식으로 —
 연산자는 하드코딩 목록과 대조해 상수를 출력하고, 열 이름은 알려진 집합과 대조하며, 사용자
-입력의 어떤 조각도 SQL로 복사되지 않습니다.
+입력의 어떤 조각도 SQL로 복사되지 않습니다. 없는 것: `<Previous value>` 비교와 `{?변수}`.
 
 #### UC27 · p403–426 · 이웃 누락(핸드오버 누락)에 의한 호 단절 KPI 만들기 — ●
 
@@ -957,7 +1025,7 @@ resulting from missing handover` → `Next` → `Column Aliases` → `Finish` �
 `uc27-graph-partial-union_p408`, `uc27-sort-column_p410`, `uc27-states-initial_p414`,
 `uc27-transition-dialog_p415`, `uc27-condition-dialog_p415`, `uc27-transition-with-output_p421`,
 `uc27-missing-handover-transitions_p423`, `uc27-complete-graph_p425`, `uc27-result-grid_p426`.
-(`state-machine-states_p368.png`은 p413의 State Machine `Properties` 그림과 동일합니다.)
+(`state-machine-states_p368.png`은 p368 원본이며 p413에서 재사용됩니다.)
 
 **우리.** ◐ — 노드 그래프의 구조(배치·연결 방향·상태 이름)는 일치합니다. 같은 KPI를 만들 수
 있는가는 **아니오** — (1) 우리 `STATE_MACHINE`은 표본별 `CASE`라 "Bad BLER를 거쳐야"라는 순서를
@@ -1076,6 +1144,107 @@ resulting from missing handover` → `Next` → `Column Aliases` → `Finish` �
 
 ---
 
+## 부록 — 워크벤치 요소의 대화상자 (p367–p396)
+
+UC26·UC27이 쓰는 요소들의 `Properties`를 원문에서 옮겼습니다. 요소별 의미·우리와의 차이는
+[`kpi-workbench.md`](kpi-workbench.md)가 원본이고, 여기는 **대화상자의 필드**입니다.
+
+### State Machine (p367–372)
+
+- 용도: *"examining the start and the end of particular events, the duration of such events, values
+  of other parameters before, during and after these events."* 먼저 그리드로 데이터를 보고 어떤 값·
+  시그널링 메시지 이름·event_ID가 어떤 전이를 일으킬지 **흐름도로** 설계할 것. 상태마다 **돌아오는
+  전이**가 있어야 함. 입력은 **시간순 정렬**돼 있어야 하며 아니면 앞에 Sort 요소.
+- `Properties › State Machine` 탭: `States` 목록 · `Add` / `Modify` / `Remove` · **`Initial state`**
+  (idle 상태를 고름). 최소한 idle 상태 하나와 관심 상태 하나.
+- `State` 대화상자: `Name` · `Transitions` 목록 · `Add` / `Modify` / `Remove`.
+- **`Transition`** 대화상자: `Conditions`(AND/OR 우클릭으로 전환) · **`Time trigger`**(조건이 정해진
+  ms 안에 충족되지 **않으면** 발동하는 전이) · `Target` · **`Output`**.
+- Output 규칙(p370 원문): *"If the field is left blank, no output will be generated from this
+  transition. … When a transition occurs from the state x to state y, the point in time when the
+  transition occurred from state x to state y (start_time), the point in time when the transition
+  occurred from the state y to the next state, and the time in milliseconds that passed while in
+  the state y (time_interval) are recorded in the output data set."* 용도 둘 — 커스텀 이벤트
+  (`start_time`), 절차 지연 측정(예: UMTS radio bearer 확립 — 진입/이탈 상태를 만들면
+  `time_interval`이 곧 지연 ms).
+- **`Condition`** 대화상자: `Left Column` · `Operator` · `Right column`(`<Value>` / **`<Previous
+  value>`** — `!=`와 함께 쓰면 "값이 바뀌면" / 다른 열) · `Value`(`{?변수}` 가능, 전이마다 고유 이름).
+  예: `L3 Signaling message = CALL ATTEMPT`.
+
+### Group By / Binning (p372–376)
+
+- 먼저 상관 요소(예 `All Values Within Time Range`, primary는 가장 왼쪽 소켓)로 파라미터들을 한
+  데이터셋으로 합친 뒤 Group By에 연결.
+- `Properties › Group By` 탭: `Input`(입력 파라미터 전부) → 화살표로 **`Group by`**와
+  **`Aggregates`**로 이동. 그룹 파라미터는 여러 개 가능하며 **순서가 계층**이 됨. 집계마다
+  `Function`(Minimum · Maximum · Average · Standard Deviation · Variance · Sum · Count · Mode · Median ·
+  Percentile · First · Last) · **`Weight by`**(time · distance(GPS) …; 보통 Average·Count에만) ·
+  **`Result title`**(없으면 동작하지 않음).
+- 원문 예: `bts_site_name` › `bts_cell_name`으로 그룹핑하고 ec/no와 tx_power 각각 min·max·avg
+  여섯 집계.
+
+### Aggregate 요소 (p376–378)
+
+`Column`(`*`는 Count에서 null 포함) · `Group by` · `Weight by` · `Result title`. 예: SC별 Ec/N0
+평균 = `Column: ec/no`, `Group by: scrambling_code`, `Weight by: time`.
+
+> *"Because the Nemo measurement file format is time-based as opposed to sample-based … the
+> aggregate functions Average and Count should be weighted by time in order to obtain accurate
+> results."* — 우리는 1 Hz 균일이라 시간 가중이 필요 없습니다([`corrections.md` C7](corrections.md)).
+
+### Sort (p378–379) · Top-N / Bottom-N / Nth Best / Nth Worst / Discard Worst (p384–386)
+
+- Sort: `Ascending` / `Descending` 요소, `Sort` 탭에서 열(예 `time`) 선택.
+- Top-N·Bottom-N: 지정 열의 상·하위 N개. Nth Best·Worst: N번째 값 하나. Discard Worst: `Percent`
+  만큼 최악값 버림, `High values`면 높은 쪽을 버림.
+- `Nth` 탭: `N` · `Column` · **`Group by`**. 예: SC별 Ec/N0 상위 2개 = `N: 2, Column: ec/no, Group
+  by: scrambling_code`.
+
+### Mathematical functions (p386–388)
+
+`Operator` 탭: `Left column` · `Right column`(`<Value>` 또는 열) · `Right value`(`{?변수}` 가능) ·
+`Result title`. 함수: `+ − * / %`(나머지) · `<<` `>>`(비트 시프트, 값 = 자릿수) · `Ceiling` · `Floor`
+(값 = 1 / 10 …, 반올림 단위) · `Log`(값 = 밑) · `Exponentiation`(값 = 지수) · `Root`(값 = 차수, 2 =
+제곱근) · `Round`(소수 <0.5 내림, ≥0.5 올림; 값 = 단위).
+
+### Time functions (p388–390)
+
+- **Resample**: *"0.5-second and 1.3-second RSCP samples with values -86 and -87 respectively, would
+  constitute five samples of value -86 and 13 samples with value -87 when resampled at a
+  100-millisecond interval."* `Interval`(ms / s). 원래보다 긴 주기로 재표본화하면 정확도가 떨어지고
+  데이터가 손실될 수 있음.
+- **Time Shift**: 시점 이벤트(예 `Dropped call`)에 **시간 범위**를 만들어 전후 값을 상관시키기
+  위한 것. `Time offset`(backward / forward + 값 + s/ms) · `Duration`(backward / forward + 값).
+  예: 이벤트 10초 전부터 10초 후까지 = `Time offset backward 10 s`, `Duration forward 20 s`.
+
+### 실행 · 저장 · 재편집 · 실행 방식 · 상수 (p391–396)
+
+- **Run**: 모든 요소가 초록이고 마지막 요소가 Output에 연결 → 측정 선택 → 배경 우클릭 `Run
+  Script`. 결과를 보고 정렬 추가, 상태·트리거 재조정, 추가 필터. Output 더블클릭 → `Results` 탭에서
+  불필요한 열 숨김.
+- **Save Component**: 배경 우클릭 `Save Component`. Parameter와 Output이 갖춰진 동작 가능한
+  상태여야 함. 우측 메뉴 `Components`에 나타나며, 캔버스에 놓을 때 `Component Type` — `Single
+  component`(요소 하나로) / `Multiple nodes (will reset model)`(개별 편집 가능).
+- **Save**: 배경 우클릭 `Save`(동작 불가 상태면 메뉴에 없음) → `Analyze Wizard – Properties`:
+  `Name`(Parameters의 `User` 아래 표시) · `Title`(캔버스에 놓았을 때 표시) · `Description`
+  (Parameters에서 우클릭 `Description`) → `Column Aliases`(선택) → `Finish`.
+- **재편집**: `User` 항목의 KPI를 `Tools | KPI Workbench` 캔버스로 드래그 → `Multiple nodes (will
+  reset model)`.
+- **KPI execution method**(우하단 `Properties`, KPI를 만들기 **전에** 정할 것): `Execute per file`
+  (파일마다 따로) · `Execute per measurement`(같은 측정 세션의 파일 전부) · `Execute per all`(모든
+  파일 동시에).
+- **Constants**: `Constants` 필드 우클릭 `Add Constant` → `Name`(예 `example`) → 값 입력(예
+  `10000`). 스크립트·요소 속성에서 **`{$example}`** 로 참조.
+
+**그림.** `workbench-transition-dialog-time-trigger_p369`, `workbench-condition-dialog_p370`,
+`workbench-transition-two-conditions_p371`, `workbench-group-by-properties_p374`,
+`workbench-group-by-example_p375`, `workbench-group-by-result_p375`, `workbench-aggregate-properties_p377`,
+`workbench-nth-properties_p385`, `workbench-math-operator_p387`, `workbench-resample_p389`,
+`workbench-time-shift_p390`, `workbench-component-type_p392`, `workbench-save-properties_p393`,
+`workbench-execution-method_p395`, `workbench-add-constant_p396`.
+
+---
+
 ## 유즈케이스를 가로지르는 개념 여섯
 
 | 개념 | 걸린 UC | 매뉴얼 | 우리 |
@@ -1101,7 +1270,7 @@ resulting from missing handover` → `Next` → `Column Aliases` → `Finish` �
 | `manual10.2_cell-locator-estimated-site_p174.png` | 지도 워크북 + `Properties › BTS` "Select which lines to draw" + `Number of cells [Time]` 범례. **UC20의 마지막 그림**(p174) | `manual10.2_uc20-bts-lines-properties_p174.png` |
 | `manual10.2_cell-beam-range-on-map_p162.png` | 경로를 따라 비닝된 타일(RSCP · Throughput `[Distance]`). **UC16 Delta plotting의 결과**(p162 상단). 빔 범위 그림은 같은 페이지의 다른 그림 | `manual10.2_uc16-delta-plotting-result_p162.png` (+ 새로 `uc17-cell-beam-range-sector_p162`) |
 | `manual10.2_uc27-state-flow_p405.png` | UC27 **시작 캔버스** — 파라미터 3개와 빨간 Output. 상태 흐름도는 p405의 벡터 텍스트라 그림 파일이 없음(위 mermaid로 재현) | `manual10.2_uc27-start-canvas_p405.png` |
-| `manual10.2_state-machine-states_p368.png` | p413의 State Machine `Properties` 그림과 동일. p368에도 같은 그림이 있을 수 있으나 그 페이지는 미제공 | (유지) |
+| `manual10.2_state-machine-states_p368.png` | p368의 State Machine `Properties` 그림과 동일 확인(p413에서 재사용) | (유지) |
 
 나머지 11장(`p24` · `p55` · `p66` · `p88` · `p150` · `p216` · `p346` · `p349` · `p408` · `p425` · `p426`)은
 라벨과 내용이 맞습니다(p24 · p55 · p88 · p216 · p346 · p349는 이번 대조 범위 밖이라 미확인).
@@ -1119,12 +1288,11 @@ resulting from missing handover` → `Next` → `Column Aliases` → `Finish` �
 | 대조표 UC28 | `AutoScale`(사분위 구간)보다 서빙 PCI 채색이 더 가까운 대응물 — 레퍼런스의 `Add Range`는 이산값별 색 |
 | 브리프 ② · ③ 캡션, `MANIFEST.md` | 그림 라벨 4건 |
 
-## 아직 원문이 없는 구간
+## 원문 확보 상태
 
-**p300–399**. 유즈케이스로는 UC25 전체와 UC26의 p396–399. 워크벤치 요소 명세(p344–396)는
-[`kpi-workbench.md`](kpi-workbench.md)에 2026-09-01 추출본이 있습니다. 그 구간이 다시 제공되면
-UC25·UC26을 ● 등급으로 올리고, State Machine의 `Time trigger`(p367–372)와 `Group By/Binning`
-(p372–376) 대화상자를 같은 깊이로 옮기면 됩니다.
+2026-09-02 오후에 p300–399도 제공되어 **505페이지 전부**가 한 번씩 원문으로 확인됐습니다.
+유즈케이스 31개는 모두 ● 등급이고, `state-machine-states_p368.png`은 p368의 그림과 픽셀 동일함이
+확인됐습니다(p413에서 재사용). 원본 PDF는 여전히 저장소에 두지 않습니다.
 
 ---
 
