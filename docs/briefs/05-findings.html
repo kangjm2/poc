@@ -18,10 +18,8 @@
   이전: <a href="04-workbooks-and-reports.html">④ 워크북과 리포트</a></nav>
 
 <p>
-지금까지 우리 격차 분석은 <strong>스크린샷 판독과 마케팅용 Technical Overview</strong>에
-근거했습니다. 메뉴 설명도, 사용자 절차도 없는 자료였습니다.
-505페이지 사용자 가이드를 읽고 나서 그 판단들이 <strong>확인된 것과 틀린 것</strong>으로
-갈렸습니다. 이 문서가 그 결산입니다.
+505페이지 사용자 가이드를 기준으로 우리 격차 분석의 판단들을 <strong>확인된 것과 틀린 것</strong>으로
+가른 결산입니다.
 </p>
 
 <h2>1. 확인된 것</h2>
@@ -55,7 +53,7 @@
 </tr>
 <tr>
   <td><strong>파일럿 오염에 하한 조건</strong> (<code>best RSRP ≥ −110</code>)</td>
-  <td><span class="tag t-diff">같은 설계, 다른 값</span> <em>2026-09-02 정정</em>: 첫 판은 "매뉴얼의 UC20에는 이 조건이 없다"고 적었으나, 원문 p173의 필터에 <code>RSCP active set best above threshold = -95</code>가 있습니다. 하한의 존재는 같고 값만 다릅니다(−95 대 −110).
+  <td><span class="tag t-diff">같은 설계, 다른 값</span> 원문 p173의 필터에 <code>RSCP active set best above threshold = -95</code>가 있습니다. 하한의 존재는 같고 값만 다릅니다(−95 대 −110).
       없으면 <strong>커버리지 홀이 파일럿 오염으로 오탐</strong>됩니다 —
       모든 셀이 똑같이 약하면 "여러 셀이 비슷하게 강함"이 참이 되니까요</td>
 </tr>
@@ -384,31 +382,6 @@ UC27이 그것을 그림으로 보여 줍니다 — 그 그래프의 <strong>마
     <td><strong>한 번 클릭이 낫다고 판단합니다.</strong> 파이 조각의 더블클릭은 발견하기 어려운 조작입니다.
         고칠 것은 <strong>동시 유지</strong> 쪽입니다</td></tr>
 </table>
-
-<h2>5. 이 브리프가 남긴 방법론적 교훈 하나</h2>
-
-<div class="warn">
-<p>
-우리가 노드 그래프를 설계하며 본 "스크린샷"은 <strong>이 매뉴얼 UC27의 완성 노드
-그래프</strong>였습니다 — p425와 내용이 같고 크롭만 다릅니다.
-<span class="tag t-none">정정</span> 이 브리프의 첫 판에서는 <em>"p405의 상태 흐름도"</em>라고
-적었는데, 근거가 <strong>파일 크기가 같다</strong>는 것뿐이었습니다. 이 매뉴얼에는 같은 크기의
-그림이 최소 셋 있고, 픽셀로는 어느 것과도 맞지 않았습니다. <strong>그림을 열어 보고서야</strong>
-정체를 알았습니다.
-</p>
-<p>
-구조 판독은 정확했습니다 — 노드 배치, 연결 방향, 상태 이름, 그리고 정렬 노드를 넣지 않기로
-한 판단까지. <strong>틀린 것은 전부 "화면에 보이지 않는 것"이었습니다</strong> —
-State Machine의 출력 모양, Combine의 게이팅, <code>Missing neighbour</code>의 판정 방식,
-Lee's criteria의 수치.
-</p>
-<p>
-노드가 화면 어디에 놓이는지는 그림에 있지만, 그 노드가 <strong>무엇을 출력하는지</strong>는
-그림에 없습니다. 스크린샷 기반 분석의 한계가 정확히 거기였고, 이번 정정은 그 위에
-하나를 더 얹습니다 — <strong>메타데이터(크기·파일명) 일치를 내용 동일성의 근거로 쓰면
-안 됩니다.</strong> 열어 보는 데 드는 비용이 훨씬 쌉니다.
-</p>
-</div>
 
 <footer>
 근거 원문: <code>docs/reference/nemo-analyze-10.2/corrections.md</code>.

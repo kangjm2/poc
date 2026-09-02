@@ -18,29 +18,13 @@
   이전: <a href="02-analysis-and-drilldown.html">② 분석과 드릴다운</a> ·
   다음: <a href="04-workbooks-and-reports.html">④ 워크북과 리포트</a></nav>
 
-<div class="warn">
-<h5>먼저 밝혀 둘 것 — 그리고 이 자리에서 한 번 정정합니다</h5>
+<div class="ours">
+<h5>우리 노드 그래프의 출발점</h5>
 <p>
-우리는 웹에서 주운 <code>nemo-analyze_kpi-workbench.png</code>(774×717)를 보고 노드 그래프를
-설계했습니다. 이 브리프의 첫 판에서 저는 <em>"그 그림은 매뉴얼 p405의 상태 흐름도였다"</em>고
-적었습니다. <strong>틀렸습니다.</strong> 근거가 <strong>크기가 같다</strong>는 것뿐이었는데,
-이 매뉴얼에는 774×717 그림이 최소 셋 있습니다(p405 · p411 · p424). 픽셀로 비교하니 셋 중
-어느 것과도 일치하지 않았습니다.
-</p>
-<p>
-그림을 <strong>실제로 열어 보니</strong> UC27의 <strong>완성 노드 그래프</strong>였습니다 —
-아래 p425 그림과 내용이 같고 자른 높이만 다릅니다.
-</p>
-<p>
-<strong>그래서 결론이 반대로 바뀝니다.</strong> 우리는 부분 그림이 아니라
-<strong>완성된 그래프를 보고 설계했고</strong>, 거기 있던 <code>Union</code>과
-<code>Ascending time</code>도 보았습니다. 정렬 노드를 넣지 않기로 한 판단은 그것을 보고
-내린 것입니다. 구조 판독은 정확했습니다 — 노드 배치, 연결 방향, 상태 이름
-(<code>OK</code> / <code>Bad BLER</code> / <code>Missing handover</code>)까지.
-</p>
-<p>
-<strong>틀린 것은 여전히 있습니다.</strong> 그림에서 <em>읽을 수 없는 것</em>을 추측한
-부분입니다 — 각 노드가 무엇을 출력하는지. 아래가 그 목록입니다.
+우리 노드 그래프는 UC27의 <strong>완성 노드 그래프</strong>(아래 p425 그림과 같은 내용)를 보고
+설계했습니다. 구조 — 노드 배치, 연결 방향, 상태 이름(<code>OK</code> / <code>Bad BLER</code> /
+<code>Missing handover</code>), <code>Union</code>과 <code>Ascending time</code>의 자리 — 는 일치합니다.
+어긋나는 것은 그림에서 <em>읽을 수 없는 것</em>, 즉 각 노드가 무엇을 출력하는지입니다. 아래가 그 목록입니다.
 </p>
 </div>
 
@@ -286,11 +270,10 @@ Appendix 3(p477)이 산수로 보여 줍니다 — Rx Quality가 <code>0/90초, 
 <strong>우리는 1 Hz 균일 샘플이라 시간 가중은 아무 일도 하지 않습니다.</strong>
 <span class="tag t-out">시간 축 — 만들지 않음</span>
 </p>
-<div class="warn" style="margin-top:14px">
-<h5>정정 — 거리 축은 다릅니다</h5>
+<div class="ours" style="margin-top:14px">
+<h5>거리 축은 다릅니다</h5>
 <p>
-이 브리프의 첫 판은 <em>"<code>Weight by</code>는 격차가 아니다"</em>라고 통째로 닫았습니다.
-<strong>절반만 맞았습니다.</strong> 같은 p477이 이어서 말합니다:
+같은 p477이 이어서 말합니다:
 </p>
 <blockquote>
 "the duration can be <strong>in time or in distance</strong>, depending on how the data is to be
@@ -456,9 +439,7 @@ often necessary to [sort]" <span class="src">p359, Union 설명</span>
 <div class="two">
 <figure>
   <img src="../assets/screenshots/manual10.2_uc27-start-canvas_p405.png" alt="UC27 시작 화면 — 파라미터 3개와 Output">
-  <figcaption>UC27 시작 화면 — 파라미터 3개와 아직 빨간 Output · p405.
-    <strong>정정 (2026-09-02)</strong>: 첫 판은 이 그림을 "상태 흐름도"라고 적었으나, 열어 보면
-    상태 흐름도가 아니라 캔버스의 출발 상태입니다</figcaption>
+  <figcaption>UC27 시작 화면 — 파라미터 3개와 아직 빨간 Output · p405</figcaption>
 </figure>
 <figure>
   <img src="../assets/screenshots/manual10.2_uc27-graph-partial-union_p408.png" alt="UC27 중간 단계 그래프">
@@ -537,13 +518,7 @@ Ec/N0 차이가 음수여도 <strong>BLER이 먼저 나빠진 상태를 거쳐�
 </div>
 
 <div class="ours">
-<h5>그런데 <code>Missing neighbour</code>에 대한 우리 기존 판단은 <strong>틀렸습니다</strong></h5>
-<p>
-우리 격차 문서는 이렇게 적어 놨습니다 —
-<em>"<code>Missing neighbour</code> 원인 분류는 이웃 셀 측정으로 안 풀립니다.
-<strong>측정된</strong> 이웃과 <strong>설정된</strong> 이웃 목록의 차집합인데 우리는 후자가
-없습니다."</em>
-</p>
+<h5><code>Missing neighbour</code>는 설정된 이웃 목록 없이 판정됩니다</h5>
 <p>
 <strong>UC27이 보여주듯 Nemo는 설정된 이웃 목록을 쓰지 않습니다.</strong>
 <code>best active set − 1. best &lt; 0</code>, 즉 <strong>측정값만으로</strong> 판정합니다.
