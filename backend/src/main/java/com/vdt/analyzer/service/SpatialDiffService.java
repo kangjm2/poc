@@ -4,6 +4,7 @@ import com.vdt.analyzer.domain.KpiDefinition;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 
+import java.util.ArrayList;
 import java.util.List;
 
 /**
@@ -37,9 +38,28 @@ public class SpatialDiffService {
                           Double deltaValue, String color, String label) {}
 
     public record SpatialDiff(String kpi, String displayName, String unit,
-                              long sessionA, long sessionB, double sizeMeters,
+                              long sessionA, long sessionB,
+                              /** Every measurement on each side. One-element lists are the
+                               *  ordinary two-drive comparison. */
+                              List<Long> groupA, List<Long> groupB,
+                              double sizeMeters,
                               int tilesBoth, int tilesOnlyA, int tilesOnlyB,
                               String direction, List<DiffBin> bins) {}
+
+    private static String placeholders(int n) {
+        return String.join(", ", java.util.Collections.nCopies(n, "?"));
+    }
+
+    /** Flattens the two id lists into the positional order the SQL above binds them in. */
+    private static Object[] args(List<Long> groupA, double dLat, double dLon,
+                                 List<Long> all, String kpiName) {
+        List<Object> out = new ArrayList<>(groupA);
+        out.add(dLat);
+        out.add(dLon);
+        out.addAll(all);
+        out.add(kpiName);
+        return out.toArray();
+    }
 
     private final JdbcTemplate jdbc;
     private final KpiCatalog catalog;
@@ -50,47 +70,83 @@ public class SpatialDiffService {
     }
 
     public SpatialDiff diff(long sessionA, long sessionB, String kpiName, double sizeMeters) {
+        return diff(List.of(sessionA), List.of(sessionB), kpiName, sizeMeters);
+    }
+
+    /**
+     * Two GROUPS of measurements differenced tile by tile.
+     *
+     * The reference compares groups rather than files (UC16 p159: "A measurement group
+     * average is calculated from all measurements within a Measurement Group"), and the
+     * reason is that one drive is one sample of a road. Three morning runs against three
+     * evening runs says something about the road; one against one says something about
+     * two afternoons.
+     *
+     * The group average is POOLED, not an average of per-drive averages. Those differ
+     * whenever the drives contributed unequal numbers of samples to a tile - a drive that
+     * crawled through a tile in traffic has more samples there than one that sailed past -
+     * and pooling is the one that answers "what did this group measure here".
+     */
+    public SpatialDiff diff(List<Long> groupA, List<Long> groupB, String kpiName,
+                            double sizeMeters) {
         KpiDefinition def = catalog.require(kpiName);
         if (sizeMeters < 5 || sizeMeters > 20_000) {
             throw new IllegalArgumentException("Bin size must be between 5 and 20000 metres");
         }
-        if (sessionA == sessionB) {
-            throw new IllegalArgumentException("Pick two different measurements to compare");
+        if (groupA == null || groupA.isEmpty() || groupB == null || groupB.isEmpty()) {
+            throw new IllegalArgumentException("Both sides need at least one measurement");
+        }
+        // A measurement on both sides would be differenced against itself and pull every
+        // tile it touches towards zero, which reads as "these agree here".
+        List<Long> shared = groupA.stream().filter(groupB::contains).toList();
+        if (!shared.isEmpty()) {
+            throw new IllegalArgumentException(
+                    "A measurement cannot be on both sides: " + shared);
         }
         String dir = String.valueOf(def.getDirection());
+        long sessionA = groupA.get(0), sessionB = groupB.get(0);
 
+        List<Long> all = new ArrayList<>(groupA);
+        all.addAll(groupB);
+        // Placeholders rather than `= ANY(?)`: a Long[] handed to JdbcTemplate is spread
+        // as several arguments by varargs, not bound as one array, and the first version
+        // of this failed with "column index out of range" for exactly that reason.
+        String allIn = placeholders(all.size());
+        String aIn = placeholders(groupA.size());
         Double centreLat = jdbc.queryForObject(
-                "SELECT avg(latitude) FROM sample WHERE session_id IN (?, ?)",
-                Double.class, sessionA, sessionB);
+                "SELECT avg(latitude) FROM sample WHERE session_id IN (" + allIn + ")",
+                Double.class, all.toArray());
         if (centreLat == null) {
             return new SpatialDiff(kpiName, def.getDisplayName(), def.getUnit(),
-                    sessionA, sessionB, sizeMeters, 0, 0, 0, dir, List.of());
+                    sessionA, sessionB, groupA, groupB, sizeMeters, 0, 0, 0, dir, List.of());
         }
 
         double dLat = sizeMeters / METRES_PER_DEGREE_LAT;
         double dLon = sizeMeters / (METRES_PER_DEGREE_LAT
                 * Math.max(0.05, Math.cos(Math.toRadians(centreLat))));
 
+        // Pooled per SIDE, not per session: the group is one body of measurement, so the
+        // side is decided first and the average taken over everything it contributed.
         List<DiffBin> bins = jdbc.query("""
                 WITH binned AS (
-                    SELECT s.session_id,
+                    SELECT CASE WHEN s.session_id IN (%1$s) THEN 'A' ELSE 'B' END AS side,
                            floor(s.latitude / ?) AS gy,
                            floor(s.longitude / ?) AS gx,
                            count(*) AS n, avg(k.value) AS avg_v
                     FROM sample s
                     JOIN sample_kpi k ON k.session_id = s.session_id AND k.seq = s.seq
-                    WHERE s.session_id IN (?, ?) AND k.kpi_name = ?
-                    GROUP BY s.session_id, gy, gx
+                    WHERE s.session_id IN (%2$s) AND k.kpi_name = ?
+                    GROUP BY side, gy, gx
                 )
                 SELECT gy, gx,
-                       max(CASE WHEN session_id = ? THEN n END) AS n_a,
-                       max(CASE WHEN session_id = ? THEN n END) AS n_b,
-                       max(CASE WHEN session_id = ? THEN avg_v END) AS a_v,
-                       max(CASE WHEN session_id = ? THEN avg_v END) AS b_v
+                       max(CASE WHEN side = 'A' THEN n END) AS n_a,
+                       max(CASE WHEN side = 'B' THEN n END) AS n_b,
+                       max(CASE WHEN side = 'A' THEN avg_v END) AS a_v,
+                       max(CASE WHEN side = 'B' THEN avg_v END) AS b_v
                 FROM binned
                 GROUP BY gy, gx
                 ORDER BY gy, gx
-                """, (rs, i) -> {
+                """.formatted(aIn, allIn), (rs, i) -> {
             double lat = (rs.getDouble("gy") + 0.5) * dLat;
             double lon = (rs.getDouble("gx") + 0.5) * dLon;
             Long nA = (Long) rs.getObject("n_a");
@@ -101,8 +157,7 @@ public class SpatialDiffService {
                     : Math.round((bV - aV) * 100.0) / 100.0;
             return new DiffBin(round6(lat), round6(lon), sizeMeters, nA, nB,
                     round2(aV), round2(bV), delta, verdict(delta, dir).color, verdict(delta, dir).label);
-        }, dLat, dLon, sessionA, sessionB, kpiName,
-           sessionA, sessionB, sessionA, sessionB);
+        }, args(groupA, dLat, dLon, all, kpiName));
 
         int both = 0, onlyA = 0, onlyB = 0;
         for (DiffBin b : bins) {
@@ -112,7 +167,7 @@ public class SpatialDiffService {
         }
 
         return new SpatialDiff(kpiName, def.getDisplayName(), def.getUnit(),
-                sessionA, sessionB, sizeMeters, both, onlyA, onlyB, dir, bins);
+                sessionA, sessionB, groupA, groupB, sizeMeters, both, onlyA, onlyB, dir, bins);
     }
 
     /**

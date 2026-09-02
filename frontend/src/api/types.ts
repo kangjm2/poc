@@ -487,7 +487,10 @@ export interface DiffBin {
 
 export interface SpatialDiff {
   kpi: string; displayName: string; unit: string
-  sessionA: number; sessionB: number; sizeMeters: number
+  sessionA: number; sessionB: number
+  /** Every measurement on each side. One-element lists are the two-drive comparison. */
+  groupA: number[]; groupB: number[]
+  sizeMeters: number
   tilesBoth: number; tilesOnlyA: number; tilesOnlyB: number
   /** HIGHER_IS_BETTER | LOWER_IS_BETTER | NEUTRAL - a NEUTRAL KPI gets no verdict. */
   direction: string

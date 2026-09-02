@@ -229,9 +229,12 @@ export const api = {
     get<AreaStats>(`/sessions/${id}/area-statistics?kpi=${encodeURIComponent(kpi)}`
       + `&polygon=${encodeURIComponent(polygon.map(([a, b]) => `${a},${b}`).join(';'))}`),
 
-  spatialDiff: (id: number, other: number, kpi: string, sizeMeters: number) =>
+  // `withB` adds measurements to the far side. Absent, the call is exactly what it was.
+  spatialDiff: (id: number, other: number, kpi: string, sizeMeters: number,
+                withB?: number[]) =>
     get<SpatialDiff>(`/sessions/${id}/spatial-diff?other=${other}`
-      + `&kpi=${encodeURIComponent(kpi)}&sizeMeters=${sizeMeters}`),
+      + `&kpi=${encodeURIComponent(kpi)}&sizeMeters=${sizeMeters}`
+      + (withB && withB.length ? `&withB=${withB.join(',')}` : '')),
 
   distanceBins: (id: number, kpi: string, stepMeters: number) =>
     get<DistanceBin[]>(`/sessions/${id}/distance-bins?kpi=${kpi}&stepMeters=${stepMeters}`),

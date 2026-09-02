@@ -19,6 +19,14 @@ export function SpatialDiffPanel({ sessionId, sessions, kpi, cursorSeq, onPick }
   onPick: (seq: number) => void
 }) {
   const [other, setOther] = useState<number | null>(null)
+  /**
+   * Extra measurements on the far side, making it a GROUP rather than a drive.
+   *
+   * One drive is one sample of a road. The reference compares groups for that reason
+   * (UC16 p159) and averages every measurement in a group together, which is what makes
+   * "the evening runs are worse here" a statement about evenings.
+   */
+  const [withB, setWithB] = useState<number[]>([])
   const [size, setSize] = useState(150)
   const [data, setData] = useState<SpatialDiff | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -34,9 +42,9 @@ export function SpatialDiffPanel({ sessionId, sessions, kpi, cursorSeq, onPick }
   useEffect(() => {
     if (sessionId == null || other == null) { setData(null); return }
     setError(null)
-    api.spatialDiff(sessionId, other, kpi, size).then(setData)
+    api.spatialDiff(sessionId, other, kpi, size, withB).then(setData)
       .catch((e) => { setData(null); setError(e instanceof Error ? e.message : String(e)) })
-  }, [sessionId, other, kpi, size])
+  }, [sessionId, other, kpi, size, withB])
 
   const legend = data?.direction === 'NEUTRAL'
     ? [['#5b3fa8', 'changed a lot'], ['#a390d4', 'changed'], ['#e8e8ec', 'unchanged']]
@@ -51,8 +59,22 @@ export function SpatialDiffPanel({ sessionId, sessions, kpi, cursorSeq, onPick }
           <span className="meta" style={{ marginLeft: 'auto', display: 'flex', gap: 6 }}>
             <label>against</label>
             <select value={other ?? ''} aria-label="Compare against"
-                    onChange={(e) => setOther(Number(e.target.value))}>
+                    onChange={(e) => { setOther(Number(e.target.value)); setWithB([]) }}>
               {sessions.filter((s) => s.id !== sessionId)
+                .map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+            </select>
+            {/* Only measurements on neither side are offered: one on both would be
+                differenced against itself and pull its tiles towards "these agree". */}
+            <select value="" aria-label="Add to the far side"
+                    title="Average another measurement into the far side"
+                    onChange={(e) => {
+                      const id = Number(e.target.value)
+                      if (id) setWithB((v) => v.includes(id) ? v : [...v, id])
+                      e.currentTarget.value = ''
+                    }}>
+              <option value="">+ add to far side…</option>
+              {sessions
+                .filter((s) => s.id !== sessionId && s.id !== other && !withB.includes(s.id))
                 .map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
             </select>
             <select value={size} aria-label="Diff tile size"
@@ -63,6 +85,16 @@ export function SpatialDiffPanel({ sessionId, sessions, kpi, cursorSeq, onPick }
             </select>
           </span>
         </header>
+        {withB.length > 0 && (
+          <div className="diff-group" style={{ padding: '4px 8px', color: '#444' }}>
+            Far side is a group of {withB.length + 1}, averaged together:{' '}
+            {[other, ...withB].map((id) => sessions.find((s) => s.id === id)?.name ?? id)
+              .join(' · ')}
+            <button style={{ marginLeft: 8 }} onClick={() => setWithB([])}>
+              back to one measurement
+            </button>
+          </div>
+        )}
         {error && <div className="error">{error}</div>}
         {data && (
           <div className="diff-legend">
