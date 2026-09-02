@@ -109,8 +109,6 @@ table{display:block;overflow-x:auto}
 </li>
 <li><a href="#필요한-입력-데이터--31개-한-표">필요한 입력 데이터 — 31개 한 표</a></li>
 <li><a href="#유즈케이스를-가로지르는-개념-여섯">유즈케이스를 가로지르는 개념 여섯</a></li>
-<li><a href="#그림-라벨-정정-2026-09-02-원문으로-확정">그림 라벨 정정 (2026-09-02, 원문으로 확정)</a></li>
-<li><a href="#이-판이-이전-문서를-고친-곳">이 판이 이전 문서를 고친 곳</a></li>
 <li><a href="#원문-확보-상태">원문 확보 상태</a></li>
 </ul>
 </div>
@@ -133,8 +131,8 @@ table{display:block;overflow-x:auto}
 <td>Nemo Analyze User Guide · <code>NTN00000A-90013</code> · Edition 1, 2023-11-27 · 문서화 대상 SW 10.1.0 · 505p</td>
 </tr>
 <tr>
-<td>이 판의 근거</td>
-<td><strong>2026-09-02, 사용자가 원문 PDF를 다시 제공</strong>(p1–504 전체, 두 번에 나눠). 이 문서의 절차·값·인용은 전부 그 원문에서 직접 옮겼습니다</td>
+<td>근거</td>
+<td>이 문서의 절차·값·인용은 전부 원문 PDF(p1–504)에서 직접 옮겼습니다</td>
 </tr>
 <tr>
 <td>기계 판독 인덱스</td>
@@ -172,12 +170,10 @@ table{display:block;overflow-x:auto}
 </tr>
 </tbody>
 </table>
-<p>(2026-09-02 오후 판까지는 p300–399가 없어 UC25·26을 ◐로 두었습니다. 같은 날 그 구간이 추가로
-제공되어 두 항목을 원문으로 다시 썼고, UC27이 쓰는 워크벤치 요소의 대화상자(p367–396)를
-<a href="#부록--워크벤치-요소의-대화상자-p367p396">부록</a>으로 옮겼습니다.)</p>
+<p>UC27이 쓰는 워크벤치 요소의 대화상자(p367–396)는 <a href="#부록--워크벤치-요소의-대화상자-p367p396">부록</a>에
+있습니다.</p>
 <h2 id="페이지-번호">페이지 번호</h2>
-<p>목차(<code>toc.json</code>) 기준이며, 이번에 원문으로 <strong>전부 확인</strong>했습니다. 2026-09-02 오전 판에서
-추정으로 적었던 UC16 = p158, UC13 = p147은 맞았습니다. UC20은 p172 하단에서 시작해 p174까지,
+<p>목차(<code>toc.json</code>) 기준이며 원문으로 전부 확인했습니다. UC20은 p172 하단에서 시작해 p174까지,
 UC27은 p403–426입니다.</p>
 <hr />
 <h2 id="한눈에--31개-인덱스">한눈에 — 31개 인덱스</h2>
@@ -791,7 +787,7 @@ Details</code>(더블클릭 — Info View에 디코딩). <code>Export Data To</c
 <li>이후 레이어 조합 전체를 DB에 로드해 <strong>하나의 지도로</strong> 엽니다.</li>
 </ol>
 <div class="figs"><figure><a href="../assets/screenshots/manual10.2_uc13-drag-tab-layer_p147.png" target="_blank"><img loading="lazy" src="../assets/screenshots/manual10.2_uc13-drag-tab-layer_p147.png" alt="uc13-drag-tab-layer_p147"></a><figcaption>UC13 — <code>.TAB</code> 파일을 지도로 드래그 <span class="src">p147</span></figcaption></figure><figure><a href="../assets/screenshots/manual10.2_uc13-mapx-save-geoset_p148.png" target="_blank"><img loading="lazy" src="../assets/screenshots/manual10.2_uc13-mapx-save-geoset_p148.png" alt="uc13-mapx-save-geoset_p148"></a><figcaption>UC13 — 지도 팝업 <code>MapX › Save Geoset</code> <span class="src">p148</span></figcaption></figure></div>
-<p><strong>우리.</strong> ◐ — <strong>2026-09-02 하향(코드 확인 후).</strong> "조합을 저장한다"는 절반은 워크북이 합니다.
+<p><strong>우리.</strong> ◐ — "조합을 저장한다"는 절반은 워크북이 합니다.
 막히는 것은 <strong>무엇을 조합하는가</strong>입니다 — 레퍼런스의 레이어는 <code>.TAB</code> <strong>지도 자산</strong>(그리고 UC15가
 말하듯 분석 결과도 새 레이어가 됩니다)이고, 우리 레이어는 <code>{kpiName, visible}</code>
 (<code>types.ts:436</code>, <code>WorkbookService.java:31</code>)뿐입니다. MapX·<code>.TAB</code>·지오셋은 코드에 전무하고
@@ -923,7 +919,7 @@ segment, not necessarily the mean value."</em></p>
    bin values of the other, a subtraction is performed between the bin values of the routes."</em></li>
 <li>결과가 지도에 새 레이어로.</li>
 </ol>
-<div class="figs"><figure><a href="../assets/screenshots/manual10.2_uc16-tools-delta-plotting_p158.png" target="_blank"><img loading="lazy" src="../assets/screenshots/manual10.2_uc16-tools-delta-plotting_p158.png" alt="uc16-tools-delta-plotting_p158"></a><figcaption>UC16 — Tools 패널의 Delta plotting 아이콘 <span class="src">p158</span></figcaption></figure><figure><a href="../assets/screenshots/manual10.2_uc16-area-selection_p158.jpeg" target="_blank"><img loading="lazy" src="../assets/screenshots/manual10.2_uc16-area-selection_p158.jpeg" alt="uc16-area-selection_p158"></a><figcaption>UC16 — 점선 영역 선택 <span class="src">p158</span></figcaption></figure><figure><a href="../assets/screenshots/manual10.2_uc16-delta-plotting-dialog_p159.png" target="_blank"><img loading="lazy" src="../assets/screenshots/manual10.2_uc16-delta-plotting-dialog_p159.png" alt="uc16-delta-plotting-dialog_p159"></a><figcaption>UC16 — <code>Delta Plotting</code> 대화상자 (Group 1 / Group 2, Configure) <span class="src">p159</span></figcaption></figure><figure><a href="../assets/screenshots/manual10.2_uc16-delta-plotting-configured_p161.png" target="_blank"><img loading="lazy" src="../assets/screenshots/manual10.2_uc16-delta-plotting-configured_p161.png" alt="uc16-delta-plotting-configured_p161"></a><figcaption>UC16 — 두 그룹 설정 완료 (Ec/N0 best active set / Ec/N0 detected set) <span class="src">p161</span></figcaption></figure><figure><a href="../assets/screenshots/manual10.2_uc16-delta-plotting-result_p162.png" target="_blank"><img loading="lazy" src="../assets/screenshots/manual10.2_uc16-delta-plotting-result_p162.png" alt="uc16-delta-plotting-result_p162"></a><figcaption><strong>2026-09-02 개명</strong> (구 <code>cell-beam-range-on-map_p162</code>). 원문 대조 결과 p162 상단의 <strong>UC16 Delta plotting 결과</strong>(경로를 따라 비닝된 타일, RSCP · Throughput <code>[Distance]</code> 범례). 빔 범위 그림은 같은 페이지의 다른 그림 → <code>uc17-cell-beam-range-sector_p162</code> — 경로를 따라 비닝된 타일 — RSCP · Throughput <code>[Distance]</code> 범례 <span class="src">p162</span></figcaption></figure></div>
+<div class="figs"><figure><a href="../assets/screenshots/manual10.2_uc16-tools-delta-plotting_p158.png" target="_blank"><img loading="lazy" src="../assets/screenshots/manual10.2_uc16-tools-delta-plotting_p158.png" alt="uc16-tools-delta-plotting_p158"></a><figcaption>UC16 — Tools 패널의 Delta plotting 아이콘 <span class="src">p158</span></figcaption></figure><figure><a href="../assets/screenshots/manual10.2_uc16-area-selection_p158.jpeg" target="_blank"><img loading="lazy" src="../assets/screenshots/manual10.2_uc16-area-selection_p158.jpeg" alt="uc16-area-selection_p158"></a><figcaption>UC16 — 점선 영역 선택 <span class="src">p158</span></figcaption></figure><figure><a href="../assets/screenshots/manual10.2_uc16-delta-plotting-dialog_p159.png" target="_blank"><img loading="lazy" src="../assets/screenshots/manual10.2_uc16-delta-plotting-dialog_p159.png" alt="uc16-delta-plotting-dialog_p159"></a><figcaption>UC16 — <code>Delta Plotting</code> 대화상자 (Group 1 / Group 2, Configure) <span class="src">p159</span></figcaption></figure><figure><a href="../assets/screenshots/manual10.2_uc16-delta-plotting-configured_p161.png" target="_blank"><img loading="lazy" src="../assets/screenshots/manual10.2_uc16-delta-plotting-configured_p161.png" alt="uc16-delta-plotting-configured_p161"></a><figcaption>UC16 — 두 그룹 설정 완료 (Ec/N0 best active set / Ec/N0 detected set) <span class="src">p161</span></figcaption></figure><figure><a href="../assets/screenshots/manual10.2_uc16-delta-plotting-result_p162.png" target="_blank"><img loading="lazy" src="../assets/screenshots/manual10.2_uc16-delta-plotting-result_p162.png" alt="uc16-delta-plotting-result_p162"></a><figcaption>p162 상단의 <strong>UC16 Delta plotting 결과</strong>(경로를 따라 비닝된 타일, RSCP · Throughput <code>[Distance]</code> 범례). 빔 범위 그림은 같은 페이지의 다른 그림 → <code>uc17-cell-beam-range-sector_p162</code> — 경로를 따라 비닝된 타일 — RSCP · Throughput <code>[Distance]</code> 범례 <span class="src">p162</span></figcaption></figure></div>
 <p><strong>우리.</strong> ✅ — 공간 차분 지도(<code>SpatialDiffService</code>): 두 주행을 하나의 격자에 담아 타일별 차이.
 한쪽만 지나간 타일은 0이 아니라 null. 레퍼런스와 같은 "빈별 평균 → 빼기"이고, 가중 기준 선택도
 같습니다. 없는 것: 그룹당 여러 측정의 그룹 평균(우리는 주행 1 대 1).</p>
@@ -1048,7 +1044,7 @@ Contents</code>에서 셀을 좌클릭해도 표시됩니다.</p>
 </ol>
 <p><strong>질의 API 쪽.</strong> Appendix 6 <code>BTS_QUEST</code>(p499) — 측정과 BTS 파일로 "언제 어느 사이트·셀에 붙어
 있었나"(<code>type</code> 1 = serving, 0 = neighbor).</p>
-<div class="figs"><figure><a href="../assets/screenshots/manual10.2_uc19-set-active-bts-files_p171.png" target="_blank"><img loading="lazy" src="../assets/screenshots/manual10.2_uc19-set-active-bts-files_p171.png" alt="uc19-set-active-bts-files_p171"></a><figcaption>UC19 — <code>Set Active BTS Files</code> <span class="src">p171</span></figcaption></figure><figure><a href="../assets/screenshots/manual10.2_uc19-bts-reference-parameters-workspace_p172.png" target="_blank"><img loading="lazy" src="../assets/screenshots/manual10.2_uc19-bts-reference-parameters-workspace_p172.png" alt="uc19-bts-reference-parameters-workspace_p172"></a><figcaption><strong>2026-09-02 개명</strong> (구 <code>pilot-pollution-connections_p172</code>). 원문 대조 결과 <strong>UC19의 그림</strong> — Workspace 패널, Parameters에 <code>reference</code> 검색 → <code>Other › All BTS reference cells</code> <span class="src">p172</span></figcaption></figure></div>
+<div class="figs"><figure><a href="../assets/screenshots/manual10.2_uc19-set-active-bts-files_p171.png" target="_blank"><img loading="lazy" src="../assets/screenshots/manual10.2_uc19-set-active-bts-files_p171.png" alt="uc19-set-active-bts-files_p171"></a><figcaption>UC19 — <code>Set Active BTS Files</code> <span class="src">p171</span></figcaption></figure><figure><a href="../assets/screenshots/manual10.2_uc19-bts-reference-parameters-workspace_p172.png" target="_blank"><img loading="lazy" src="../assets/screenshots/manual10.2_uc19-bts-reference-parameters-workspace_p172.png" alt="uc19-bts-reference-parameters-workspace_p172"></a><figcaption><strong>UC19의 그림</strong> — Workspace 패널, Parameters에 <code>reference</code> 검색 → <code>Other › All BTS reference cells</code> <span class="src">p172</span></figcaption></figure></div>
 <p><strong>우리.</strong> ◐ — <code>cell_ref</code>(PCI · ARFCN · 밴드 · GSCN · 방위각)를 DB가 갖고 있어 임포트·활성화
 절차가 불필요합니다. "서빙 셀 이름을 열로 붙이기"는 <code>SOURCE_SAMPLE</code>의 <code>serving_pci</code>가 절반을
 합니다(이름이 아니라 PCI).</p>
@@ -1108,7 +1104,7 @@ Contents</code>에서 셀을 좌클릭해도 표시됩니다.</p>
 파일럿이 <strong>3개 이상</strong>이고, best active set의 Ec/N0가 <code>-12</code> dB보다 <strong>나쁘며</strong> RSCP가 <code>-95</code> dBm보다
 <strong>좋은</strong> 구간. 즉 레퍼런스에도 RSCP 하한이 있습니다 — 커버리지 홀을 오염으로 오탐하지 않기 위한
 조건입니다.</p>
-<div class="figs"><figure><a href="../assets/screenshots/manual10.2_uc20-pilot-pollution-filters_p173.png" target="_blank"><img loading="lazy" src="../assets/screenshots/manual10.2_uc20-pilot-pollution-filters_p173.png" alt="uc20-pilot-pollution-filters_p173"></a><figcaption>UC20 — 파일럿 오염 필터 값 (window −6 · Ec/N0 below −12 · RSCP above −95 · count 3 · carrier 1538) <span class="src">p173</span></figcaption></figure><figure><a href="../assets/screenshots/manual10.2_uc20-select-columns_p173.png" target="_blank"><img loading="lazy" src="../assets/screenshots/manual10.2_uc20-select-columns_p173.png" alt="uc20-select-columns_p173"></a><figcaption>UC20 — <code>Select columns</code> (Route: gps_longitude · gps_latitude · time) <span class="src">p173</span></figcaption></figure><figure><a href="../assets/screenshots/manual10.2_uc20-pilots-drawn-on-map_p174.png" target="_blank"><img loading="lazy" src="../assets/screenshots/manual10.2_uc20-pilots-drawn-on-map_p174.png" alt="uc20-pilots-drawn-on-map_p174"></a><figcaption>UC20 — 측정된 파일럿 연결선 <span class="src">p174</span></figcaption></figure><figure><a href="../assets/screenshots/manual10.2_uc20-bts-lines-properties_p174.png" target="_blank"><img loading="lazy" src="../assets/screenshots/manual10.2_uc20-bts-lines-properties_p174.png" alt="uc20-bts-lines-properties_p174"></a><figcaption><strong>2026-09-02 개명</strong> (구 <code>cell-locator-estimated-site_p174</code>). 원문 대조 결과 <strong>UC20의 마지막 그림</strong> — 지도 워크북 + <code>Properties › BTS</code> &quot;Select which lines to draw&quot; + <code>Number of cells [Time]</code> 범례. (같은 날 오전 판은 이 파일과 p172 파일의 내용을 서로 바꿔 적었음 — 원문 이미지 해시 비교로 확정.) 진짜 Cell locator 그림은 <code>uc21-real-vs-estimated-site_p175</code> <span class="src">p174</span></figcaption></figure></div>
+<div class="figs"><figure><a href="../assets/screenshots/manual10.2_uc20-pilot-pollution-filters_p173.png" target="_blank"><img loading="lazy" src="../assets/screenshots/manual10.2_uc20-pilot-pollution-filters_p173.png" alt="uc20-pilot-pollution-filters_p173"></a><figcaption>UC20 — 파일럿 오염 필터 값 (window −6 · Ec/N0 below −12 · RSCP above −95 · count 3 · carrier 1538) <span class="src">p173</span></figcaption></figure><figure><a href="../assets/screenshots/manual10.2_uc20-select-columns_p173.png" target="_blank"><img loading="lazy" src="../assets/screenshots/manual10.2_uc20-select-columns_p173.png" alt="uc20-select-columns_p173"></a><figcaption>UC20 — <code>Select columns</code> (Route: gps_longitude · gps_latitude · time) <span class="src">p173</span></figcaption></figure><figure><a href="../assets/screenshots/manual10.2_uc20-pilots-drawn-on-map_p174.png" target="_blank"><img loading="lazy" src="../assets/screenshots/manual10.2_uc20-pilots-drawn-on-map_p174.png" alt="uc20-pilots-drawn-on-map_p174"></a><figcaption>UC20 — 측정된 파일럿 연결선 <span class="src">p174</span></figcaption></figure><figure><a href="../assets/screenshots/manual10.2_uc20-bts-lines-properties_p174.png" target="_blank"><img loading="lazy" src="../assets/screenshots/manual10.2_uc20-bts-lines-properties_p174.png" alt="uc20-bts-lines-properties_p174"></a><figcaption><strong>UC20의 마지막 그림</strong> — 지도 워크북 + <code>Properties › BTS</code> &quot;Select which lines to draw&quot; + <code>Number of cells [Time]</code> 범례. Cell locator 그림은 <code>uc21-real-vs-estimated-site_p175</code> <span class="src">p174</span></figcaption></figure></div>
 <p><strong>우리.</strong> ✅ — Mobility 탭의 모니터드 셋 점선 + <code>MonitoredSetService</code>의 오염 구간. 우리도
 하한(<code>POLLUTION_MIN_BEST_DBM = -110</code>)을 답니다. <strong>정정</strong>: 2026-09-01 브리프 ⑤와 대조표는 "매뉴얼의
 UC20에는 이 조건이 없다"고 적었는데, 원문 필터 대화상자에 <code>RSCP active set best above threshold
@@ -1545,12 +1541,12 @@ resulting from missing handover</code> → <code>Next</code> → <code>Column Al
 <p><strong>Output 규칙의 함의.</strong> 행은 그 상태를 <strong>빠져나올 때</strong> 기록되고, 이름은 방금 있었던 상태를
 가리키며, <code>time_interval</code>이 "그 상태에 머문 시간(ms)"입니다. 관심 상태에서 <strong>나가는 모든 전이</strong>에
 같은 Output 이름을 적어야 빠짐없이 잡힙니다.</p>
-<div class="figs"><figure><a href="../assets/screenshots/manual10.2_uc27-start-canvas_p405.png" target="_blank"><img loading="lazy" src="../assets/screenshots/manual10.2_uc27-start-canvas_p405.png" alt="uc27-start-canvas_p405"></a><figcaption><strong>2026-09-02 개명</strong> (구 <code>uc27-state-flow_p405</code>). UC27의 <strong>시작 캔버스</strong> — <code>BLER</code> · <code>Ec/No best active set</code> · <code>Ec/No 1. best</code> 파라미터 3개와 아직 빨간 <code>Output</code>. p405의 상태 흐름도는 벡터 텍스트라 그림 파일이 없고 <code>use-cases.md</code>에 mermaid로 재현 — 파라미터 3개와 빨간 Output <span class="src">p405</span></figcaption></figure><figure><a href="../assets/screenshots/manual10.2_uc27-subtraction-properties_p407.png" target="_blank"><img loading="lazy" src="../assets/screenshots/manual10.2_uc27-subtraction-properties_p407.png" alt="uc27-subtraction-properties_p407"></a><figcaption>UC27 — Subtraction <code>Properties</code> (Left/Right column, Result title <code>Ec/N0 difference</code>) <span class="src">p407</span></figcaption></figure><figure><a href="../assets/screenshots/manual10.2_uc27-graph-partial-union_p408.png" target="_blank"><img loading="lazy" src="../assets/screenshots/manual10.2_uc27-graph-partial-union_p408.png" alt="uc27-graph-partial-union_p408"></a><figcaption>UC27 <strong>중간 단계</strong> — Union까지 연결하고 Output은 아직 빨강(미연결). 색 규약이 보이는 그림 <span class="src">p408</span></figcaption></figure><figure><a href="../assets/screenshots/manual10.2_uc27-sort-column_p410.png" target="_blank"><img loading="lazy" src="../assets/screenshots/manual10.2_uc27-sort-column_p410.png" alt="uc27-sort-column_p410"></a><figcaption>UC27 — Ascending sort <code>Column = time</code> <span class="src">p410</span></figcaption></figure><figure><a href="../assets/screenshots/manual10.2_uc27-states-initial_p414.png" target="_blank"><img loading="lazy" src="../assets/screenshots/manual10.2_uc27-states-initial_p414.png" alt="uc27-states-initial_p414"></a><figcaption>UC27 — 상태 3개와 <code>Initial state = OK</code> <span class="src">p414</span></figcaption></figure><figure><a href="../assets/screenshots/manual10.2_uc27-transition-dialog_p415.jpeg" target="_blank"><img loading="lazy" src="../assets/screenshots/manual10.2_uc27-transition-dialog_p415.jpeg" alt="uc27-transition-dialog_p415"></a><figcaption>UC27 — <code>Transition</code> 대화상자 (Conditions · Target · Output) <span class="src">p415</span></figcaption></figure><figure><a href="../assets/screenshots/manual10.2_uc27-condition-dialog_p415.png" target="_blank"><img loading="lazy" src="../assets/screenshots/manual10.2_uc27-condition-dialog_p415.png" alt="uc27-condition-dialog_p415"></a><figcaption>UC27 — <code>Condition</code> 대화상자 (<code>bler &gt;= 20</code>) <span class="src">p415</span></figcaption></figure><figure><a href="../assets/screenshots/manual10.2_uc27-transition-with-output_p421.jpeg" target="_blank"><img loading="lazy" src="../assets/screenshots/manual10.2_uc27-transition-with-output_p421.jpeg" alt="uc27-transition-with-output_p421"></a><figcaption>UC27 — Output 필드에 <code>Missing handover</code>를 넣은 전이 <span class="src">p421</span></figcaption></figure><figure><a href="../assets/screenshots/manual10.2_uc27-missing-handover-transitions_p423.png" target="_blank"><img loading="lazy" src="../assets/screenshots/manual10.2_uc27-missing-handover-transitions_p423.png" alt="uc27-missing-handover-transitions_p423"></a><figcaption>UC27 — Missing handover 상태의 전이 2개 <span class="src">p423</span></figcaption></figure><figure><a href="../assets/screenshots/manual10.2_uc27-complete-graph_p425.png" target="_blank"><img loading="lazy" src="../assets/screenshots/manual10.2_uc27-complete-graph_p425.png" alt="uc27-complete-graph_p425"></a><figcaption>UC27 <strong>완성 그래프</strong> (기존 <code>nemo-analyze_kpi-workbench.png</code>와 같은 내용, 다른 크롭) — BLER + (Ec/No best active set − 1. best) → <strong>Union</strong> → <strong>Ascending time</strong> → State Machine → Call dropped와 상관 → <code>Output (Column count: 19)</code> <span class="src">p425</span></figcaption></figure><figure><a href="../assets/screenshots/manual10.2_uc27-result-grid_p426.png" target="_blank"><img loading="lazy" src="../assets/screenshots/manual10.2_uc27-result-grid_p426.png" alt="uc27-result-grid_p426"></a><figcaption>UC27 <strong>실행 결과</strong> — <code>start_time · end_time · time_interval · index · text · Event ID · Event · Measurement</code>. 상태 점유마다 한 행이라는 사실이 실제 값(5341 ms, <code>Missing handover</code>, <code>CAD</code>)으로 보임 <span class="src">p426</span></figcaption></figure></div>
+<div class="figs"><figure><a href="../assets/screenshots/manual10.2_uc27-start-canvas_p405.png" target="_blank"><img loading="lazy" src="../assets/screenshots/manual10.2_uc27-start-canvas_p405.png" alt="uc27-start-canvas_p405"></a><figcaption>UC27의 <strong>시작 캔버스</strong> — <code>BLER</code> · <code>Ec/No best active set</code> · <code>Ec/No 1. best</code> 파라미터 3개와 아직 빨간 <code>Output</code>. p405의 상태 흐름도는 벡터 텍스트라 그림 파일이 없고 <code>use-cases.md</code>에 mermaid로 재현 — 파라미터 3개와 빨간 Output <span class="src">p405</span></figcaption></figure><figure><a href="../assets/screenshots/manual10.2_uc27-subtraction-properties_p407.png" target="_blank"><img loading="lazy" src="../assets/screenshots/manual10.2_uc27-subtraction-properties_p407.png" alt="uc27-subtraction-properties_p407"></a><figcaption>UC27 — Subtraction <code>Properties</code> (Left/Right column, Result title <code>Ec/N0 difference</code>) <span class="src">p407</span></figcaption></figure><figure><a href="../assets/screenshots/manual10.2_uc27-graph-partial-union_p408.png" target="_blank"><img loading="lazy" src="../assets/screenshots/manual10.2_uc27-graph-partial-union_p408.png" alt="uc27-graph-partial-union_p408"></a><figcaption>UC27 <strong>중간 단계</strong> — Union까지 연결하고 Output은 아직 빨강(미연결). 색 규약이 보이는 그림 <span class="src">p408</span></figcaption></figure><figure><a href="../assets/screenshots/manual10.2_uc27-sort-column_p410.png" target="_blank"><img loading="lazy" src="../assets/screenshots/manual10.2_uc27-sort-column_p410.png" alt="uc27-sort-column_p410"></a><figcaption>UC27 — Ascending sort <code>Column = time</code> <span class="src">p410</span></figcaption></figure><figure><a href="../assets/screenshots/manual10.2_uc27-states-initial_p414.png" target="_blank"><img loading="lazy" src="../assets/screenshots/manual10.2_uc27-states-initial_p414.png" alt="uc27-states-initial_p414"></a><figcaption>UC27 — 상태 3개와 <code>Initial state = OK</code> <span class="src">p414</span></figcaption></figure><figure><a href="../assets/screenshots/manual10.2_uc27-transition-dialog_p415.jpeg" target="_blank"><img loading="lazy" src="../assets/screenshots/manual10.2_uc27-transition-dialog_p415.jpeg" alt="uc27-transition-dialog_p415"></a><figcaption>UC27 — <code>Transition</code> 대화상자 (Conditions · Target · Output) <span class="src">p415</span></figcaption></figure><figure><a href="../assets/screenshots/manual10.2_uc27-condition-dialog_p415.png" target="_blank"><img loading="lazy" src="../assets/screenshots/manual10.2_uc27-condition-dialog_p415.png" alt="uc27-condition-dialog_p415"></a><figcaption>UC27 — <code>Condition</code> 대화상자 (<code>bler &gt;= 20</code>) <span class="src">p415</span></figcaption></figure><figure><a href="../assets/screenshots/manual10.2_uc27-transition-with-output_p421.jpeg" target="_blank"><img loading="lazy" src="../assets/screenshots/manual10.2_uc27-transition-with-output_p421.jpeg" alt="uc27-transition-with-output_p421"></a><figcaption>UC27 — Output 필드에 <code>Missing handover</code>를 넣은 전이 <span class="src">p421</span></figcaption></figure><figure><a href="../assets/screenshots/manual10.2_uc27-missing-handover-transitions_p423.png" target="_blank"><img loading="lazy" src="../assets/screenshots/manual10.2_uc27-missing-handover-transitions_p423.png" alt="uc27-missing-handover-transitions_p423"></a><figcaption>UC27 — Missing handover 상태의 전이 2개 <span class="src">p423</span></figcaption></figure><figure><a href="../assets/screenshots/manual10.2_uc27-complete-graph_p425.png" target="_blank"><img loading="lazy" src="../assets/screenshots/manual10.2_uc27-complete-graph_p425.png" alt="uc27-complete-graph_p425"></a><figcaption>UC27 <strong>완성 그래프</strong> (기존 <code>nemo-analyze_kpi-workbench.png</code>와 같은 내용, 다른 크롭) — BLER + (Ec/No best active set − 1. best) → <strong>Union</strong> → <strong>Ascending time</strong> → State Machine → Call dropped와 상관 → <code>Output (Column count: 19)</code> <span class="src">p425</span></figcaption></figure><figure><a href="../assets/screenshots/manual10.2_uc27-result-grid_p426.png" target="_blank"><img loading="lazy" src="../assets/screenshots/manual10.2_uc27-result-grid_p426.png" alt="uc27-result-grid_p426"></a><figcaption>UC27 <strong>실행 결과</strong> — <code>start_time · end_time · time_interval · index · text · Event ID · Event · Measurement</code>. 상태 점유마다 한 행이라는 사실이 실제 값(5341 ms, <code>Missing handover</code>, <code>CAD</code>)으로 보임 <span class="src">p426</span></figcaption></figure></div>
 <p><strong>우리.</strong> ◐ — 노드 그래프의 구조(배치·연결 방향·상태 이름)는 일치합니다. 같은 KPI를 만들 수
 있는가는 <strong>아니오</strong> — (1) 우리 <code>STATE_MACHINE</code>은 표본별 <code>CASE</code>라 "Bad BLER를 거쳐야"라는 순서를
 표현 못 함, (2) 출력이 표본별 값이라 <code>start_time</code>/<code>time_interval</code> 구간 행을 못 냄, (3) primary
-게이팅이 없음, (4) <code>sample_neighbour</code>에 active set 개념이 없음. "설정된 이웃 목록이 없어 원천
-불가"라던 기존 판단은 틀렸고, 실제로 막는 것은 시드 생성기가 매 표본 argmax를 서빙으로 골라
+게이팅이 없음, (4) <code>sample_neighbour</code>에 active set 개념이 없음. 설정된 이웃 목록은 필요하지 않으며,
+실제로 막는 것은 시드 생성기가 매 표본 argmax를 서빙으로 골라
 "이웃이 서빙보다 강한" 표본이 0개라는 점입니다(<a href="../reference/nemo-analyze-10.2/corrections.md"><code>corrections.md</code> C1·C2·C9</a>).
 <code>SOURCE_EVENT</code>가 생겨 6단계의 상관 상대는 이제 캔버스에 올릴 수 있습니다.</p>
 <hr />
@@ -2044,84 +2040,9 @@ CSV 한 개 = 세션 한 개입니다.</p>
 </tbody>
 </table>
 <hr />
-<h2 id="그림-라벨-정정-2026-09-02-원문으로-확정">그림 라벨 정정 (2026-09-02, 원문으로 확정)</h2>
-<p>2026-09-01에 추출된 그림 16장을 이번 원문과 <strong>픽셀 단위로 대조</strong>했습니다. 넷이 실제 페이지·내용과
-달랐고, 파일명을 바꿨습니다. 같은 날 오전 판의 이 표는 두 파일을 서로 바꿔 적었던 것이라 함께
-고쳤습니다.</p>
-<table>
-<thead>
-<tr>
-<th>이전 파일명</th>
-<th>실제 내용 (원문 위치)</th>
-<th>새 파일명</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td><code>manual10.2_pilot-pollution-connections_p172.png</code></td>
-<td><strong>Workspace 패널</strong> — Parameters에 <code>reference</code> 검색 → <code>All BTS reference cells</code>. <strong>UC19의 그림</strong>(p172 상단)</td>
-<td><code>manual10.2_uc19-bts-reference-parameters-workspace_p172.png</code></td>
-</tr>
-<tr>
-<td><code>manual10.2_cell-locator-estimated-site_p174.png</code></td>
-<td>지도 워크북 + <code>Properties › BTS</code> "Select which lines to draw" + <code>Number of cells [Time]</code> 범례. <strong>UC20의 마지막 그림</strong>(p174)</td>
-<td><code>manual10.2_uc20-bts-lines-properties_p174.png</code></td>
-</tr>
-<tr>
-<td><code>manual10.2_cell-beam-range-on-map_p162.png</code></td>
-<td>경로를 따라 비닝된 타일(RSCP · Throughput <code>[Distance]</code>). <strong>UC16 Delta plotting의 결과</strong>(p162 상단). 빔 범위 그림은 같은 페이지의 다른 그림</td>
-<td><code>manual10.2_uc16-delta-plotting-result_p162.png</code> (+ 새로 <code>uc17-cell-beam-range-sector_p162</code>)</td>
-</tr>
-<tr>
-<td><code>manual10.2_uc27-state-flow_p405.png</code></td>
-<td>UC27 <strong>시작 캔버스</strong> — 파라미터 3개와 빨간 Output. 상태 흐름도는 p405의 벡터 텍스트라 그림 파일이 없음(위 mermaid로 재현)</td>
-<td><code>manual10.2_uc27-start-canvas_p405.png</code></td>
-</tr>
-<tr>
-<td><code>manual10.2_state-machine-states_p368.png</code></td>
-<td>p368의 State Machine <code>Properties</code> 그림과 동일 확인(p413에서 재사용)</td>
-<td>(유지)</td>
-</tr>
-</tbody>
-</table>
-<p>나머지 11장(<code>p24</code> · <code>p55</code> · <code>p66</code> · <code>p88</code> · <code>p150</code> · <code>p216</code> · <code>p346</code> · <code>p349</code> · <code>p408</code> · <code>p425</code> · <code>p426</code>)은
-라벨과 내용이 맞습니다(p24 · p55 · p88 · p216 · p346 · p349는 이번 대조 범위 밖이라 미확인).</p>
-<blockquote>
-<p>교훈은 <code>MANIFEST.md</code>가 이미 적어 둔 것과 같습니다 — <strong>파일명과 치수는 동일성의 근거가
-아닙니다.</strong> 그리고 하나 더: 그림 여러 장을 한 번에 열어 보고 기억으로 대조하면 <strong>순서가
-뒤바뀝니다.</strong> 이번 확정은 원문 이미지와의 해시 비교로 했습니다.</p>
-</blockquote>
-<h2 id="이-판이-이전-문서를-고친-곳">이 판이 이전 문서를 고친 곳</h2>
-<table>
-<thead>
-<tr>
-<th>문서</th>
-<th>무엇</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>대조표 UC20 · 브리프 ⑤ "확인된 것"</td>
-<td>"매뉴얼의 UC20에는 하한 조건이 없다 → 우리가 더 낫다"는 판정 철회. 원문 필터에 <code>RSCP active set best above threshold = -95</code>가 있음</td>
-</tr>
-<tr>
-<td>대조표 UC18</td>
-<td>레퍼런스의 동기화는 시간 커서가 아니라 <strong>그리드 셀 행 → 지도 줌</strong>. 대응물은 셀 목록 행 선택</td>
-</tr>
-<tr>
-<td>대조표 UC28</td>
-<td><code>AutoScale</code>(사분위 구간)보다 서빙 PCI 채색이 더 가까운 대응물 — 레퍼런스의 <code>Add Range</code>는 이산값별 색</td>
-</tr>
-<tr>
-<td>브리프 ② · ③ 캡션, <code>MANIFEST.md</code></td>
-<td>그림 라벨 4건</td>
-</tr>
-</tbody>
-</table>
 <h2 id="원문-확보-상태">원문 확보 상태</h2>
-<p>2026-09-02 오후에 p300–399도 제공되어 <strong>505페이지 전부</strong>가 한 번씩 원문으로 확인됐습니다.
-유즈케이스 31개는 모두 ● 등급이고, <code>state-machine-states_p368.png</code>은 p368의 그림과 픽셀 동일함이
-확인됐습니다(p413에서 재사용). 원본 PDF는 여전히 저장소에 두지 않습니다.</p>
+<p><strong>505페이지 전부</strong>가 원문으로 확인됐고 유즈케이스 31개는 모두 ● 등급입니다. 원본 PDF는 저장소에
+두지 않습니다.</p>
 <hr />
 <p>출처: Nemo Analyze User Guide · NTN00000A-90013 · Edition 1, 2023-11-27. 그림은
 <code>docs/assets/screenshots/manual10.2_*</code>이며 재배포하지 않습니다(<code>docs/assets/NOTICE.md</code>).</p>

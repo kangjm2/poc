@@ -8,7 +8,7 @@
 | | |
 |---|---|
 | 출처 | Nemo Analyze User Guide · `NTN00000A-90013` · Edition 1, 2023-11-27 · 문서화 대상 SW 10.1.0 · 505p |
-| 이 판의 근거 | **2026-09-02, 사용자가 원문 PDF를 다시 제공**(p1–504 전체, 두 번에 나눠). 이 문서의 절차·값·인용은 전부 그 원문에서 직접 옮겼습니다 |
+| 근거 | 이 문서의 절차·값·인용은 전부 원문 PDF(p1–504)에서 직접 옮겼습니다 |
 | 기계 판독 인덱스 | [`use-cases.json`](use-cases.json) · [`toc.json`](toc.json) |
 | 현재 구현 상태 | [`../../use-case-coverage.md`](../../use-case-coverage.md) — **상태는 그쪽에서 셉니다.** 이 문서는 *레퍼런스가 무엇을 하라고 하는가*의 기록입니다 |
 | 그림 | `docs/assets/screenshots/manual10.2_*` — 파일명 끝 `_pNNN`이 원문 페이지. 재배포하지 않습니다([`NOTICE.md`](../../assets/NOTICE.md)) |
@@ -23,14 +23,12 @@
 |---|---|---|
 | **●** | 원문 페이지를 직접 읽고 절차 전체를 옮김 | **1–31 전부** |
 
-(2026-09-02 오후 판까지는 p300–399가 없어 UC25·26을 ◐로 두었습니다. 같은 날 그 구간이 추가로
-제공되어 두 항목을 원문으로 다시 썼고, UC27이 쓰는 워크벤치 요소의 대화상자(p367–396)를
-[부록](#부록--워크벤치-요소의-대화상자-p367p396)으로 옮겼습니다.)
+UC27이 쓰는 워크벤치 요소의 대화상자(p367–396)는 [부록](#부록--워크벤치-요소의-대화상자-p367p396)에
+있습니다.
 
 ## 페이지 번호
 
-목차(`toc.json`) 기준이며, 이번에 원문으로 **전부 확인**했습니다. 2026-09-02 오전 판에서
-추정으로 적었던 UC16 = p158, UC13 = p147은 맞았습니다. UC20은 p172 하단에서 시작해 p174까지,
+목차(`toc.json`) 기준이며 원문으로 전부 확인했습니다. UC20은 p172 하단에서 시작해 p174까지,
 UC27은 p403–426입니다.
 
 ---
@@ -525,7 +523,7 @@ Details`(더블클릭 — Info View에 디코딩). `Export Data To` — MS Excel
 
 **그림.** `uc13-drag-tab-layer_p147`, `uc13-mapx-save-geoset_p148`.
 
-**우리.** ◐ — **2026-09-02 하향(코드 확인 후).** "조합을 저장한다"는 절반은 워크북이 합니다.
+**우리.** ◐ — "조합을 저장한다"는 절반은 워크북이 합니다.
 막히는 것은 **무엇을 조합하는가**입니다 — 레퍼런스의 레이어는 `.TAB` **지도 자산**(그리고 UC15가
 말하듯 분석 결과도 새 레이어가 됩니다)이고, 우리 레이어는 `{kpiName, visible}`
 (`types.ts:436`, `WorkbookService.java:31`)뿐입니다. MapX·`.TAB`·지오셋은 코드에 전무하고
@@ -1173,8 +1171,8 @@ resulting from missing handover` → `Next` → `Column Aliases` → `Finish` �
 **우리.** ◐ — 노드 그래프의 구조(배치·연결 방향·상태 이름)는 일치합니다. 같은 KPI를 만들 수
 있는가는 **아니오** — (1) 우리 `STATE_MACHINE`은 표본별 `CASE`라 "Bad BLER를 거쳐야"라는 순서를
 표현 못 함, (2) 출력이 표본별 값이라 `start_time`/`time_interval` 구간 행을 못 냄, (3) primary
-게이팅이 없음, (4) `sample_neighbour`에 active set 개념이 없음. "설정된 이웃 목록이 없어 원천
-불가"라던 기존 판단은 틀렸고, 실제로 막는 것은 시드 생성기가 매 표본 argmax를 서빙으로 골라
+게이팅이 없음, (4) `sample_neighbour`에 active set 개념이 없음. 설정된 이웃 목록은 필요하지 않으며,
+실제로 막는 것은 시드 생성기가 매 표본 argmax를 서빙으로 골라
 "이웃이 서빙보다 강한" 표본이 0개라는 점입니다([`corrections.md` C1·C2·C9](corrections.md)).
 `SOURCE_EVENT`가 생겨 6단계의 상관 상대는 이제 캔버스에 올릴 수 있습니다.
 
@@ -1478,41 +1476,10 @@ CSV 한 개 = 세션 한 개입니다.
 
 ---
 
-## 그림 라벨 정정 (2026-09-02, 원문으로 확정)
-
-2026-09-01에 추출된 그림 16장을 이번 원문과 **픽셀 단위로 대조**했습니다. 넷이 실제 페이지·내용과
-달랐고, 파일명을 바꿨습니다. 같은 날 오전 판의 이 표는 두 파일을 서로 바꿔 적었던 것이라 함께
-고쳤습니다.
-
-| 이전 파일명 | 실제 내용 (원문 위치) | 새 파일명 |
-|---|---|---|
-| `manual10.2_pilot-pollution-connections_p172.png` | **Workspace 패널** — Parameters에 `reference` 검색 → `All BTS reference cells`. **UC19의 그림**(p172 상단) | `manual10.2_uc19-bts-reference-parameters-workspace_p172.png` |
-| `manual10.2_cell-locator-estimated-site_p174.png` | 지도 워크북 + `Properties › BTS` "Select which lines to draw" + `Number of cells [Time]` 범례. **UC20의 마지막 그림**(p174) | `manual10.2_uc20-bts-lines-properties_p174.png` |
-| `manual10.2_cell-beam-range-on-map_p162.png` | 경로를 따라 비닝된 타일(RSCP · Throughput `[Distance]`). **UC16 Delta plotting의 결과**(p162 상단). 빔 범위 그림은 같은 페이지의 다른 그림 | `manual10.2_uc16-delta-plotting-result_p162.png` (+ 새로 `uc17-cell-beam-range-sector_p162`) |
-| `manual10.2_uc27-state-flow_p405.png` | UC27 **시작 캔버스** — 파라미터 3개와 빨간 Output. 상태 흐름도는 p405의 벡터 텍스트라 그림 파일이 없음(위 mermaid로 재현) | `manual10.2_uc27-start-canvas_p405.png` |
-| `manual10.2_state-machine-states_p368.png` | p368의 State Machine `Properties` 그림과 동일 확인(p413에서 재사용) | (유지) |
-
-나머지 11장(`p24` · `p55` · `p66` · `p88` · `p150` · `p216` · `p346` · `p349` · `p408` · `p425` · `p426`)은
-라벨과 내용이 맞습니다(p24 · p55 · p88 · p216 · p346 · p349는 이번 대조 범위 밖이라 미확인).
-
-> 교훈은 `MANIFEST.md`가 이미 적어 둔 것과 같습니다 — **파일명과 치수는 동일성의 근거가
-> 아닙니다.** 그리고 하나 더: 그림 여러 장을 한 번에 열어 보고 기억으로 대조하면 **순서가
-> 뒤바뀝니다.** 이번 확정은 원문 이미지와의 해시 비교로 했습니다.
-
-## 이 판이 이전 문서를 고친 곳
-
-| 문서 | 무엇 |
-|---|---|
-| 대조표 UC20 · 브리프 ⑤ "확인된 것" | "매뉴얼의 UC20에는 하한 조건이 없다 → 우리가 더 낫다"는 판정 철회. 원문 필터에 `RSCP active set best above threshold = -95`가 있음 |
-| 대조표 UC18 | 레퍼런스의 동기화는 시간 커서가 아니라 **그리드 셀 행 → 지도 줌**. 대응물은 셀 목록 행 선택 |
-| 대조표 UC28 | `AutoScale`(사분위 구간)보다 서빙 PCI 채색이 더 가까운 대응물 — 레퍼런스의 `Add Range`는 이산값별 색 |
-| 브리프 ② · ③ 캡션, `MANIFEST.md` | 그림 라벨 4건 |
-
 ## 원문 확보 상태
 
-2026-09-02 오후에 p300–399도 제공되어 **505페이지 전부**가 한 번씩 원문으로 확인됐습니다.
-유즈케이스 31개는 모두 ● 등급이고, `state-machine-states_p368.png`은 p368의 그림과 픽셀 동일함이
-확인됐습니다(p413에서 재사용). 원본 PDF는 여전히 저장소에 두지 않습니다.
+**505페이지 전부**가 원문으로 확인됐고 유즈케이스 31개는 모두 ● 등급입니다. 원본 PDF는 저장소에
+두지 않습니다.
 
 ---
 

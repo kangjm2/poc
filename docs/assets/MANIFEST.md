@@ -5,7 +5,7 @@
 
 > 저작권 고지는 [`NOTICE.md`](./NOTICE.md)를 참조하십시오.
 
-## 0-1. 2026-09-01 추가 — Nemo Analyze 10.2 User Guide
+## 0-1. Nemo Analyze 10.2 User Guide
 
 사용자가 **Nemo Analyze User Guide**(부품번호 `NTN00000A-90013`, Edition 1, 2023-11-27,
 문서화 대상 SW 10.1.0) 505페이지 전체를 제공했습니다. 지금까지 우리가 가진 것은 전부
@@ -14,7 +14,7 @@
 | | |
 |---|---|
 | **원본 PDF** | **이 저장소에 두지 않습니다.** 라이선스 보유자 전용 배포물이며, 아래 재배포 금지 원칙이 그대로 적용됩니다 |
-| 추출한 그림 | `manual10.2_*` — 2026-09-01에 16장, **2026-09-02에 77 + 26장 추가**(아래 §0-2 · §0-3). 파일명 끝의 `_pNNN`이 원문 페이지 |
+| 추출한 그림 | `manual10.2_*` — 기본 16장 + 유즈케이스 그림 77장(§0-2) + p300–399 그림 26장(§0-3). 파일명 끝의 `_pNNN`이 원문 페이지 |
 | 텍스트 인용 | `docs/reference/nemo-analyze-10.2/`에 페이지 번호와 함께 |
 
 > 이 그림들에도 §0의 원칙이 그대로 적용됩니다: **재배포 금지 · 원본 유지 · 저장소 공개 시
@@ -27,14 +27,14 @@
 | `manual10.2_cell-footprint_p66.png` | p66 | 셀 푸트프린트 — **3위 안에 든 적 있는** 셀마다 별도 페이지 |
 | `manual10.2_drilldown-pie-with-coloured-side-tabs_p88.png` | p88 | 드릴다운 파이 + **좌측에 조각 색으로 쌓이는 세로 탭** |
 | `manual10.2_area-binning_p150.png` | p150 | 영역 비닝 |
-| `manual10.2_uc16-delta-plotting-result_p162.png` | p162 | **2026-09-02 개명** (구 `cell-beam-range-on-map_p162`). 원문 대조 결과 p162 상단의 **UC16 Delta plotting 결과**(경로를 따라 비닝된 타일, RSCP · Throughput `[Distance]` 범례). 빔 범위 그림은 같은 페이지의 다른 그림 → `uc17-cell-beam-range-sector_p162` |
-| `manual10.2_uc19-bts-reference-parameters-workspace_p172.png` | p172 | **2026-09-02 개명** (구 `pilot-pollution-connections_p172`). 원문 대조 결과 **UC19의 그림** — Workspace 패널, Parameters에 `reference` 검색 → `Other › All BTS reference cells` |
-| `manual10.2_uc20-bts-lines-properties_p174.png` | p174 | **2026-09-02 개명** (구 `cell-locator-estimated-site_p174`). 원문 대조 결과 **UC20의 마지막 그림** — 지도 워크북 + `Properties › BTS` "Select which lines to draw" + `Number of cells [Time]` 범례. (같은 날 오전 판은 이 파일과 p172 파일의 내용을 서로 바꿔 적었음 — 원문 이미지 해시 비교로 확정.) 진짜 Cell locator 그림은 `uc21-real-vs-estimated-site_p175` |
+| `manual10.2_uc16-delta-plotting-result_p162.png` | p162 | p162 상단의 **UC16 Delta plotting 결과**(경로를 따라 비닝된 타일, RSCP · Throughput `[Distance]` 범례). 빔 범위 그림은 같은 페이지의 다른 그림 → `uc17-cell-beam-range-sector_p162` |
+| `manual10.2_uc19-bts-reference-parameters-workspace_p172.png` | p172 | **UC19의 그림** — Workspace 패널, Parameters에 `reference` 검색 → `Other › All BTS reference cells` |
+| `manual10.2_uc20-bts-lines-properties_p174.png` | p174 | **UC20의 마지막 그림** — 지도 워크북 + `Properties › BTS` "Select which lines to draw" + `Number of cells [Time]` 범례. Cell locator 그림은 `uc21-real-vs-estimated-site_p175` |
 | `manual10.2_workbook-pages_p216.png` | p216 | 워크북 페이지 구성 |
 | `manual10.2_kpi-workbench-canvas_p346.png` | p346 | Parameters 트리에서 캔버스로 파라미터 드래그. 우측에 요소 분류(Parameters·Correlations·Joins·Operations·Aggregates·Sorting·Filters·Math·Time·Components), Properties의 `Execute per` |
 | `manual10.2_kpi-workbench-sockets_p349.png` | p349 | Correlation 실물 예 — `Call attempt failure`(primary) + `Ec/N0 active set` → `Previous Value` → `Output`. 미설정 노드가 빨강인 색 규약이 보임 |
-| `manual10.2_state-machine-states_p368.png` | p368 | State Machine 상태 정의 대화상자. p368 원본과 픽셀 동일 확인(2026-09-02 오후, p300–399 제공 후). p413에서 재사용 |
-| `manual10.2_uc27-start-canvas_p405.png` | p405 | **2026-09-02 개명** (구 `uc27-state-flow_p405`). UC27의 **시작 캔버스** — `BLER` · `Ec/No best active set` · `Ec/No 1. best` 파라미터 3개와 아직 빨간 `Output`. p405의 상태 흐름도는 벡터 텍스트라 그림 파일이 없고 `use-cases.md`에 mermaid로 재현 |
+| `manual10.2_state-machine-states_p368.png` | p368 | State Machine 상태 정의 대화상자. p413에서 재사용 |
+| `manual10.2_uc27-start-canvas_p405.png` | p405 | UC27의 **시작 캔버스** — `BLER` · `Ec/No best active set` · `Ec/No 1. best` 파라미터 3개와 아직 빨간 `Output`. p405의 상태 흐름도는 벡터 텍스트라 그림 파일이 없고 `use-cases.md`에 mermaid로 재현 |
 | `manual10.2_uc27-graph-partial-union_p408.png` | p408 | UC27 **중간 단계** — Union까지 연결하고 Output은 아직 빨강(미연결). 색 규약이 보이는 그림 |
 | `manual10.2_uc27-complete-graph_p425.png` | p425 | UC27 **완성 그래프** (기존 `nemo-analyze_kpi-workbench.png`와 같은 내용, 다른 크롭) — BLER + (Ec/No best active set − 1. best) → **Union** → **Ascending time** → State Machine → Call dropped와 상관 → `Output (Column count: 19)` |
 | `manual10.2_uc27-result-grid_p426.png` | p426 | UC27 **실행 결과** — `start_time · end_time · time_interval · index · text · Event ID · Event · Measurement`. 상태 점유마다 한 행이라는 사실이 실제 값(5341 ms, `Missing handover`, `CAD`)으로 보임 |
@@ -56,12 +56,10 @@
 > 교훈은 방법에 있습니다 — **치수 일치를 동일성의 근거로 쓰면 안 됩니다.**
 
 
-### 0-2. 2026-09-02 추가 — 유즈케이스 그림 77장
+### 0-2. 유즈케이스 그림 77장
 
-사용자가 원문 PDF(p1–299 · p400–504, 이어서 p300–399)를 다시 제공해, Use Case 31개의 그림을 원문에서 직접 추출했습니다
-(`pymupdf`, 임베드 이미지 무손실). 각 그림이 무엇인지와 절차상 위치는
+Use Case 31개의 그림을 원문 PDF에서 직접 추출했습니다(`pymupdf`, 임베드 이미지 무손실). 각 그림이 무엇인지와 절차상 위치는
 [`docs/reference/nemo-analyze-10.2/use-cases.md`](../reference/nemo-analyze-10.2/use-cases.md)에 있습니다.
-기존 16장 중 4장은 원문과의 해시 대조로 라벨이 틀린 것이 확정돼 **개명**했습니다(위 표의 "2026-09-02 개명" 행).
 §0의 원칙(재배포 금지 · 원본 유지 · 공개 시 재검토)이 그대로 적용됩니다.
 
 | 파일 | 원문 | 무엇 |
@@ -144,9 +142,9 @@
 | `manual10.2_uc31-string-properties_p441.png` | p441 | UC31 — `String Properties` (MEASUREMENT_REPORT) |
 | `manual10.2_uc31-l3-grid-colored_p443.png` | p443 | UC31 — Message Name 열이 칠해진 L3 그리드 |
 
-### 0-3. 2026-09-02 추가 — p300–399의 그림 26장
+### 0-3. p300–399의 그림 26장
 
-같은 날 오후에 빠져 있던 p300–399가 제공되어, UC25 · UC26과 워크벤치 요소 대화상자(State Machine · Group By ·
+p300–399에서 UC25 · UC26과 워크벤치 요소 대화상자(State Machine · Group By ·
 Aggregate · Filter · Nth · Math · Resample · Time Shift · 저장·실행)의 그림을 추출했습니다. 설명은
 [`use-cases.md`](../reference/nemo-analyze-10.2/use-cases.md)의 UC25 · UC26 · 부록.
 
