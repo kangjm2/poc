@@ -118,11 +118,15 @@ export function LegendPanel({ dist, onEdit, isolate, onIsolate, weightedBy, onWe
           <span className="pct">{b.percentage.toFixed(2)}%</span>
         </div>
       ))}
-      {isolate != null && (
+      {/* Gated on onIsolate, not on isolate alone. The isolation survives a tab switch on
+          purpose, so without this the notice followed the user onto screens that draw no
+          route and told them the rest of it was greyed - over a table. The sentence is a
+          claim about a picture, so it may only appear where the picture is. */}
+      {isolate != null && onIsolate && (
         <div className="legend-note isolating">
-          Showing <b>{isolate}</b> only &mdash; the rest of the drive is drawn grey for
-          position, not hidden.
-          <button onClick={() => onIsolate?.(null)}>Show all</button>
+          Showing <b>{isolate}</b> only &mdash; the rest is drawn grey for context, not
+          hidden.
+          <button onClick={() => onIsolate(null)}>Show all</button>
         </div>
       )}
       <div className="legend-row" style={{ borderTop: '1px solid #e2e2e8', color: '#666' }}>

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { api } from '../api/client'
 import type { CellBreakdown, SeqRange } from '../api/types'
+import { paintBar } from '../view/paint'
 
 /**
  * A KPI as one bar per serving cell.
@@ -19,8 +20,9 @@ const PAD = { left: 46, right: 12, top: 10, bottom: 34 }
 const BAR_H = 18
 const GAP = 6
 
-function BarChart({ data, onPickCell }: {
+function BarChart({ data, isolate, onPickCell }: {
   data: CellBreakdown
+  isolate?: string | null
   onPickCell?: (pci: number) => void
 }) {
   if (data.cells.length === 0) {
@@ -75,7 +77,8 @@ function BarChart({ data, onPickCell }: {
                  + `${c.binLabel}`}
               </title>
               <rect x={PAD.left} y={y} width={w} height={BAR_H}
-                    fill={c.color} stroke="#00000022" />
+                    fill={paintBar(c.binLabel, c.color, isolate ?? null)}
+                    stroke="#00000022" />
               <text x={PAD.left - 5} y={y + BAR_H - 5} fontSize={10} fill="#262626"
                     textAnchor="end">{c.pci}</text>
               <text x={PAD.left + w + 5} y={y + BAR_H - 5} fontSize={10} fill="#444">
@@ -135,11 +138,12 @@ function BreakdownTable({ data }: { data: CellBreakdown }) {
  * disagree - and fetching twice would let them, besides doubling the query. The page owns
  * the request; the views are pure.
  */
-export function CellsPage({ sessionId, kpi, range, scaleVersion, onPickCell }: {
+export function CellsPage({ sessionId, kpi, range, scaleVersion, isolate, onPickCell }: {
   sessionId: number | null
   kpi: string
   range?: SeqRange | null
   scaleVersion?: number
+  isolate?: string | null
   onPickCell?: (pci: number) => void
 }) {
   const [data, setData] = useState<CellBreakdown | null>(null)
@@ -163,7 +167,7 @@ export function CellsPage({ sessionId, kpi, range, scaleVersion, onPickCell }: {
           <span className="meta">ranked by mean, best first</span>
         </header>
         <div style={{ padding: 10 }}>
-          <BarChart data={data} onPickCell={onPickCell} />
+          <BarChart data={data} isolate={isolate} onPickCell={onPickCell} />
         </div>
       </div>
       <div className="panel">

@@ -31,6 +31,12 @@ public class WorkbookController {
         return workbooks.list();
     }
 
+    /** What the editor must not let the user exceed. Served so it cannot be guessed. */
+    @GetMapping("/limits")
+    public WorkbookService.Limits limits() {
+        return workbooks.limits();
+    }
+
     @PostMapping
     public WorkbookService.Workbook save(@RequestBody WorkbookRequest body) {
         return workbooks.save(body.id(), body.name(), body.panes());

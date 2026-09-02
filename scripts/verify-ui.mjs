@@ -322,6 +322,45 @@ check('격리는 숨기기가 아니라 문맥 유지',
   isoFrame != null && allFrame != null && Math.abs(isoFrame.w - allFrame.w) < 3,
   `route spans ${isoFrame?.w.toFixed(0)} isolated, ${allFrame?.w.toFixed(0)} whole`)
 
+// The legend may only OFFER isolation where something honours it. The dock renders on
+// every tab, so before this the band was clickable on all fourteen and the notice claimed
+// "the rest is drawn grey" over screens with no route on them.
+//
+// Asserted on the cursor rather than on the notice: the notice is absent when nothing is
+// isolated, which would make an "is the notice gone" check pass on a screen where the
+// control still works. The pointer is present exactly when the click is wired.
+const isoCursorOn = async () => page
+  .locator('.dock.right .legend-row').filter({ has: page.locator('.swatch') })
+  .nth(1).evaluate((el) => getComputedStyle(el).cursor)
+
+await page.locator('.workbook-tabs button', { hasText: 'Overview' }).click()
+await page.waitForTimeout(900)
+const cursorWithMap = await isoCursorOn()
+await page.locator('.workbook-tabs button', { hasText: 'Statistics' }).click()
+await page.waitForTimeout(900)
+const cursorNoMap = await isoCursorOn()
+check('격리는 그것을 반영하는 화면에서만 제안됨',
+  cursorWithMap === 'pointer' && cursorNoMap !== 'pointer',
+  `overview ${cursorWithMap}, statistics ${cursorNoMap}`)
+
+// And the bars on the Cells page paint from the same scale, so they honour it too - the
+// legend now tells the truth there rather than the control being withdrawn.
+await page.locator('.workbook-tabs button', { hasText: 'Cells' }).click()
+await page.waitForTimeout(1400)
+const barFill = () => page.locator('.panel svg rect[fill]').evaluateAll(
+  (rs) => rs.filter((r) => (r.getAttribute('fill') ?? '').toLowerCase() === '#c9c9d0').length)
+const barsBefore = await barFill()
+await page.locator('.dock.right .legend-row').filter({ has: page.locator('.swatch') })
+  .nth(1).click()
+await page.waitForTimeout(1200)
+const barsAfter = await barFill()
+check('셀 막대도 범례 격리를 반영',
+  barsBefore === 0 && barsAfter > 0, `muted bars ${barsBefore} -> ${barsAfter}`)
+await page.locator('.legend-note.isolating button').click()
+await page.waitForTimeout(800)
+await page.locator('.workbook-tabs button', { hasText: 'Overview' }).click()
+await page.waitForTimeout(900)
+
 // Identity colouring. The witness is the SERVING CELL count from the API, not the number
 // of colours drawn - a palette bug that gave every cell the same colour would still draw
 // "some colours".
@@ -790,8 +829,12 @@ check('드라이브 전체 셀 검출 표', nbrRows >= 3, `${nbrRows} cells`)
 const pollBest = await page
   .locator('.panel:has(.title:text-is("Pilot pollution")) tbody tr td:nth-child(4)')
   .allInnerTexts()
+// Non-empty first: `.every()` is true of an empty list, so the original form of this check
+// passed both when every stretch had a usable best cell and when the detector had gone
+// silent. Those are opposite outcomes and only one of them is the feature working.
+check('파일럿 오염 구간이 실제로 보고됨', pollBest.length > 0, `${pollBest.length} stretches`)
 check('파일럿 오염이 커버리지 홀을 오탐하지 않음',
-  pollBest.every((v) => Number(v) >= -110),
+  pollBest.length > 0 && pollBest.every((v) => Number(v) >= -110),
   pollBest.length ? `best RSRP: ${pollBest.join(', ')}` : 'no stretches')
 await page.screenshot({ path: `${OUT}/26-monitored-set.png`, fullPage: true })
 
@@ -947,6 +990,64 @@ const hiddenBack = await page.locator('.dock-section:has(h3:text-is("Layers")) i
 check('페인·레이어·표시여부가 함께 살아남음',
   panesBack === 1 && layersBack === 2 && hiddenBack === 1,
   `${panesBack} pane, ${layersBack} layers, ${hiddenBack} hidden`)
+
+// A MAP pane must draw the layer its own dock names. It used to be handed App's track,
+// painted for App's globally selected KPI, so the dock said one thing and the map drew
+// another - and the caption was written FROM the dock, which made the disagreement
+// invisible. The witness is the route's stroke colours: two different KPIs bin the same
+// drive differently, so a map that ignored its layer would paint identically for both.
+await page.locator('button', { hasText: '+ Map pane' }).click()
+await page.waitForTimeout(900)
+const mapDock = page.locator('.dock-section:has(h3:text-is("Layers"))').last()
+await mapDock.locator('select').selectOption({ label: 'RSRP (NR SpCell)' })
+await page.waitForTimeout(2500)
+// The witness is the ORDER of colours along the route, not the set of them. The first
+// version of this check compared distinct-colour sets and failed honestly: every KPI is
+// painted from the same four severity colours, so the set is identical whichever KPI the
+// map drew, and the check could not have distinguished the fix either way. Where each
+// colour falls IS the KPI - the fade that makes RSRP red is not where SINR bottoms out.
+const paneStrokes = () => page.locator('.leaflet-overlay-pane path.route-run')
+  .evaluateAll((ps) => ps.map((x) => (x.getAttribute('stroke') ?? '').toLowerCase()).join(','))
+const strokesRsrp = await paneStrokes()
+await mapDock.locator('select').selectOption({ label: 'SS-SINR' })
+await page.waitForTimeout(2500)
+const strokesSinr = await paneStrokes()
+check('지도 페인이 자기 레이어를 그림',
+  strokesRsrp.length > 0 && strokesSinr.length > 0 && strokesRsrp !== strokesSinr,
+  `${strokesRsrp.split(',').length} runs, sequences ${strokesRsrp === strokesSinr ? 'IDENTICAL' : 'differ'}`)
+
+// A map paints one scale, so ticking is exclusive there. Asserted on the checkbox state
+// rather than on the drawing: two KPIs could coincidentally bin alike, but only one box
+// can be ticked if the rule is applied.
+const mapChecked = await mapDock.locator('input[type=checkbox]:checked').count()
+const mapTotal = await mapDock.locator('input[type=checkbox]').count()
+check('지도 페인은 한 번에 한 레이어',
+  mapTotal === 2 && mapChecked === 1, `${mapChecked} of ${mapTotal} ticked`)
+
+// The cap is the server's, so the editor asks for it. A dock that kept its own number
+// would keep offering a ninth layer and let the user find the limit by pressing Save.
+const limits = await (await page.request.get(`${API_BASE}/api/workbooks/limits`)).json()
+const chartDock = page.locator('.dock-section:has(h3:text-is("Layers"))').first()
+const named = await page.locator('.dock.right .parameter-tree, body').first().isVisible()
+for (let i = 0; i < limits.maxLayersPerPane + 2; i++) {
+  const opts = await chartDock.locator('select option').count()
+  if (opts <= 1) break
+  await chartDock.locator('select').selectOption({ index: 1 }).catch(() => {})
+  await page.waitForTimeout(250)
+}
+const chartLayers = await chartDock.locator('input[type=checkbox]').count()
+const addDisabled = await chartDock.locator('select').isDisabled()
+check('레이어 상한을 서버에서 받아 UI가 막음',
+  chartLayers === limits.maxLayersPerPane && addDisabled,
+  `${chartLayers}/${limits.maxLayersPerPane} layers, add disabled ${addDisabled} (named=${named})`)
+
+// Destroying a workbook asks first. Answering no must leave it there - a dialog that
+// appeared and deleted anyway would pass a check that only looked for the dialog.
+page.once('dialog', (d) => d.dismiss())
+await page.locator('button', { hasText: 'Delete workbook' }).click()
+await page.waitForTimeout(1200)
+check('워크북 삭제는 확인을 받고, 취소하면 남음',
+  await page.locator(`.workbook-tabs button:text-is("${PROBE}")`).count() === 1)
 
 // Cleaned up so a second run starts where the first did.
 const books = await (await page.request.get(`${API_BASE}/api/workbooks`)).json()

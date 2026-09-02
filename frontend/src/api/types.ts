@@ -446,6 +446,9 @@ export interface Workbook {
   id: number; name: string; ordinal: number; panes: WorkbookPane[]
 }
 
+/** Served by the backend rather than duplicated here - see WorkbookService.Limits. */
+export interface WorkbookLimits { maxPanes: number; maxLayersPerPane: number }
+
 export interface WorkbookRequest {
   id: number | null; name: string; panes: WorkbookPane[]
 }

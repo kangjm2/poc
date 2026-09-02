@@ -274,6 +274,12 @@ public class DataSeeder implements SmartInitializingSingleton {
                     : p.prbUtilisation();
 
             addKpi(kpiRows, sid, p.seq(), ts, "RSRP", p.rsrp());
+            // RSRQ was missing here while seedMonitoredSet below still wrote a full
+            // monitored set for this session - so the Ec/N0-side dock had per-neighbour
+            // quality and no serving trace to agree with. Anything reading serving quality
+            // from sample_kpi saw this session as having none, which is a gap in the seed
+            // and not a fact about the drive.
+            addKpi(kpiRows, sid, p.seq(), ts, "RSRQ", p.rsrq());
             addKpi(kpiRows, sid, p.seq(), ts, "SINR", p.sinr());
             addKpi(kpiRows, sid, p.seq(), ts, "MAC_DL_THROUGHPUT",
                     Math.round(thr * 10.0) / 10.0);
