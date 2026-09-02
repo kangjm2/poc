@@ -16,6 +16,7 @@ table.meta td:first-child{width:96px;font-weight:600;color:var(--dim);white-spac
 .uc{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:13px;
     background:var(--panel);padding:0 5px;border-radius:4px;white-space:nowrap}
 h3 .src{font-weight:400;margin-left:8px}
+.subj{font-size:13px;color:var(--dim);margin:0 6px 0 5px}
 </style>
 </head>
 <body>
@@ -144,8 +145,8 @@ h3 .src{font-weight:400;margin-left:8px}
 <h2>3. 사용자 시나리오 7편</h2>
 
 <p>시나리오마다 사용자의 <strong>질문</strong>, 합쳐지는 <strong>입력 그룹</strong>, 유즈케이스를 순서대로 꿴
-<strong>흐름</strong>, 마지막에 내리는 <strong>결정</strong>을 적습니다. 흐름의 유즈케이스는 절차와 대화상자 값이
-<a href="07-use-cases.html">⑦</a>에 그대로 있으므로 여기서는 이름만 부릅니다. 유즈케이스 밖의 단계(적재 규칙 ·
+<strong>흐름</strong>, 마지막에 내리는 <strong>결정</strong>을 적습니다. 흐름의 유즈케이스는 번호 옆에 매뉴얼의 제목(Subject)을 붙였고, 절차와 대화상자 값은
+<a href="07-use-cases.html">⑦</a>에 그대로 있습니다. 유즈케이스 밖의 단계(적재 규칙 ·
 드릴다운 · 리포트 · 스케줄러)는 <a href="../reference/nemo-analyze-10.2/README.md">레퍼런스 폴더</a>의 전사 5편을
 가리킵니다. 각 시나리오 끝의 상자는 우리 구현의 현재 상태와 가장 가까운 검증 여정입니다.</p>
 
@@ -157,13 +158,13 @@ h3 .src{font-weight:400;margin-left:8px}
     <a href="../reference/nemo-analyze-10.2/call-events-and-recording.md">ETSI로 통일</a>해 두어야 건수가 맞음</td></tr>
 </table>
 <ol class="steps">
-<li><span class="uc">UC7</span> 지도와 그래프에 드롭 이벤트 아이콘을 띄워 23건의 위치를 본다.</li>
+<li><span class="uc">UC7</span><span class="subj">Notification icons in graphs</span> 지도와 그래프에 드롭 이벤트 아이콘을 띄워 23건의 위치를 본다.</li>
 <li><a href="../reference/nemo-analyze-10.2/drilldown-timeline-notifications.md">드릴다운</a>(Before/After 초 설정)으로 한 건의 그 순간 워크북을 연다.</li>
-<li><span class="uc">UC6</span> BLER · Ec/N0 best active set · Ec/N0 Nth best를 한 시간축에 겹쳐 떨어지기 직전의 형태를 본다.</li>
-<li><span class="uc">UC27</span> 워크벤치 State Machine으로 23건 전부를 "파일럿 오염 · 이웃 누락 · 커버리지 부족"으로 자동 분류한다.</li>
-<li><span class="uc">UC12</span> 이웃 누락으로 분류된 건은 measurement report 메시지를 검색해 단말이 그 셀을 보고했는지 확인한다.</li>
-<li><span class="uc">UC20</span> 오염으로 분류된 건은 Pilot pollution 지도로 위치와 관련 셀을 확인한다.</li>
-<li><span class="uc">UC5</span> 필요하면 커버리지 밖(RSCP &lt; −100)을 전역 필터로 걸러 "커버리지 부족" 건을 통계에서 분리한다.</li>
+<li><span class="uc">UC6</span><span class="subj">Multiple graph layers</span> BLER · Ec/N0 best active set · Ec/N0 Nth best를 한 시간축에 겹쳐 떨어지기 직전의 형태를 본다.</li>
+<li><span class="uc">UC27</span><span class="subj">Creating a KPI for dropped calls resulting from a missing handover</span> 워크벤치 State Machine으로 23건 전부를 "파일럿 오염 · 이웃 누락 · 커버리지 부족"으로 자동 분류한다.</li>
+<li><span class="uc">UC12</span><span class="subj">Using L3 and RRC message search parameters</span> 이웃 누락으로 분류된 건은 measurement report 메시지를 검색해 단말이 그 셀을 보고했는지 확인한다.</li>
+<li><span class="uc">UC20</span><span class="subj">Displaying base station connections on map based on pilot pollution</span> 오염으로 분류된 건은 Pilot pollution 지도로 위치와 관련 셀을 확인한다.</li>
+<li><span class="uc">UC5</span><span class="subj">Global parameter filtering based on a secondary parameter</span> 필요하면 커버리지 밖(RSCP &lt; −100)을 전역 필터로 걸러 "커버리지 부족" 건을 통계에서 분리한다.</li>
 </ol>
 <p><strong>결정.</strong> 셀별 이웃 목록 추가 요청 vs 안테나 틸트 조정 요청. 산출은 원인별 건수 파이, 사례 목록,
 관련 셀 목록.</p>
@@ -178,13 +179,13 @@ h3 .src{font-weight:400;margin-left:8px}
 <tr><td>필요 자료</td><td>좌표 있는 스캐너 또는 단말 로그 + BTS 파일(좌표 · 방위 · 채널 · 이름 · 빔 범위)</td></tr>
 </table>
 <ol class="steps">
-<li><span class="uc">UC18</span> BTS 그리드를 열어 파일 자체(누락 · 중복 · 채널 불일치)를 검사한다.</li>
-<li><span class="uc">UC19</span> 셀 이름을 파라미터로 붙여 이후 뷰에서 PCI가 아니라 이름으로 읽는다.</li>
-<li><span class="uc">UC14</span> 서빙 셀 선을 그려 엉뚱한 사이트에서 서빙되는 구간을 찾는다.</li>
-<li><span class="uc">UC17</span> 셀 빔을 그려 방위가 DB와 다른 곳을 본다.</li>
-<li><span class="uc">UC21</span> 측정에서 사이트 위치를 추정해 DB 좌표와 대조한다 — 좌표가 틀린 사이트가 드러남.</li>
-<li><span class="uc">UC1</span> 3강 우세 지도로 지배 셀이 없는 구간(오버슈팅 · 오염 후보)을 찾는다.</li>
-<li><span class="uc">UC23</span> 서빙 셀 선을 KML로 내보내 RF 설계팀이 Google Earth에서 본다.</li>
+<li><span class="uc">UC18</span><span class="subj">Synchronizing base station map overlay with grid rows</span> BTS 그리드를 열어 파일 자체(누락 · 중복 · 채널 불일치)를 검사한다.</li>
+<li><span class="uc">UC19</span><span class="subj">Using BTS reference parameters</span> 셀 이름을 파라미터로 붙여 이후 뷰에서 PCI가 아니라 이름으로 읽는다.</li>
+<li><span class="uc">UC14</span><span class="subj">Coloring routes based on BTS coverage</span> 서빙 셀 선을 그려 엉뚱한 사이트에서 서빙되는 구간을 찾는다.</li>
+<li><span class="uc">UC17</span><span class="subj">Displaying base station cell beam range on map</span> 셀 빔을 그려 방위가 DB와 다른 곳을 본다.</li>
+<li><span class="uc">UC21</span><span class="subj">Cell locator analysis</span> 측정에서 사이트 위치를 추정해 DB 좌표와 대조한다 — 좌표가 틀린 사이트가 드러남.</li>
+<li><span class="uc">UC1</span><span class="subj">Viewing cell footprints, RSCP footprints, and LTE footprints</span> 3강 우세 지도로 지배 셀이 없는 구간(오버슈팅 · 오염 후보)을 찾는다.</li>
+<li><span class="uc">UC23</span><span class="subj">Exporting Serving Cell Lines to Google Earth</span> 서빙 셀 선을 KML로 내보내 RF 설계팀이 Google Earth에서 본다.</li>
 </ol>
 <p><strong>결정.</strong> DB 정정 목록(좌표 · 방위 · 이름), 오버슈팅 셀 목록.</p>
 <div class="ours"><h5>우리</h5>3 · 6단계는 있고(서빙 셀 선 · 3강 판정), 1 · 2단계는 <code>cell_ref</code>가 BTS 파일을 대신하므로
@@ -199,10 +200,10 @@ h3 .src{font-weight:400;margin-left:8px}
 </table>
 <ol class="steps">
 <li><a href="../reference/nemo-analyze-10.2/measurement-organization.md">파일명 규약</a>대로 적재하고 Drag &amp; Drop 폴더로 전·후를 나눈다.</li>
-<li><span class="uc">UC15</span> 경로별 통계(Route Statistics)를 거리 가중으로 낸다.</li>
-<li><span class="uc">UC16</span> 델타 플로팅으로 두 그룹의 차이 지도를 만든다.</li>
-<li><span class="uc">UC30</span> gradient 색상셋으로 차이 값을 칠한다.</li>
-<li><span class="uc">UC24</span> 스프레드시트로 내려 셀별 · 구간별 표를 만든다.</li>
+<li><span class="uc">UC15</span><span class="subj">Performing area binning</span> 경로별 통계(Route Statistics)를 거리 가중으로 낸다.</li>
+<li><span class="uc">UC16</span><span class="subj">Comparing two groups of measurements from the same route on map</span> 델타 플로팅으로 두 그룹의 차이 지도를 만든다.</li>
+<li><span class="uc">UC30</span><span class="subj">Creating and applying a color set on map</span> gradient 색상셋으로 차이 값을 칠한다.</li>
+<li><span class="uc">UC24</span><span class="subj">Retrieving data from minimized data sets</span> 스프레드시트로 내려 셀별 · 구간별 표를 만든다.</li>
 <li><a href="../reference/nemo-analyze-10.2/reports-and-workbooks.md">리포트 템플릿</a>에 지도 이미지와 통계표를 넣어 출력한다.</li>
 </ol>
 <p><strong>결정.</strong> 변경 승인, 또는 나빠진 구간의 추가 조치.</p>
@@ -218,10 +219,10 @@ h3 .src{font-weight:400;margin-left:8px}
 </table>
 <ol class="steps">
 <li>Voice Quality 폴더로 단말 로그에 맞는 서버 로그를 찾는다.</li>
-<li><span class="uc">UC2</span> UL · DL MOS를 한 지도와 그래프에 올린다.</li>
-<li><span class="uc">UC11</span> MOS가 낮은 점에서 오디오 샘플을 직접 들어 잡음인지 묵음인지 확인한다.</li>
-<li><span class="uc">UC6</span> 그 시각의 RSCP · BLER을 겹쳐 무선 원인인지 코어 원인인지 가른다.</li>
-<li><span class="uc">UC7</span> 핸드오버 · 셀 재선택 이벤트와 겹치는지 본다.</li>
+<li><span class="uc">UC2</span><span class="subj">Viewing uplink voice quality server data</span> UL · DL MOS를 한 지도와 그래프에 올린다.</li>
+<li><span class="uc">UC11</span><span class="subj">Play audio sample</span> MOS가 낮은 점에서 오디오 샘플을 직접 들어 잡음인지 묵음인지 확인한다.</li>
+<li><span class="uc">UC6</span><span class="subj">Multiple graph layers</span> 그 시각의 RSCP · BLER을 겹쳐 무선 원인인지 코어 원인인지 가른다.</li>
+<li><span class="uc">UC7</span><span class="subj">Notification icons in graphs</span> 핸드오버 · 셀 재선택 이벤트와 겹치는지 본다.</li>
 </ol>
 <p><strong>결정.</strong> 무선 최적화 대상 셀, 또는 코어 · 전송망 티켓.</p>
 <div class="ours"><h5>우리</h5><span class="tag t-none">없음</span> 서버 로그도 음성 품질 측정도 오디오도 수집 범위에 없습니다. 4 · 5단계만
@@ -234,11 +235,11 @@ h3 .src{font-weight:400;margin-left:8px}
 <tr><td>필요 자료</td><td>단말 로그 + 같은 시각의 <code>.pcap</code> + 바이너리 진단 로그, Microsoft Network Monitor 3.4</td></tr>
 </table>
 <ol class="steps">
-<li><span class="uc">UC6</span> 처리율 · SINR · RB 수를 겹쳐 무선 병목인지 본다.</li>
-<li><span class="uc">UC3</span> 무선이 멀쩡하면 그 시각의 패킷을 열어 재전송 · RTT · 윈도우를 본다.</li>
-<li><span class="uc">UC4</span> 스케줄링 의심이면 진단 로그의 MAC/RLC 상태를 본다.</li>
-<li><span class="uc">UC12</span> RRC 재설정 메시지를 검색해 베어러 변경 시각과 맞춰 본다.</li>
-<li><span class="uc">UC31</span> 시그널링 그리드에 string 색상셋을 걸어 재설정 · 해제 메시지를 눈에 띄게 한다.</li>
+<li><span class="uc">UC6</span><span class="subj">Multiple graph layers</span> 처리율 · SINR · RB 수를 겹쳐 무선 병목인지 본다.</li>
+<li><span class="uc">UC3</span><span class="subj">Viewing IP/UDP packet trace data</span> 무선이 멀쩡하면 그 시각의 패킷을 열어 재전송 · RTT · 윈도우를 본다.</li>
+<li><span class="uc">UC4</span><span class="subj">Viewing Binary Log Data</span> 스케줄링 의심이면 진단 로그의 MAC/RLC 상태를 본다.</li>
+<li><span class="uc">UC12</span><span class="subj">Using L3 and RRC message search parameters</span> RRC 재설정 메시지를 검색해 베어러 변경 시각과 맞춰 본다.</li>
+<li><span class="uc">UC31</span><span class="subj">Creating and applying a color set in grid</span> 시그널링 그리드에 string 색상셋을 걸어 재설정 · 해제 메시지를 눈에 띄게 한다.</li>
 </ol>
 <p><strong>결정.</strong> 무선 파라미터 조정 vs 서버 · 전송 쪽 이관.</p>
 <div class="ours"><h5>우리</h5>1단계(무선 층)만 됩니다. 패킷 캡처와 바이너리 로그는 입력에 없고 시그널링 본문은 비구조화입니다.
@@ -252,10 +253,10 @@ h3 .src{font-weight:400;margin-left:8px}
 <tr><td>필요 자료</td><td>5G 스캐너 로그의 best beam 인덱스 + 빔 정보가 든 BTS 파일, 3D Visualizer 옵션</td></tr>
 </table>
 <ol class="steps">
-<li><span class="uc">UC22</span> best beam 지도를 그려 빔이 바뀌는 경계를 본다.</li>
-<li><span class="uc">UC17</span> 빔 범위를 겹쳐 설계 방위와 대조한다.</li>
-<li><span class="uc">UC9</span> 3D 뷰로 고층 건물 주변의 수직 빔을 확인한다.</li>
-<li><span class="uc">UC28</span> 이산값 색상셋으로 빔 인덱스별 색을 고정해 여러 로그에서 같은 색으로 읽는다.</li>
+<li><span class="uc">UC22</span><span class="subj">5G beam visualization</span> best beam 지도를 그려 빔이 바뀌는 경계를 본다.</li>
+<li><span class="uc">UC17</span><span class="subj">Displaying base station cell beam range on map</span> 빔 범위를 겹쳐 설계 방위와 대조한다.</li>
+<li><span class="uc">UC9</span><span class="subj">Viewing 5G measurement results in 3D Visualizer (optional)</span> 3D 뷰로 고층 건물 주변의 수직 빔을 확인한다.</li>
+<li><span class="uc">UC28</span><span class="subj">Automatic generation of color set for a value range</span> 이산값 색상셋으로 빔 인덱스별 색을 고정해 여러 로그에서 같은 색으로 읽는다.</li>
 </ol>
 <p><strong>결정.</strong> 빔북 재설정 대상 셀.</p>
 <div class="ours"><h5>우리</h5><span class="tag t-none">없음</span> 빔 인덱스 측정과 3D 뷰가 없습니다. 4단계의 이산값 채색만 PCI 채색으로
@@ -269,10 +270,10 @@ h3 .src{font-weight:400;margin-left:8px}
 </table>
 <ol class="steps">
 <li><a href="../reference/nemo-analyze-10.2/measurement-organization.md">파일명 규약</a>을 정하고 Search 폴더를 <code>Search last 7 days</code>로 만든다.</li>
-<li><span class="uc">UC25</span> FTP 자동 적재와 스케줄러를 건다.</li>
-<li><span class="uc">UC26</span> · <span class="uc">UC27</span> 워크벤치로 팀의 KPI 정의를 만든다.</li>
-<li><span class="uc">UC10</span> 결과 그리드에 임계 색상셋을 입힌다.</li>
-<li><span class="uc">UC29</span> 색상셋을 팀 표준으로 정해 <code>.aex</code>로 배포한다.</li>
+<li><span class="uc">UC25</span><span class="subj">Triggering events</span> FTP 자동 적재와 스케줄러를 건다.</li>
+<li><span class="uc">UC26</span><span class="subj">Creating complex filters using multiple conditions</span> · <span class="uc">UC27</span><span class="subj">Creating a KPI for dropped calls resulting from a missing handover</span> 워크벤치로 팀의 KPI 정의를 만든다.</li>
+<li><span class="uc">UC10</span><span class="subj">Color sets in grids</span> 결과 그리드에 임계 색상셋을 입힌다.</li>
+<li><span class="uc">UC29</span><span class="subj">Creating a color set</span> 색상셋을 팀 표준으로 정해 <code>.aex</code>로 배포한다.</li>
 <li>Scope Filter를 건 <a href="../reference/nemo-analyze-10.2/reports-and-workbooks.md">리포트 템플릿</a>을 스케줄에 붙이고 Options › Email로 발송한다.</li>
 </ol>
 <p><strong>결정.</strong> 임계 초과 셀의 주간 조치 목록.</p>
