@@ -1,0 +1,319 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>⑨ 입력 기준 분류와 사용자 시나리오 — Nemo Analyze 10.2</title>
+<link rel="stylesheet" href="brief.css">
+<style>
+table.g td:nth-child(1){white-space:nowrap;font-weight:600}
+table.g td:nth-child(3){white-space:nowrap}
+table.m{font-size:13px}
+table.m th,table.m td{text-align:center}
+table.m th:first-child,table.m td:first-child{text-align:left;white-space:nowrap}
+table.meta{margin:8px 0 12px;font-size:14px}
+table.meta td:first-child{width:96px;font-weight:600;color:var(--dim);white-space:nowrap}
+.uc{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:13px;
+    background:var(--panel);padding:0 5px;border-radius:4px;white-space:nowrap}
+h3 .src{font-weight:400;margin-left:8px}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="top">
+  <h1>⑨ 입력 기준 분류와 사용자 시나리오</h1>
+  <div class="sub">유즈케이스 31개를 <strong>입력 데이터</strong>로 다시 묶고, 그 묶음으로 <strong>업무의 처음부터 끝까지</strong>를 시나리오 7편으로 푼 것</div>
+</header>
+
+<nav class="crumbs"><a href="index.html">← 브리프 목록</a> ·
+  <a href="07-use-cases.html">⑦ 상세</a> · <a href="08-use-cases-summary.html">⑧ 요약표</a> ·
+  <a href="../use-case-coverage.md">대조표</a> · <a href="../scenario-verification.md">E2E 검증 여정</a></nav>
+
+<p>매뉴얼의 유즈케이스는 <strong>기능 하나</strong>를 다룹니다 — 지도에 셀 선을 긋는다, 파라미터 두 개를 겹친다,
+색상셋을 만든다. 그러나 사용자가 실제로 하는 일은 "드롭콜 23건이 왜 떨어졌는지 알아내서 조치 목록을
+내는 것"처럼 <strong>여러 기능을 순서대로 거쳐 하나의 결정에 이르는 흐름</strong>입니다. 이 문서는 그 흐름을
+쓰기 위한 준비로 유즈케이스를 <em>장·절</em>이 아니라 <em>필요한 입력</em>으로 다시 묶고(§2), 그 묶음을
+합쳐 시나리오 7편을 씁니다(§3). 먼저 이 작업이 설계 과정의 어느 단계에 속하는지부터 적습니다(§1).</p>
+
+<h2>1. 설계 관점에서 이 작업이 놓이는 자리</h2>
+
+<p>요구사항 공학에서 <strong>유즈케이스</strong>는 시스템 경계 안의 기능 단위이고, <strong>시나리오</strong>는 그
+유즈케이스 여럿을 실제 업무 순서로 꿴 구체적 사례입니다. 시나리오를 쓰는 일은 <strong>요구 분석 단계의
+끝, 설계에 들어가기 직전</strong>에 놓입니다. 기능 목록이 다 모였을 때 "이 기능들로 사용자의 업무가
+끊기지 않고 끝까지 이어지는가"를 검사하는 것이 시나리오의 첫 용도이고, 같은 시나리오가 검증 단계에서
+<strong>인수 기준</strong>으로 다시 쓰이는 것이 둘째 용도입니다. V 모델로 말하면 왼쪽(분석)에서 쓴 시나리오가
+오른쪽(검증)의 E2E 테스트가 됩니다.</p>
+
+<table>
+<tr><th style="width:130px">단계</th><th style="width:230px">묻는 것</th><th>산출물</th><th style="width:230px">우리 문서</th></tr>
+<tr><td><strong>요구 수집</strong></td><td>무엇을 할 수 있어야 하나</td>
+    <td>기능 목록 — 유즈케이스, FR-xx</td>
+    <td><a href="08-use-cases-summary.html">⑧</a> · <a href="07-use-cases.html">⑦</a> · <a href="../requirements-analysis.md">requirements-analysis §2</a></td></tr>
+<tr><td><strong>요구 분석 — 정보 흐름</strong></td><td>어떤 데이터가 들어오고 무엇이 그것을 소비하나</td>
+    <td><strong>입력 기준 분류</strong>, 데이터 모델 결정 사항</td>
+    <td>이 문서 §2 · <a href="../architecture.md">architecture.md</a> 데이터 모델</td></tr>
+<tr><td><strong>요구 분석 — 업무 분석</strong></td><td>사용자가 어떤 순서로 무엇을 보고 무엇을 결정하나</td>
+    <td><strong>시나리오</strong> (task flow · user journey)</td>
+    <td>이 문서 §3</td></tr>
+<tr><td><strong>설계</strong></td><td>화면 · API · 저장 구조를 어떻게 잡나</td>
+    <td>화면 명세 SC-xx, 데이터 모델, API</td>
+    <td><a href="../requirements-analysis.md">requirements-analysis §4·§6</a> · <a href="../architecture.md">architecture.md</a></td></tr>
+<tr><td><strong>검증</strong></td><td>시나리오가 실제로 끝까지 걸어지나</td>
+    <td>E2E 여정 S1–S13, 단계별 통과 기록</td>
+    <td><a href="../scenario-verification.md">scenario-verification.md</a></td></tr>
+</table>
+
+<p>우리 저장소에서는 순서가 <strong>거꾸로</strong>였습니다. 검증 여정 S1–S13이 먼저 있고, 레퍼런스 쪽 시나리오는
+이제 씁니다. 그래서 이 문서의 시나리오는 <em>새 기능을 요구하는 문서</em>라기보다 <strong>검증 여정이
+레퍼런스가 상정한 업무를 빠짐없이 덮는지 대조하는 기준</strong>입니다 — §4의 대응표가 그 대조입니다.</p>
+
+<p>입력 기준 분류가 이 단계에서 하는 일은 둘입니다. 첫째, 우선순위를 "유즈케이스 몇 개를 덮나"가 아니라
+<strong>"입력 하나를 채우면 시나리오 몇 편이 끝까지 열리나"</strong>로 매기게 합니다. 둘째, 그 입력이 우리
+데이터 모델에 없다면 그것은 화면이 아니라 <strong>스키마의 결정 사항</strong>이라는 것을 드러냅니다(active set
+구분, BTS 파일의 열). 시나리오가 화면 설계에 앞서야 하는 이유가 여기에 있습니다 — 화면은 바꾸기 쉽고
+스키마는 어렵습니다.</p>
+
+<h2>2. 입력 데이터 기준 분류</h2>
+
+<p>기준은 <strong>"그 입력이 없으면 유즈케이스가 성립하지 않는 것"</strong>입니다. 좌표 있는 측정 파일은 거의
+모든 유즈케이스의 바탕이라 그룹 ⑥ 하나로만 둡니다. 각 유즈케이스가 요구하는 입력의 원문은
+<a href="07-use-cases.html#필요한-입력-데이터--31개-한-표">⑦ "필요한 입력 데이터 — 31개 한 표"</a>에 있습니다.</p>
+
+<table class="g">
+<tr><th style="width:150px">그룹</th><th>결정적 입력</th><th style="width:150px">UC</th><th>비고</th><th style="width:110px">우리 데이터</th></tr>
+<tr><td>① 음성 (Voice)</td>
+    <td>서버 측 UL 음성 품질 로그, 오디오 샘플 파일, 두 로그의 시각 동기(±3 s)</td>
+    <td>2 · 11</td>
+    <td>둘 다 "단말 로그 + 음성 쪽 동반 파일"</td>
+    <td><span class="tag t-none">없음</span></td></tr>
+<tr><td>② 동반 캡처 파일</td>
+    <td><code>.pcap</code>, 바이너리 진단 로그 <code>.nmfb</code> / <code>.dfl</code></td>
+    <td>3 · 4</td>
+    <td>①과 같이 측정 파일 밖의 짝 파일이나 내용이 패킷·칩셋 로그라 분리. 크게는 ①②가 "동반 파일" 상위 그룹</td>
+    <td><span class="tag t-none">없음</span></td></tr>
+<tr><td>③ 시그널링 본문</td>
+    <td>디코딩된 L3/RRC 메시지 텍스트, Message Name 열</td>
+    <td>12 · 31</td>
+    <td>본문 검색(12)과 이름 채색(31)</td>
+    <td><span class="tag t-diff">일부</span> 이름·시각만</td></tr>
+<tr><td>④ 이벤트·알림</td>
+    <td>로그에 기록된 이벤트(호 · 재선택 · 핸드오버 · 실패)</td>
+    <td>7 · 27</td>
+    <td>27은 <code>Call dropped</code>가 트리거이고 ⑤의 이웃 측정도 필요</td>
+    <td><span class="tag t-same">있음</span></td></tr>
+<tr><td>⑤ 이웃 셀 측정</td>
+    <td>active / monitored set 또는 순위별 이웃의 Ec/N0 · RSCP · RSRP</td>
+    <td>1 · 20 · 21 · 27</td>
+    <td>1은 3강 판정 부분만. 20·21은 ⑦의 BTS도 필요</td>
+    <td><span class="tag t-diff">일부</span> active set 구분 없음</td></tr>
+<tr><td>⑥ 범용 측정 파일</td>
+    <td>파라미터 1개 이상, 대개 GPS 좌표, 통계 기준(Time / Distance / Sample)</td>
+    <td>1 · 5 · 6 · 8 · 10 · 15 · 16 · 28 · 30</td>
+    <td>하위: 좌표 불필요·시간축만 6 · 8 · 10 / 세션 2그룹 16 / 이산값 파라미터 28 / 통계 기준 15 · 16</td>
+    <td><span class="tag t-same">있음</span></td></tr>
+<tr><td>⑦ BTS 파일 (사이트 DB)</td>
+    <td>사이트 좌표 · 방위 · 채널 · 이름 · 빔 범위 · 안테나 높이 · 틸트</td>
+    <td>14 · 17 · 18 · 19 · 23<br><span class="src">+ 5(셀 필터) · 20 · 21(검증) · 9 · 22</span></td>
+    <td>순수 BTS 그룹은 다섯. 나머지는 다른 그룹과 교집합</td>
+    <td><span class="tag t-diff">일부</span> 이름·빔 범위·높이·틸트 열 없음</td></tr>
+<tr><td>⑧ 5G 빔 데이터</td>
+    <td>best beam 인덱스, 빔 방향</td>
+    <td>9 · 22</td>
+    <td>⑦의 BTS 파일과 항상 함께. 9는 3D Visualizer 옵션도</td>
+    <td><span class="tag t-none">없음</span></td></tr>
+<tr><td>⑨ 측정 데이터 없음 · 인프라 · 자산</td>
+    <td>MapInfo <code>.TAB</code>, 서버 · FTP, 워크벤치 데이터셋, 스프레드시트 데이터셋, 색상셋 정의</td>
+    <td>13 · 24 · 25 · 26 · 29</td>
+    <td>측정 파일이 아니라 도구 쪽 입력이 결정적. 24 · 26은 "이미 질의한 데이터셋"이라 ⑥의 파생으로 볼 수도 있음</td>
+    <td><span class="tag t-out">범위 밖</span> 서버·임계 편집기는 있음</td></tr>
+</table>
+
+<h3>겹치는 유즈케이스의 처리</h3>
+<p>한 유즈케이스가 두 그룹에 걸리는 경우가 일곱 있습니다(1 · 5 · 9 · 20 · 21 · 22 · 27). 단일 소속으로
+강제하면 <strong>가장 구하기 어려운 입력</strong> 쪽에 두는 것이 실용적입니다. 그러면 1과 5는 ⑥, 20 · 21 · 27은
+⑤, 9 · 22는 ⑧입니다.</p>
+
+<h3>장·절 묶음과 다른 점</h3>
+<p>장 기준으로는 UC2와 UC11이 8장 안에서 멀리 떨어져 있고, UC27(KPI Workbench)과 UC20(Pilot pollution)이 다른
+장에 있지만, 입력 기준으로는 둘 다 <strong>"active set을 구분하는 이웃 측정"</strong>이라는 같은 전제를 공유합니다.
+반대로 12장 색상셋 네 개(28–31)는 입력 기준으로 ⑥ · ⑥ · ⑨ · ③으로 흩어집니다. 우리 데이터와 맞춰 보면
+⑥ · ④는 있고, ⑤ · ⑦ · ③은 일부, ① · ② · ⑧은 없고, ⑨는 범위 밖입니다. 그룹 하나를 채우면 여러 유즈케이스가
+한꺼번에 열리는 곳은 ⑦(BTS 열 보강)과 ⑤(active set 구분)입니다.</p>
+
+<h2>3. 사용자 시나리오 7편</h2>
+
+<p>시나리오마다 사용자의 <strong>질문</strong>, 합쳐지는 <strong>입력 그룹</strong>, 유즈케이스를 순서대로 꿴
+<strong>흐름</strong>, 마지막에 내리는 <strong>결정</strong>을 적습니다. 흐름의 유즈케이스는 절차와 대화상자 값이
+<a href="07-use-cases.html">⑦</a>에 그대로 있으므로 여기서는 이름만 부릅니다. 유즈케이스 밖의 단계(적재 규칙 ·
+드릴다운 · 리포트 · 스케줄러)는 <a href="../reference/nemo-analyze-10.2/README.md">레퍼런스 폴더</a>의 전사 5편을
+가리킵니다. 각 시나리오 끝의 상자는 우리 구현의 현재 상태와 가장 가까운 검증 여정입니다.</p>
+
+<h3>A. 드롭콜 원인 규명<span class="src">④ 이벤트 + ⑤ 이웃 + ③ 시그널링 (+ ⑦)</span></h3>
+<table class="meta">
+<tr><td>질문</td><td>"이번 주 드라이브에서 떨어진 호 23건은 왜 떨어졌나."</td></tr>
+<tr><td>사용자</td><td>RF 최적화 엔지니어</td></tr>
+<tr><td>필요 자료</td><td>단말 로그(이벤트 · active/monitored set Ec/N0 · BLER · L3 메시지) + BTS 파일. 드롭과 시도 실패의 정의를
+    <a href="../reference/nemo-analyze-10.2/call-events-and-recording.md">ETSI로 통일</a>해 두어야 건수가 맞음</td></tr>
+</table>
+<ol class="steps">
+<li><span class="uc">UC7</span> 지도와 그래프에 드롭 이벤트 아이콘을 띄워 23건의 위치를 본다.</li>
+<li><a href="../reference/nemo-analyze-10.2/drilldown-timeline-notifications.md">드릴다운</a>(Before/After 초 설정)으로 한 건의 그 순간 워크북을 연다.</li>
+<li><span class="uc">UC6</span> BLER · Ec/N0 best active set · Ec/N0 Nth best를 한 시간축에 겹쳐 떨어지기 직전의 형태를 본다.</li>
+<li><span class="uc">UC27</span> 워크벤치 State Machine으로 23건 전부를 "파일럿 오염 · 이웃 누락 · 커버리지 부족"으로 자동 분류한다.</li>
+<li><span class="uc">UC12</span> 이웃 누락으로 분류된 건은 measurement report 메시지를 검색해 단말이 그 셀을 보고했는지 확인한다.</li>
+<li><span class="uc">UC20</span> 오염으로 분류된 건은 Pilot pollution 지도로 위치와 관련 셀을 확인한다.</li>
+<li><span class="uc">UC5</span> 필요하면 커버리지 밖(RSCP &lt; −100)을 전역 필터로 걸러 "커버리지 부족" 건을 통계에서 분리한다.</li>
+</ol>
+<p><strong>결정.</strong> 셀별 이웃 목록 추가 요청 vs 안테나 틸트 조정 요청. 산출은 원인별 건수 파이, 사례 목록,
+관련 셀 목록.</p>
+<div class="ours"><h5>우리</h5>Problem Survey가 1 · 4단계를 덮고(원인 파이 → 사례 목록 → 그 순간), 3단계는 다중 KPI 겹치기로
+가능합니다. 끊기는 곳은 5 · 6단계 — 시그널링 본문이 비구조화이고 active set 개념이 없어 "이웃 누락"과 "오염"을
+근거 있게 가를 수 없습니다. 가장 가까운 검증 여정: <strong>S1 주행 후 필드 분석</strong>(L3 드릴다운 · 이벤트 점프까지).</div>
+
+<h3>B. 사이트 DB 검증과 셀 커버리지 점검<span class="src">⑦ BTS + ⑤ 이웃 + ⑥</span></h3>
+<table class="meta">
+<tr><td>질문</td><td>"우리가 가진 사이트 DB가 현장과 맞나, 그리고 어느 셀이 과도하게 퍼져 있나."</td></tr>
+<tr><td>사용자</td><td>망 설계자 · 사이트 DB 관리자</td></tr>
+<tr><td>필요 자료</td><td>좌표 있는 스캐너 또는 단말 로그 + BTS 파일(좌표 · 방위 · 채널 · 이름 · 빔 범위)</td></tr>
+</table>
+<ol class="steps">
+<li><span class="uc">UC18</span> BTS 그리드를 열어 파일 자체(누락 · 중복 · 채널 불일치)를 검사한다.</li>
+<li><span class="uc">UC19</span> 셀 이름을 파라미터로 붙여 이후 뷰에서 PCI가 아니라 이름으로 읽는다.</li>
+<li><span class="uc">UC14</span> 서빙 셀 선을 그려 엉뚱한 사이트에서 서빙되는 구간을 찾는다.</li>
+<li><span class="uc">UC17</span> 셀 빔을 그려 방위가 DB와 다른 곳을 본다.</li>
+<li><span class="uc">UC21</span> 측정에서 사이트 위치를 추정해 DB 좌표와 대조한다 — 좌표가 틀린 사이트가 드러남.</li>
+<li><span class="uc">UC1</span> 3강 우세 지도로 지배 셀이 없는 구간(오버슈팅 · 오염 후보)을 찾는다.</li>
+<li><span class="uc">UC23</span> 서빙 셀 선을 KML로 내보내 RF 설계팀이 Google Earth에서 본다.</li>
+</ol>
+<p><strong>결정.</strong> DB 정정 목록(좌표 · 방위 · 이름), 오버슈팅 셀 목록.</p>
+<div class="ours"><h5>우리</h5>3 · 6단계는 있고(서빙 셀 선 · 3강 판정), 1 · 2단계는 <code>cell_ref</code>가 BTS 파일을 대신하므로
+"파일 검사"가 곧 셀 테이블입니다. 끊기는 곳은 5단계(위치 추정 알고리즘 미구현)와 7단계(KML 대신 GeoJSON).
+가장 가까운 검증 여정: <strong>S5 커버리지 최적화</strong>.</div>
+
+<h3>C. 변경 전후 비교<span class="src">⑥ 두 그룹 + ⑦</span></h3>
+<table class="meta">
+<tr><td>질문</td><td>"새 사이트를 켠 뒤 같은 경로의 RSRP · 처리율이 얼마나 좋아졌나."</td></tr>
+<tr><td>사용자</td><td>최적화 담당 · 검증 팀</td></tr>
+<tr><td>필요 자료</td><td>같은 경로의 측정 파일 두 묶음(그룹당 1개 이상), 통계 기준(거리 가중), 색상셋</td></tr>
+</table>
+<ol class="steps">
+<li><a href="../reference/nemo-analyze-10.2/measurement-organization.md">파일명 규약</a>대로 적재하고 Drag &amp; Drop 폴더로 전·후를 나눈다.</li>
+<li><span class="uc">UC15</span> 경로별 통계(Route Statistics)를 거리 가중으로 낸다.</li>
+<li><span class="uc">UC16</span> 델타 플로팅으로 두 그룹의 차이 지도를 만든다.</li>
+<li><span class="uc">UC30</span> gradient 색상셋으로 차이 값을 칠한다.</li>
+<li><span class="uc">UC24</span> 스프레드시트로 내려 셀별 · 구간별 표를 만든다.</li>
+<li><a href="../reference/nemo-analyze-10.2/reports-and-workbooks.md">리포트 템플릿</a>에 지도 이미지와 통계표를 넣어 출력한다.</li>
+</ol>
+<p><strong>결정.</strong> 변경 승인, 또는 나빠진 구간의 추가 조치.</p>
+<div class="ours"><h5>우리</h5>세션 두 개 비교 · KPI별 통계와 판정 · CDF 오버레이 · 거리 가중이 있어 2–3단계는 됩니다. 없는
+것은 그룹당 여러 측정의 평균(1단계), gradient 타입(4단계), 리포트 출력(6단계). 가장 가까운 검증 여정:
+<strong>S2 빌드 A/B 비교</strong>, <strong>S7 통계 리포팅</strong>.</div>
+
+<h3>D. 음성 품질 감사<span class="src">① 음성 + ⑥ + ④</span></h3>
+<table class="meta">
+<tr><td>질문</td><td>"고객이 불평하는 통화 끊김 · 잡음이 실제로 어디서 나는가."</td></tr>
+<tr><td>사용자</td><td>음성 품질 담당</td></tr>
+<tr><td>필요 자료</td><td>단말 DL 로그 + 서버 UL 음성 품질 로그 + 오디오 샘플, 두 로그의 시각 동기(±3 s), 서버 전화선 번호 설정</td></tr>
+</table>
+<ol class="steps">
+<li>Voice Quality 폴더로 단말 로그에 맞는 서버 로그를 찾는다.</li>
+<li><span class="uc">UC2</span> UL · DL MOS를 한 지도와 그래프에 올린다.</li>
+<li><span class="uc">UC11</span> MOS가 낮은 점에서 오디오 샘플을 직접 들어 잡음인지 묵음인지 확인한다.</li>
+<li><span class="uc">UC6</span> 그 시각의 RSCP · BLER을 겹쳐 무선 원인인지 코어 원인인지 가른다.</li>
+<li><span class="uc">UC7</span> 핸드오버 · 셀 재선택 이벤트와 겹치는지 본다.</li>
+</ol>
+<p><strong>결정.</strong> 무선 최적화 대상 셀, 또는 코어 · 전송망 티켓.</p>
+<div class="ours"><h5>우리</h5><span class="tag t-none">없음</span> 서버 로그도 음성 품질 측정도 오디오도 수집 범위에 없습니다. 4 · 5단계만
+무선 KPI로 가능합니다. 대응하는 검증 여정 없음.</div>
+
+<h3>E. 데이터 세션 처리율 저하 심층 분석<span class="src">② 동반 캡처 + ③ 시그널링 + ⑥</span></h3>
+<table class="meta">
+<tr><td>질문</td><td>"특정 구간에서 처리율이 왜 떨어지는가, 무선인가 상위 계층인가."</td></tr>
+<tr><td>사용자</td><td>트러블슈터 · 프로토콜 분석가</td></tr>
+<tr><td>필요 자료</td><td>단말 로그 + 같은 시각의 <code>.pcap</code> + 바이너리 진단 로그, Microsoft Network Monitor 3.4</td></tr>
+</table>
+<ol class="steps">
+<li><span class="uc">UC6</span> 처리율 · SINR · RB 수를 겹쳐 무선 병목인지 본다.</li>
+<li><span class="uc">UC3</span> 무선이 멀쩡하면 그 시각의 패킷을 열어 재전송 · RTT · 윈도우를 본다.</li>
+<li><span class="uc">UC4</span> 스케줄링 의심이면 진단 로그의 MAC/RLC 상태를 본다.</li>
+<li><span class="uc">UC12</span> RRC 재설정 메시지를 검색해 베어러 변경 시각과 맞춰 본다.</li>
+<li><span class="uc">UC31</span> 시그널링 그리드에 string 색상셋을 걸어 재설정 · 해제 메시지를 눈에 띄게 한다.</li>
+</ol>
+<p><strong>결정.</strong> 무선 파라미터 조정 vs 서버 · 전송 쪽 이관.</p>
+<div class="ours"><h5>우리</h5>1단계(무선 층)만 됩니다. 패킷 캡처와 바이너리 로그는 입력에 없고 시그널링 본문은 비구조화입니다.
+같은 질문을 <strong>프론트홀</strong> 쪽으로 던진 것이 검증 여정 <strong>S4 프론트홀 결함 분류</strong> — 레퍼런스에는 없는
+우리 쪽 시나리오입니다.</div>
+
+<h3>F. 5G 빔 검증<span class="src">⑧ 빔 + ⑦ BTS</span></h3>
+<table class="meta">
+<tr><td>질문</td><td>"설치된 5G 빔 구성이 설계대로 방사되는가."</td></tr>
+<tr><td>사용자</td><td>5G 사이트 검수자</td></tr>
+<tr><td>필요 자료</td><td>5G 스캐너 로그의 best beam 인덱스 + 빔 정보가 든 BTS 파일, 3D Visualizer 옵션</td></tr>
+</table>
+<ol class="steps">
+<li><span class="uc">UC22</span> best beam 지도를 그려 빔이 바뀌는 경계를 본다.</li>
+<li><span class="uc">UC17</span> 빔 범위를 겹쳐 설계 방위와 대조한다.</li>
+<li><span class="uc">UC9</span> 3D 뷰로 고층 건물 주변의 수직 빔을 확인한다.</li>
+<li><span class="uc">UC28</span> 이산값 색상셋으로 빔 인덱스별 색을 고정해 여러 로그에서 같은 색으로 읽는다.</li>
+</ol>
+<p><strong>결정.</strong> 빔북 재설정 대상 셀.</p>
+<div class="ours"><h5>우리</h5><span class="tag t-none">없음</span> 빔 인덱스 측정과 3D 뷰가 없습니다. 4단계의 이산값 채색만 PCI 채색으로
+대응합니다. 대응하는 검증 여정 없음.</div>
+
+<h3>G. 정기 KPI 자동 리포팅<span class="src">⑨ 인프라 + ⑥ + ④</span></h3>
+<table class="meta">
+<tr><td>질문</td><td>"매주 월요일 지난주 드라이브 KPI 리포트가 메일로 와야 한다."</td></tr>
+<tr><td>사용자</td><td>리포트 작성자 · 분석 팀 리드</td></tr>
+<tr><td>필요 자료</td><td>Nemo Analyze Server, FTP/SFTP 폴더, 파일명 규약, 리포트 · 워크북 템플릿, 팀 표준 색상셋</td></tr>
+</table>
+<ol class="steps">
+<li><a href="../reference/nemo-analyze-10.2/measurement-organization.md">파일명 규약</a>을 정하고 Search 폴더를 <code>Search last 7 days</code>로 만든다.</li>
+<li><span class="uc">UC25</span> FTP 자동 적재와 스케줄러를 건다.</li>
+<li><span class="uc">UC26</span> · <span class="uc">UC27</span> 워크벤치로 팀의 KPI 정의를 만든다.</li>
+<li><span class="uc">UC10</span> 결과 그리드에 임계 색상셋을 입힌다.</li>
+<li><span class="uc">UC29</span> 색상셋을 팀 표준으로 정해 <code>.aex</code>로 배포한다.</li>
+<li>Scope Filter를 건 <a href="../reference/nemo-analyze-10.2/reports-and-workbooks.md">리포트 템플릿</a>을 스케줄에 붙이고 Options › Email로 발송한다.</li>
+</ol>
+<p><strong>결정.</strong> 임계 초과 셀의 주간 조치 목록.</p>
+<div class="ours"><h5>우리</h5>서버 임포트 · 요약 통계 · KPI 임계 서버 저장(NEW-03)이 있어 3 · 4 · 5단계는 됩니다. 없는 것은 폴더
+감시 · 스케줄 · 메일(2 · 6단계)과 저장된 찾기 조건(1단계). 가장 가까운 검증 여정: <strong>S7 통계 리포팅</strong>,
+<strong>S9 색상 스케일 개인화</strong>, <strong>S6 데이터 수명주기</strong>.</div>
+
+<h2>4. 시나리오 × 입력 그룹 × 검증 여정</h2>
+
+<p>● 그 입력이 없으면 시나리오가 성립하지 않음 · ◐ 있으면 한 단계가 더 열림. 오른쪽 두 열은 우리 현황입니다.</p>
+
+<table class="m">
+<tr><th>시나리오</th><th>①<br>음성</th><th>②<br>캡처</th><th>③<br>시그널링</th><th>④<br>이벤트</th><th>⑤<br>이웃</th><th>⑥<br>측정</th><th>⑦<br>BTS</th><th>⑧<br>빔</th><th>⑨<br>인프라</th><th style="width:120px">가까운 검증 여정</th><th style="width:150px">지금 되는 정도</th></tr>
+<tr><td>A 드롭콜 원인</td><td></td><td></td><td>●</td><td>●</td><td>●</td><td>◐</td><td>◐</td><td></td><td></td><td>S1</td><td><span class="tag t-diff">절반</span> 분류 근거가 얕음</td></tr>
+<tr><td>B 사이트 DB 검증</td><td></td><td></td><td></td><td></td><td>●</td><td>●</td><td>●</td><td></td><td></td><td>S5</td><td><span class="tag t-diff">절반</span> 위치 추정 · KML 없음</td></tr>
+<tr><td>C 전후 비교</td><td></td><td></td><td></td><td></td><td></td><td>●</td><td>◐</td><td></td><td>◐</td><td>S2 · S7</td><td><span class="tag t-same">대부분</span> 그룹 평균 · 리포트 없음</td></tr>
+<tr><td>D 음성 감사</td><td>●</td><td></td><td></td><td>◐</td><td></td><td>●</td><td></td><td></td><td></td><td>—</td><td><span class="tag t-none">없음</span></td></tr>
+<tr><td>E 처리율 심층</td><td></td><td>●</td><td>●</td><td></td><td></td><td>●</td><td></td><td></td><td></td><td>(S4 프론트홀)</td><td><span class="tag t-none">없음</span> 무선 층만</td></tr>
+<tr><td>F 5G 빔</td><td></td><td></td><td></td><td></td><td></td><td>◐</td><td>●</td><td>●</td><td></td><td>—</td><td><span class="tag t-none">없음</span></td></tr>
+<tr><td>G 자동 리포팅</td><td></td><td></td><td></td><td>◐</td><td></td><td>●</td><td></td><td></td><td>●</td><td>S6 · S7 · S9</td><td><span class="tag t-diff">일부</span> 감시 · 스케줄 · 메일 없음</td></tr>
+</table>
+
+<h3>시사점</h3>
+<ul>
+<li><strong>A와 B는 같은 결손을 공유합니다</strong> — active set 구분(⑤)과 BTS 열 보강(⑦). 이 둘을 채우면 시나리오
+두 편이 한꺼번에 끝까지 이어집니다. 유즈케이스 단위로 세면 20 · 21 · 27과 17 · 19 · 23 여섯 개이지만,
+시나리오 단위로 보면 "드롭콜 원인"과 "사이트 DB 검증"이라는 업무 두 개가 완성되는 것입니다.</li>
+<li><strong>C는 화면이 아니라 출력이 부족합니다.</strong> 분석은 되는데 리포트로 나가지 않습니다. 백로그의
+"리포트 구성 선택"이 이 시나리오의 마지막 단계입니다.</li>
+<li><strong>D · E · F는 입력을 바꾸지 않는 한 부분적으로도 열리지 않습니다.</strong> 수집 범위(CSV 한 개 = 세션 한 개)의
+결정이며, 유즈케이스 대조표에서 ✕로 표시된 것과 같은 항목입니다. 다만 E의 질문 자체는 우리가
+프론트홀 방향으로 이미 답하고 있습니다(S4).</li>
+<li><strong>G는 인프라 결정입니다.</strong> 폴더 감시 · 스케줄 · 메일은 분석 기능이 아니라 운영 기능이라, 도입 여부를
+따로 정해야 합니다.</li>
+<li><strong>검증 여정에 없는 시나리오</strong>는 D · F 둘입니다. 나머지 다섯은 우리 여정이 부분적으로라도 걷고 있으므로,
+새 여정을 만들기보다 <strong>기존 여정의 끊긴 단계를 늘리는 쪽</strong>이 맞습니다.</li>
+</ul>
+
+<footer>출처: Nemo Analyze User Guide · NTN00000A-90013 · Edition 1, 2023-11-27. 유즈케이스별 입력은
+<a href="07-use-cases.html">⑦</a>, 한 줄 요약은 <a href="08-use-cases-summary.html">⑧</a>, 우리 구현과의 대조는
+<a href="../use-case-coverage.md">대조표</a>, 검증 여정 S1–S13은 <a href="../scenario-verification.md">scenario-verification.md</a>.</footer>
+</div>
+</body>
+</html>
