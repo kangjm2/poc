@@ -14,7 +14,7 @@
 | | |
 |---|---|
 | **원본 PDF** | **이 저장소에 두지 않습니다.** 라이선스 보유자 전용 배포물이며, 아래 재배포 금지 원칙이 그대로 적용됩니다 |
-| 추출한 그림 | `manual10.2_*` 14장 — 파일명 끝의 `_pNNN`이 원문 페이지 |
+| 추출한 그림 | `manual10.2_*` — 2026-09-01에 16장, **2026-09-02에 77장 추가**(아래 §0-2). 파일명 끝의 `_pNNN`이 원문 페이지 |
 | 텍스트 인용 | `docs/reference/nemo-analyze-10.2/`에 페이지 번호와 함께 |
 
 > 이 그림들에도 §0의 원칙이 그대로 적용됩니다: **재배포 금지 · 원본 유지 · 저장소 공개 시
@@ -27,14 +27,14 @@
 | `manual10.2_cell-footprint_p66.png` | p66 | 셀 푸트프린트 — **3위 안에 든 적 있는** 셀마다 별도 페이지 |
 | `manual10.2_drilldown-pie-with-coloured-side-tabs_p88.png` | p88 | 드릴다운 파이 + **좌측에 조각 색으로 쌓이는 세로 탭** |
 | `manual10.2_area-binning_p150.png` | p150 | 영역 비닝 |
-| `manual10.2_cell-beam-range-on-map_p162.png` | p162 | 지도 위 셀 빔 범위(섹터)로 저장했으나, **열어 보면 경로를 따라 비닝된 타일**(RSCP · Throughput `[Distance]` 범례)이 주 내용입니다. UC15/16 결과 화면일 가능성 — 원문 확인 전까지 라벨 유지 (2026-09-02) |
-| `manual10.2_pilot-pollution-connections_p172.png` | p172 | 파일럿 오염 기반 기지국 연결선 |
-| `manual10.2_cell-locator-estimated-site_p174.png` | p174 | **라벨 오류 (2026-09-02 정정).** Cell locator 결과가 아니라 **Workspace 패널** 그림입니다 — Folders · Measurements 3건 · Parameters에 `reference` 검색 → `Other › All BTS reference cells`, `Audio quality reference sample filename DL/UL`. 내용상 **UC19(BTS 참조 파라미터, p171)** 쪽. Cell locator 그림은 저장소에 없음. 원문 페이지를 확인할 수 없어 파일명은 유지 |
+| `manual10.2_uc16-delta-plotting-result_p162.png` | p162 | **2026-09-02 개명** (구 `cell-beam-range-on-map_p162`). 원문 대조 결과 p162 상단의 **UC16 Delta plotting 결과**(경로를 따라 비닝된 타일, RSCP · Throughput `[Distance]` 범례). 빔 범위 그림은 같은 페이지의 다른 그림 → `uc17-cell-beam-range-sector_p162` |
+| `manual10.2_uc19-bts-reference-parameters-workspace_p172.png` | p172 | **2026-09-02 개명** (구 `pilot-pollution-connections_p172`). 원문 대조 결과 **UC19의 그림** — Workspace 패널, Parameters에 `reference` 검색 → `Other › All BTS reference cells` |
+| `manual10.2_uc20-bts-lines-properties_p174.png` | p174 | **2026-09-02 개명** (구 `cell-locator-estimated-site_p174`). 원문 대조 결과 **UC20의 마지막 그림** — 지도 워크북 + `Properties › BTS` "Select which lines to draw" + `Number of cells [Time]` 범례. (같은 날 오전 판은 이 파일과 p172 파일의 내용을 서로 바꿔 적었음 — 원문 이미지 해시 비교로 확정.) 진짜 Cell locator 그림은 `uc21-real-vs-estimated-site_p175` |
 | `manual10.2_workbook-pages_p216.png` | p216 | 워크북 페이지 구성 |
 | `manual10.2_kpi-workbench-canvas_p346.png` | p346 | Parameters 트리에서 캔버스로 파라미터 드래그. 우측에 요소 분류(Parameters·Correlations·Joins·Operations·Aggregates·Sorting·Filters·Math·Time·Components), Properties의 `Execute per` |
 | `manual10.2_kpi-workbench-sockets_p349.png` | p349 | Correlation 실물 예 — `Call attempt failure`(primary) + `Ec/N0 active set` → `Previous Value` → `Output`. 미설정 노드가 빨강인 색 규약이 보임 |
-| `manual10.2_state-machine-states_p368.png` | p368 | State Machine 상태 정의 대화상자 |
-| `manual10.2_uc27-state-flow_p405.png` | p405 | **라벨 오류 (2026-09-02 정정).** 상태 흐름도가 아니라 UC27의 **시작 화면** — `BLER` · `Ec/No best active set` · `Ec/No 1. best` 파라미터 3개와 아직 빨간 `Output`만 놓인 캔버스. 상태 흐름도는 저장소에 없음 |
+| `manual10.2_state-machine-states_p368.png` | p368 | State Machine 상태 정의 대화상자. p413의 그림과 픽셀 동일(UC27 안에서 재사용). p368 자체는 2026-09-02 제공분(p300–399 누락)에 없어 미확인 |
+| `manual10.2_uc27-start-canvas_p405.png` | p405 | **2026-09-02 개명** (구 `uc27-state-flow_p405`). UC27의 **시작 캔버스** — `BLER` · `Ec/No best active set` · `Ec/No 1. best` 파라미터 3개와 아직 빨간 `Output`. p405의 상태 흐름도는 벡터 텍스트라 그림 파일이 없고 `use-cases.md`에 mermaid로 재현 |
 | `manual10.2_uc27-graph-partial-union_p408.png` | p408 | UC27 **중간 단계** — Union까지 연결하고 Output은 아직 빨강(미연결). 색 규약이 보이는 그림 |
 | `manual10.2_uc27-complete-graph_p425.png` | p425 | UC27 **완성 그래프** (기존 `nemo-analyze_kpi-workbench.png`와 같은 내용, 다른 크롭) — BLER + (Ec/No best active set − 1. best) → **Union** → **Ascending time** → State Machine → Call dropped와 상관 → `Output (Column count: 19)` |
 | `manual10.2_uc27-result-grid_p426.png` | p426 | UC27 **실행 결과** — `start_time · end_time · time_interval · index · text · Event ID · Event · Measurement`. 상태 점유마다 한 행이라는 사실이 실제 값(5341 ms, `Missing handover`, `CAD`)으로 보임 |
@@ -54,6 +54,95 @@
 > 빠뜨린 것은 설계가 아니라 **레퍼런스 문서의 단계 목록**이었고, 그쪽을 고쳤습니다.
 >
 > 교훈은 방법에 있습니다 — **치수 일치를 동일성의 근거로 쓰면 안 됩니다.**
+
+
+### 0-2. 2026-09-02 추가 — 유즈케이스 그림 77장
+
+사용자가 원문 PDF(p1–299 · p400–504)를 다시 제공해, Use Case 31개의 그림을 원문에서 직접 추출했습니다
+(`pymupdf`, 임베드 이미지 무손실). 각 그림이 무엇인지와 절차상 위치는
+[`docs/reference/nemo-analyze-10.2/use-cases.md`](../reference/nemo-analyze-10.2/use-cases.md)에 있습니다.
+기존 16장 중 4장은 원문과의 해시 대조로 라벨이 틀린 것이 확정돼 **개명**했습니다(위 표의 "2026-09-02 개명" 행).
+§0의 원칙(재배포 금지 · 원본 유지 · 공개 시 재검토)이 그대로 적용됩니다.
+
+| 파일 | 원문 | 무엇 |
+|---|---|---|
+| `manual10.2_uc01-analyses-submenu_p67.png` | p67 | UC1 — 측정 우클릭 `Analyses` 하위 메뉴 (Ec/N0 · RSCP · RSRP · RSRQ × mobile/scanner) |
+| `manual10.2_uc01-footprint-filter-dialog_p67.png` | p67 | UC1 — 푸트프린트 필터 대화상자 (Scrambling code / Channel number 필터, 범례·전체 경로 옵션, 값 예 `3,10-30,42,100-`) |
+| `manual10.2_uc01-footprint-pages_p68.jpeg` | p68 | UC1 — 셀마다 페이지, 하단 탭으로 이동 |
+| `manual10.2_uc02-ul-voice-quality-workbook_p69.jpeg` | p69 | UC2 — 단말 파일에서 연 음성 품질 워크북 |
+| `manual10.2_uc03-ip-traces-page_p71.jpeg` | p71 | UC3 — Workspace `IP Traces` 페이지 (.pcap 목록) |
+| `manual10.2_uc04-binary-logs-page_p73.png` | p73 | UC4 — Workspace `Binary Logs` 페이지 |
+| `manual10.2_filters-dialog-name-list_p75.png` | p75 | Parameter filtering — `Filters` 대화상자의 `Name` 목록 (Secondary parameter · Area · Cell ID · Channel number · Distance · Exclude event …) |
+| `manual10.2_polygon-filter-route_p77.png` | p77 | 폴리곤 영역 필터 — 폴리곤 구간만 색상셋, 나머지는 기본색 |
+| `manual10.2_uc05-secondary-parameter-dialog_p79.png` | p79 | UC5 — `Secondary Measurement Parameters` (RSCP best active set 선택) |
+| `manual10.2_uc05-filter-rscp_p80.png` | p80 | UC5 — 2차 파라미터 필터 `RSCP >= -100` |
+| `manual10.2_uc05-save-filter_p81.png` | p81 | UC5 — `Save Filter` (기본 이름이 필터 문자열 `… AND ("rscp" >= -100)`) |
+| `manual10.2_uc05-global-filters-saved_p82.png` | p82 | UC5 — `Global Filters`에 저장된 세트, `Set Active / Modify / Delete` |
+| `manual10.2_uc06-page-properties_p108.png` | p108 | UC6 — `Page Properties` (Fit to window / Fixed size 1483×640) |
+| `manual10.2_uc06-three-layers-stacked_p108.png` | p108 | UC6 — 레이어 3개 stacked 모드 |
+| `manual10.2_uc06-graph-properties-axes_p109.png` | p109 | UC6 — `Graph Properties` Axes Left/Right (RSCP 1. best / MIMO RSCP) |
+| `manual10.2_uc07-notification-icons-graph_p110.png` | p110 | UC7 — 알림 아이콘이 찍힌 그래프 |
+| `manual10.2_uc08-change-graph-type-popup_p111.png` | p111 | UC8 — 그래프 팝업 메뉴 (`Change Graph Type` · `Correlate Parameters` · `Bin Data` …) |
+| `manual10.2_uc08-color-grid_p112.png` | p112 | UC8 — 두 파라미터 상관 color grid |
+| `manual10.2_uc10-grid-color-sets-tab_p119.png` | p119 | UC10 — `Grid Properties › Color Sets` 탭 (Scr. code · Ec/No 열에 색상셋) |
+| `manual10.2_uc10-grid-color-bars_p120.png` | p120 | UC10 — 셀 안 막대로 표시되는 색상셋 |
+| `manual10.2_uc10-grid-color-whole-cell_p120.png` | p120 | UC10 — `Color whole cell` |
+| `manual10.2_uc11-play-audio-sample_p121.jpeg` | p121 | UC11 — 그리드 행 우클릭 `Play Audio Sample` |
+| `manual10.2_uc12-search-parameter-result_p122.png` | p122 | UC12 — 검색 파라미터 결과 (사용자가 이름 붙인 열) |
+| `manual10.2_uc13-drag-tab-layer_p147.png` | p147 | UC13 — `.TAB` 파일을 지도로 드래그 |
+| `manual10.2_uc13-mapx-save-geoset_p148.png` | p148 | UC13 — 지도 팝업 `MapX › Save Geoset` |
+| `manual10.2_uc14-color-layers-popup_p149.jpeg` | p149 | UC14 — 기지국 팝업 `Color Layers Based On Scrambling Code` · `Highlight …` · `Create Global Filter From Cell ID` |
+| `manual10.2_uc14-route-colored-by-bts_p149.jpeg` | p149 | UC14 — 한 기지국의 Ec/N0·RSCP로 칠해진 경로 |
+| `manual10.2_uc15-filters-scrambling-code_p151.png` | p151 | UC15 — 필터 (Area 좌표 · X steps · Scrambling code 목록) |
+| `manual10.2_uc15-area-binning-result_p152.jpeg` | p152 | UC15 — 영역 비닝 결과 레이어 |
+| `manual10.2_uc15-bin-layer-properties_p156.png` | p156 | UC15 — 비닝 레이어 `Properties › Statistics` (Draw method · Size · X steps · Area) |
+| `manual10.2_uc15-statistic-dropdown_p157.png` | p157 | UC15 — `Statistic` 목록 (Average · Minimum · Maximum · Sample count · Std. deviation · Variance · Mode) |
+| `manual10.2_uc16-area-selection_p158.jpeg` | p158 | UC16 — 점선 영역 선택 |
+| `manual10.2_uc16-tools-delta-plotting_p158.png` | p158 | UC16 — Tools 패널의 Delta plotting 아이콘 |
+| `manual10.2_uc16-delta-plotting-dialog_p159.png` | p159 | UC16 — `Delta Plotting` 대화상자 (Group 1 / Group 2, Configure) |
+| `manual10.2_uc16-delta-plotting-configured_p161.png` | p161 | UC16 — 두 그룹 설정 완료 (Ec/N0 best active set / Ec/N0 detected set) |
+| `manual10.2_uc17-cell-beam-range-sector_p162.png` | p162 | UC17 — 선택한 셀의 빔 범위가 섹터로 |
+| `manual10.2_uc17-options-bts-general_p163.png` | p163 | UC17 — `Options › BTS › General` |
+| `manual10.2_uc17-cell-properties-beam-range_p166.png` | p166 | UC17 — 셀 `Properties` `Beam range` (m) |
+| `manual10.2_uc17-bts-tab-beam-options_p167.png` | p167 | UC17 — `Use cell beam range from BTS file` · `use estimation from antenna height and tilt` · `Beam transparency` |
+| `manual10.2_uc18-split-vertically-popup_p169.jpeg` | p169 | UC18 — `Data View › Split › Vertically` |
+| `manual10.2_uc18-insert-grid_p170.jpeg` | p170 | UC18 — `Data View › Insert › Grid` |
+| `manual10.2_uc18-grid-synced-with-bts-map_p171.jpeg` | p171 | UC18 — BTS 그리드 행 선택 → 지도 줌 |
+| `manual10.2_uc19-set-active-bts-files_p171.png` | p171 | UC19 — `Set Active BTS Files` |
+| `manual10.2_uc20-pilot-pollution-filters_p173.png` | p173 | UC20 — 파일럿 오염 필터 값 (window −6 · Ec/N0 below −12 · RSCP above −95 · count 3 · carrier 1538) |
+| `manual10.2_uc20-select-columns_p173.png` | p173 | UC20 — `Select columns` (Route: gps_longitude · gps_latitude · time) |
+| `manual10.2_uc20-pilots-drawn-on-map_p174.png` | p174 | UC20 — 측정된 파일럿 연결선 |
+| `manual10.2_uc21-cell-locator-parameters_p175.jpeg` | p175 | UC21 — Parameters 트리의 cell locator 항목 6종 |
+| `manual10.2_uc21-real-vs-estimated-site_p175.jpeg` | p175 | UC21 — 실제 셀 위치(초록)와 추정 위치(보라) |
+| `manual10.2_uc21-inputs-dialog_p176.png` | p176 | UC21 — 입력 (Minimum accuracy score 3 · Carrier number 5780 · Minimum received power −120) |
+| `manual10.2_uc21-result-overlay_p176.jpeg` | p176 | UC21 — 결과를 BTS 참조 오버레이로 연 지도 |
+| `manual10.2_uc22-beam-lines_p177.jpeg` | p177 | UC22 — 5G best beam 선 (beam index 색) |
+| `manual10.2_uc23-serving-cell-lines-popup_p178.png` | p178 | UC23 — 레이어 팝업 `Serving Cell Lines` |
+| `manual10.2_uc23-serving-cell-lines_p178.png` | p178 | UC23 — 서빙 셀 선 |
+| `manual10.2_uc23-export-kml-popup_p179.png` | p179 | UC23 — `Export Data To › Google KML-file` |
+| `manual10.2_uc24-avg-formula_p190.png` | p190 | 스프레드시트 — `=AVG(B7:B12)` |
+| `manual10.2_uc24-minimized-dataset-formula_p191.jpeg` | p191 | UC24 — 최소화 데이터셋 참조 수식 `=AVG(*BLER DL!A1:A15)` |
+| `manual10.2_uc26-filter-tree-operator_p401.png` | p401 | UC26 — 이진 트리 노드의 연산자 우클릭 (AND/OR) |
+| `manual10.2_uc26-filter-tree-complete_p403.png` | p403 | UC26 — 세 범위가 완성된 필터 트리 |
+| `manual10.2_uc27-subtraction-properties_p407.png` | p407 | UC27 — Subtraction `Properties` (Left/Right column, Result title `Ec/N0 difference`) |
+| `manual10.2_uc27-sort-column_p410.png` | p410 | UC27 — Ascending sort `Column = time` |
+| `manual10.2_uc27-states-initial_p414.png` | p414 | UC27 — 상태 3개와 `Initial state = OK` |
+| `manual10.2_uc27-condition-dialog_p415.png` | p415 | UC27 — `Condition` 대화상자 (`bler >= 20`) |
+| `manual10.2_uc27-transition-dialog_p415.jpeg` | p415 | UC27 — `Transition` 대화상자 (Conditions · Target · Output) |
+| `manual10.2_uc27-transition-with-output_p421.jpeg` | p421 | UC27 — Output 필드에 `Missing handover`를 넣은 전이 |
+| `manual10.2_uc27-missing-handover-transitions_p423.png` | p423 | UC27 — Missing handover 상태의 전이 2개 |
+| `manual10.2_colorset-wizard-select-query_p430.png` | p430 | 색상셋 자동 생성 — `Color Set Wizard › Select Query` |
+| `manual10.2_colorset-auto-route-legend_p431.png` | p431 | 색상셋 자동 생성 — 적용된 경로와 범례 |
+| `manual10.2_uc28-color-set-properties_p433.png` | p433 | UC28 — `Color Set Properties` (Cell identification, 이산값별 색) |
+| `manual10.2_uc28-add-range_p434.png` | p434 | UC28 — `Add Range` (From 116731 · To 117419 · Step 1) |
+| `manual10.2_uc29-range-properties_p435.png` | p435 | UC29 — `Range Properties` (Description · Color · Limits `>= 0 And < 2`) |
+| `manual10.2_uc29-color-set-complete_p436.png` | p436 | UC29 — 완성된 numerical 색상셋 (Very good / Good / Bad) |
+| `manual10.2_uc30-value-properties_p437.png` | p437 | UC30 — gradient `Value Properties` (Bad, −20) |
+| `manual10.2_uc30-gradient-color-set_p438.png` | p438 | UC30 — 완성된 gradient 색상셋 (−20 Bad / 0 Good) |
+| `manual10.2_uc30-route-color-properties_p439.png` | p439 | UC30 — 경로 `Properties › Color` (Based on value · Parameter · Color set) |
+| `manual10.2_uc30-route-gradient-map_p439.jpeg` | p439 | UC30 — 그라디언트로 칠해진 경로 |
+| `manual10.2_uc31-string-properties_p441.png` | p441 | UC31 — `String Properties` (MEASUREMENT_REPORT) |
+| `manual10.2_uc31-l3-grid-colored_p443.png` | p443 | UC31 — Message Name 열이 칠해진 L3 그리드 |
 
 ---
 

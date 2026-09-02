@@ -1,44 +1,35 @@
-# Nemo Analyze 10.2 User Guide — Use Case 31개 상세 정리
+# Nemo Analyze 10.2 User Guide — Use Case 31개 상세 (원문 전사판)
 
 매뉴얼이 "Use Case N:" 제목으로 실은 사용자 절차 **31개 전부**를, 장(chapter) 순서대로
-한 곳에 정리한 문서입니다. 각 항목은 **매뉴얼이 무엇을 하라고 하는가**(목적·절차·원문
-인용·그림)를 먼저 적고, 그 아래에 **우리 구현과의 관계**를 짧게 붙였습니다.
+**원문 PDF 없이도 같은 일을 할 수 있을 만큼** 자세히 옮긴 문서입니다. 각 항목은 매뉴얼이
+말하는 것 — 목적 · 전제 · 단계별 절차 · 대화상자의 필드와 값 · 원문 인용 · 그림 — 을 먼저 적고,
+끝에 **우리 구현과의 관계**를 짧게 붙였습니다.
 
 | | |
 |---|---|
 | 출처 | Nemo Analyze User Guide · `NTN00000A-90013` · Edition 1, 2023-11-27 · 문서화 대상 SW 10.1.0 · 505p |
-| 기계 판독 인덱스 | [`use-cases.json`](use-cases.json) (번호·페이지·제목) · [`toc.json`](toc.json) (목차 321항목) |
-| 현재 구현 상태 | [`../../use-case-coverage.md`](../../use-case-coverage.md) — **상태는 그쪽에서 셉니다.** 이 문서는 *매뉴얼이 말하는 것*의 기록입니다 |
-| 판단의 기록 | [`../../briefs/`](../../briefs/) ①–⑥ |
+| 이 판의 근거 | **2026-09-02, 사용자가 원문 PDF를 다시 제공**(p1–299, p400–504). 이 문서의 절차·값·인용은 그 원문에서 직접 옮겼습니다 |
+| 원문에 없던 구간 | **p300–399**는 이번 제공분에 들어 있지 않았습니다. 그 구간의 UC25(p307)와 UC26 앞부분(p396–399)은 2026-09-01 추출본(브리프 ④ · [`kpi-workbench.md`](kpi-workbench.md))에서 옮겼고, 아래에 표시했습니다 |
+| 기계 판독 인덱스 | [`use-cases.json`](use-cases.json) · [`toc.json`](toc.json) |
+| 현재 구현 상태 | [`../../use-case-coverage.md`](../../use-case-coverage.md) — **상태는 그쪽에서 셉니다.** 이 문서는 *레퍼런스가 무엇을 하라고 하는가*의 기록입니다 |
+| 그림 | `docs/assets/screenshots/manual10.2_*` — 파일명 끝 `_pNNN`이 원문 페이지. 재배포하지 않습니다([`NOTICE.md`](../../assets/NOTICE.md)) |
 
-> **원본 PDF는 이 저장소에 없습니다.** 라이선스 보유자 전용 배포물이라 두지 않기로 했고
-> ([`README.md`](README.md)), 지금 작업 공간에 남아 있는 것은 2026-09-01 추출 때 옮겨 적은
-> **인용·절차·그림 14장·인덱스**뿐입니다. 그래서 이 문서는 31개를 **같은 깊이로** 적을 수
-> 없습니다. 항목마다 **근거 등급**을 붙였고, 등급이 낮은 항목은 원문에서 무엇을 확인해야
-> 하는지를 대신 적었습니다. **등급 ○ 항목의 절차는 이 문서에 없습니다** — 추측으로 채우지
-> 않았습니다.
+> **원본 PDF는 여전히 저장소에 두지 않습니다** ([`README.md`](README.md)). 대신 이 문서가
+> 유즈케이스에 관한 한 원문을 대신하도록 썼습니다 — 단계, 메뉴 경로, 대화상자 필드, 예시 값,
+> 경고문까지. 원문 표현이 판단에 중요한 곳은 영어 원문을 그대로 인용했습니다.
 
 ## 근거 등급
 
 | 등급 | 뜻 | 해당 UC |
 |---|---|---|
-| **●** | 원문 인용 또는 단계별 절차가 작업 공간에 남아 있음 | 1 · 5 · 12 · 15 · 20 · 21 · 25 · 26 · 27 |
-| **◐** | 원문 그림, 또는 주변 절(節)의 설명으로 내용을 특정할 수 있음 | 6 · 7 · 8 · 10 · 13 · 14 · 17 · 19 · 23 · 28–31 |
-| **○** | 제목·페이지·목차상 위치만 남아 있음 | 2 · 3 · 4 · 9 · 11 · 16 · 18 · 22 · 24 |
+| **●** | 원문 페이지를 직접 읽고 절차 전체를 옮김 | 1–24 · 27–31 (29개) |
+| **◐** | 원문 페이지가 이번 제공분에 없어 2026-09-01 추출본으로 옮김 | 25 · 26(앞부분) |
 
-## 페이지 번호에 대해
+## 페이지 번호
 
-세 문서가 서로 다른 페이지를 적고 있었습니다. **이 문서와 `use-cases.json`은 목차(`toc.json`)
-기준**으로 통일했고, `use-case-coverage.md`의 페이지 열도 같은 값으로 고쳤습니다.
-
-| UC | 목차 | 인덱스(구) | 대조표(구) | 채택 | 근거 |
-|---|---|---|---|---|---|
-| 13 | 147 | 150 | 150 | **147** | 목차. UC13·14·15가 147·148·150으로 이어지는 것이 자연스럽고, 13과 15가 같은 150일 수는 없음 |
-| 16 | (없음) | 469 | 156 | **158** | 목차에 UC16 줄이 빠져 있으나 다음 줄 제목이 `"158 Use Case 17…"`로 시작 — 앞 항목의 페이지 번호가 붙어 넘어온 추출 흔적. 469는 Map 메뉴의 `Delta plotting`(p469)에서 UC16을 **교차 참조**한 자리로 보임 |
-| 20 | (없음) | 172 | 172 | **172** | 같은 흔적: `"172 Use Case 21…"` |
-| 25 | (없음) | 307 | 196 | **307** | 브리프 ④가 p307로 인용. Report Automation(p293) 안 |
-| 27 | (없음) | 403 | 403 | **403** | 목차에 `"…missing handover403 12 Other tasks"`로 붙어 있음 |
-| 2–12, 19, 28–31 | 목차 | 목차와 같음 | 다른 값 | **목차** | 대조표의 값은 어느 자료와도 맞지 않았음 |
+목차(`toc.json`) 기준이며, 이번에 원문으로 **전부 확인**했습니다. 2026-09-02 오전 판에서
+추정으로 적었던 UC16 = p158, UC13 = p147은 맞았습니다. UC20은 p172 하단에서 시작해 p174까지,
+UC27은 p403–426입니다.
 
 ---
 
@@ -46,652 +37,1096 @@
 
 | UC | p | 장·절 | 제목 | 근거 | 우리 ([대조표](../../use-case-coverage.md)) |
 |---|---|---|---|---|---|
-| 1 | 66 | 8 · 지도 | Viewing cell footprints, RSCP footprints, and LTE footprints | ● | ✅ |
-| 2 | 68 | 8 · 지도 | Viewing uplink voice quality server data | ○ | ✕ 범위 밖 |
-| 3 | 69 | 8 · 지도 | Viewing IP/UDP packet trace data | ○ | ✕ 범위 밖 |
-| 4 | 72 | 8 · 지도 | Viewing Binary Log Data | ○ | ✕ 범위 밖 |
-| 5 | 77 | 8 · 필터 | Global parameter filtering based on a secondary parameter | ● | ◐ |
-| 6 | 108 | 8 · 그래프 | Multiple graph layers | ◐ | ✅ |
-| 7 | 110 | 8 · 그래프 | Notification icons in graphs | ◐ | ✅ |
-| 8 | 110 | 8 · 그래프 | Correlating parameters using color grids and surface graphs | ◐ | ✕ 미룸 |
-| 9 | 112 | 8 · 그래프 | Viewing 5G measurement results in 3D Visualizer (optional) | ○ | ✕ 범위 밖 |
-| 10 | 118 | 8 · 그리드 | Color sets in grids | ◐ | ◐ |
-| 11 | 120 | 8 · 그리드 | Play audio sample | ○ | ✕ 범위 밖 |
-| 12 | 121 | 8 · 그리드 | Using L3 and RRC message search parameters | ● | ◐ |
-| 13 | 147 | 8 · MapX/BTS | Adding map layers and saving layer combinations as geosets | ◐ | ✅ |
-| 14 | 148 | 8 · MapX/BTS | Coloring routes based on BTS coverage | ◐ | ✅ |
-| 15 | 150 | 8 · MapX/BTS | Performing area binning | ● | ✅ |
-| 16 | 158 | 8 · MapX/BTS | Comparing two groups of measurements from the same route on [map] | ○ | ✅ |
-| 17 | 162 | 8 · MapX/BTS | Displaying base station cell beam range on map | ◐ | ✕ 미구현 |
-| 18 | 168 | 8 · MapX/BTS | Synchronizing base station map overlay with grid rows | ○ | ✅ |
-| 19 | 171 | 8 · MapX/BTS | Using BTS reference parameters | ◐ | ◐ |
-| 20 | 172 | 8 · MapX/BTS | Displaying base station connections on map based on pilot pollution | ● | ✅ |
-| 21 | 174 | 8 · MapX/BTS | Cell locator analysis | ● | ✕ 미구현 |
-| 22 | 177 | 8 · MapX/BTS | 5G beam visualization | ○ | ✕ 미구현 |
-| 23 | 177 | 8 · MapX/BTS | Exporting Serving Cell Lines to Google Earth | ◐ | ◐ |
-| 24 | 190 | 8 · 스프레드시트 | Retrieving data from minimized data sets | ○ | ✕ 해당 없음 |
-| 25 | 307 | 10 · 리포트 자동화 | Triggering events | ● | ◐ |
-| 26 | 396 | 11 · KPI Workbench | Creating complex filters using multiple conditions | ● | ✅ |
-| 27 | 403 | 11 · KPI Workbench | Creating a KPI for dropped calls resulting from a missing handover | ● | ◐ |
-| 28 | 432 | 12 · 색상셋 | Automatic generation of color set for a value range | ◐ | ✅ |
-| 29 | 434 | 12 · 색상셋 | Creating a color set | ◐ | ◐ |
-| 30 | 436 | 12 · 색상셋 | Creating and applying a color set on map | ◐ | ✅ |
-| 31 | 440 | 12 · 색상셋 | Creating and applying a color set in grid | ◐ | ◐ |
+| 1 | 66–68 | 8 · 지도 | Viewing cell footprints, RSCP footprints, and LTE footprints | ● | ✅ |
+| 2 | 68–69 | 8 · 지도 | Viewing uplink voice quality server data | ● | ✕ 범위 밖 |
+| 3 | 69–72 | 8 · 지도 | Viewing IP/UDP packet trace data | ● | ✕ 범위 밖 |
+| 4 | 72–74 | 8 · 지도 | Viewing Binary Log Data | ● | ✕ 범위 밖 |
+| 5 | 77–82 | 8 · 필터 | Global parameter filtering based on a secondary parameter | ● | ◐ |
+| 6 | 108–109 | 8 · 그래프 | Multiple graph layers | ● | ✅ |
+| 7 | 110 | 8 · 그래프 | Notification icons in graphs | ● | ✅ |
+| 8 | 110–112 | 8 · 그래프 | Correlating parameters using color grids and surface graphs | ● | ✕ 미룸 |
+| 9 | 112 | 8 · 그래프 | Viewing 5G measurement results in 3D Visualizer (optional) | ● | ✕ 범위 밖 |
+| 10 | 118–120 | 8 · 그리드 | Color sets in grids | ● | ◐ |
+| 11 | 120–121 | 8 · 그리드 | Play audio sample | ● | ✕ 범위 밖 |
+| 12 | 121–122 | 8 · 그리드 | Using L3 and RRC message search parameters | ● | ◐ |
+| 13 | 147–148 | 8 · MapX/BTS | Adding map layers and saving layer combinations as geosets | ● | ✅ |
+| 14 | 148–149 | 8 · MapX/BTS | Coloring routes based on BTS coverage | ● | ✅ |
+| 15 | 150–157 | 8 · MapX/BTS | Performing area binning (+ Distance-based binning) | ● | ✅ |
+| 16 | 158–162 | 8 · MapX/BTS | Comparing two groups of measurements from the same route on map | ● | ✅ |
+| 17 | 162–168 | 8 · MapX/BTS | Displaying base station cell beam range on map | ● | ✕ 미구현 |
+| 18 | 168–171 | 8 · MapX/BTS | Synchronizing base station map overlay with grid rows | ● | ✅ |
+| 19 | 171–172 | 8 · MapX/BTS | Using BTS reference parameters | ● | ◐ |
+| 20 | 172–174 | 8 · MapX/BTS | Displaying base station connections on map based on pilot pollution | ● | ✅ |
+| 21 | 174–176 | 8 · MapX/BTS | Cell locator analysis | ● | ✕ 미구현 |
+| 22 | 177 | 8 · MapX/BTS | 5G beam visualization | ● | ✕ 미구현 |
+| 23 | 177–179 | 8 · MapX/BTS | Exporting Serving Cell Lines to Google Earth | ● | ◐ |
+| 24 | 190–191 | 8 · 스프레드시트 | Retrieving data from minimized data sets | ● | ✕ 해당 없음 |
+| 25 | 307 | 10 · 리포트 자동화 | Triggering events | ◐ | ◐ |
+| 26 | 396–403 | 11 · KPI Workbench | Creating complex filters using multiple conditions | ◐/● | ✅ |
+| 27 | 403–426 | 11 · KPI Workbench | Creating a KPI for dropped calls resulting from a missing handover | ● | ◐ |
+| 28 | 432–434 | 12 · 색상셋 | Automatic generation of color set for a value range | ● | ✅ |
+| 29 | 434–436 | 12 · 색상셋 | Creating a color set | ● | ◐ |
+| 30 | 436–439 | 12 · 색상셋 | Creating and applying a color set on map | ● | ✅ |
+| 31 | 440–443 | 12 · 색상셋 | Creating and applying a color set in grid | ● | ◐ |
 
-UC 번호가 **장의 흐름을 그대로 따릅니다** — 1–24가 8장(Viewing Measurement Data) 안에 있고,
-25가 10장(Reports), 26–27이 11장(Customization, KPI Workbench), 28–31이 12장(Other tasks)입니다.
-즉 매뉴얼의 유즈케이스는 독립된 시나리오 모음이 아니라 **각 절의 끝에 붙은 실습**입니다.
-이 문서도 그 순서를 따릅니다.
+UC 번호는 장의 흐름을 그대로 따릅니다 — 1–24가 8장(Viewing Measurement Data), 25가
+10장(Reports), 26–27이 11장(Customization, KPI Workbench), 28–31이 12장(Other tasks). 매뉴얼의
+유즈케이스는 독립된 시나리오 모음이 아니라 **각 절의 끝에 붙은 실습**입니다.
 
 ---
 
 ## 8장 — Viewing Measurement Data (UC1–UC24)
 
-### 8.1 파라미터에서 지도로 (p48–p73) — UC1 · UC2 · UC3 · UC4
+### 8.1 지도에서 열기 (p61–p74) — UC1 · UC2 · UC3 · UC4
 
-이 넷은 모두 "Viewing measurement data on map"(p61) 절의 끝에 붙어 있습니다. 앞 절이 측정
-파일을 지도에 여는 법(p61), BTS 파일을 지도에 여는 법(p63), 지도의 알림 아이콘(p65)을
-설명하고, 그 다음에 유즈케이스 넷이 옵니다.
+앞 절(p61–65)이 측정 파일을 지도에 여는 법, BTS 파일을 지도에 여는 법, 지도의 알림 아이콘을
+설명합니다. p66 상단은 알림 아이콘의 마무리입니다 — 경로 우클릭 → `Properties` → `Notifications`
+탭에서 관심 있는 알림(예: `Cell reselections`)을 고르면 지도에 작은 아이콘으로 찍히고, 뷰들이
+동기화돼 있으면 아이콘 위로 현재 위치 마커를 옮길 때 모든 뷰가 그 시점으로 따라옵니다.
 
-#### UC1 · p66 · 셀 푸트프린트, RSCP 푸트프린트, LTE 푸트프린트 보기 — ●
+#### UC1 · p66–68 · 셀 푸트프린트 · RSCP 푸트프린트 · LTE 푸트프린트 보기 — ●
 
-**목적.** 측정 세션 동안 **한 번이라도 3강 안에 든 셀**마다 그 셀의 서비스 범위(푸트프린트)를
-지도에 그립니다.
+**목적.** 측정된 **모든 셀**에 대해 푸트프린트(서비스 범위) 지도를 자동 생성합니다.
 
-> *"Cell/RSCP/LTE footprint is displayed for every cell whose signal has been among the
-> three strongest at some point during the measurement session. The footprint of each cell
-> is displayed on map on a separate page, allowing you to browse from footprint to another."*
+> *"Nemo Analyze can automatically create a cell footprint, an RSCP footprint, or an LTE
+> footprint map plot for every cell measured. Cell/RSCP/LTE footprint is displayed for every
+> cell whose signal has been among the three strongest at some point during the measurement
+> session. The footprint of each cell is displayed on map on a separate page, allowing you
+> to browse from footprint to another and immediately see both the footprint and the cell."*
 
-**진입.** 측정 파일 우클릭 → `Analyses | RSRP Cell Footprints (mobile)` 식. 조합은
-Ec/N0 · RSCP · RSRP · RSRQ × mobile / scanner.
+- 대상 데이터: **UMTS 스캐너와 단말 데이터 모두**.
+- 경고: *"Analysis will not work properly if there will be hundreds of pages in the results.
+  Therefore, it is advisable to use filters to limit the amount of results."*
 
-**옵션.** Scrambling code 필터 **또는** channel number 필터 중 하나 · 범례 표시 여부 · 전체
-경로 표시 여부.
+**절차.**
 
-**경고.** *"Analysis will not work properly if there will be hundreds of pages"* — 셀마다
-페이지 하나가 생기므로 필터로 결과를 줄이라고 명시합니다.
+1. `Workspace | Measurements | Measurements`에서 측정 파일 우클릭 → `Analyses` →
+   다음 중 하나: `Ec/N0 Cell Footprints (mobile)` · `Ec/N0 Footprints (scanner)` ·
+   `RSCP Cell Footprints (mobile)` · `RSCP Cell Footprints (scanner)` ·
+   `RSRP Cell Footprints (mobile)` · `RSRP Cell Footprints (scanner)` ·
+   `RSRQ Cell Footprints (mobile)` · `RSRQ Cell Footprints (scanner)`.
+   `Analyses` 하위 메뉴에는 workbooks 폴더의 워크북도 전부 나열됩니다.
+2. 필터 대화상자(예: `Ec/N0 Cell Footprints`)에서 고릅니다:
+   - **Filters**: `Scrambling code filter` **또는** `Channel number filter`. 필터 값은
+     숫자 하나 이상 또는 범위를 쉼표로 — 대화상자 도움말의 예: `3,10-30,42,100-`. 비워 둘 수 있음.
+   - **Options**: `Show color legend` (No/Yes) · `Show entire route` (No/Yes).
+3. `OK` → 푸트프린트 뷰가 열리고, **셀마다 별도 페이지**로 표시됩니다.
+4. 지도 아래 페이지 탭으로 셀에서 셀로 이동합니다.
 
-**그림.** `manual10.2_cell-footprint_p66.png` — 한 셀의 푸트프린트 페이지. 경로가 RSCP
-구간색으로 칠해져 있고 Layers에 `RSCP 1. best (RSCP (dBm))`, 육각형 BTS 아이콘, Color
-Legends에 구간별 건수·비율(`>= -80 … 9703 74.73%`)이 보입니다.
+**그림.** `uc01-analyses-submenu_p67`(Analyses 하위 메뉴), `uc01-footprint-filter-dialog_p67`
+(필터 대화상자), `uc01-footprint-pages_p68`(하단 탭이 있는 푸트프린트 페이지),
+`cell-footprint_p66`(한 셀의 페이지 — 경로가 RSCP 구간색, Layers에 `RSCP 1. best`, 범례에
+구간별 건수·비율).
 
-**우리.** `GeoAnalysisService.cellFootprints` — 셀이 **서빙했던** 표본의 볼록 껍질. 다른 점
-둘: (1) 포함 기준이 "서빙"이지 "3강 안"이 아님 — `sample_neighbour`에 순위별 이웃이 있어
-바꿀 수 있고, 그것이 오버슛 판단의 근거가 됩니다. (2) 셀당 한 페이지가 아니라 **전부 겹쳐**
-그립니다 — 중첩이 곧 파일럿 오염이라 우리 방식이 낫다고 봤지만, 셀이 수십 개면 못 읽습니다.
+**우리.** `GeoAnalysisService.cellFootprints` — 셀이 **서빙했던** 표본의 볼록 껍질. 다른 점:
+(1) 포함 기준이 "서빙"이지 "3강 안"이 아님 — `sample_neighbour`에 순위별 이웃이 있어 바꿀 수
+있습니다. (2) 셀당 한 페이지가 아니라 **전부 겹쳐** 그립니다 — 중첩이 곧 파일럿 오염이라 우리
+방식이 낫다고 봤지만, 셀이 수십 개면 못 읽습니다. 레퍼런스의 SC/채널 필터가 그 문제의 답입니다.
 
-#### UC2 · p68 · 업링크 음성 품질 서버 데이터 보기 — ○
+#### UC2 · p68–69 · 업링크 음성 품질 서버 데이터 보기 — ●
 
-**목차상 위치.** UC1 바로 뒤, 지도 절 안. 관련 절이 둘 더 있습니다 — Workspace의 `Voice
-Quality folders`(p44), 그리고 `Processing uplink voice quality data`(p191).
+**목적.** 같은 측정 세션의 **서버 측 업링크(UL) MOS**와 단말 측 다운링크 데이터를 함께 봅니다.
+Nemo Analyze가 서버 로그의 UL MOS를 단말 로그에 **자동으로 상관**시킵니다.
 
-**추정 가능한 범위.** 제목과 관련 절의 존재로 보아, 음성 품질 서버(업링크 쪽 MOS 측정을
-받는 서버)의 결과를 측정 파일과 함께 지도에 올리는 절차입니다. **절차 본문은 작업 공간에
-없습니다.**
+**전제.** (1) 두 파일 모두 DB에 로드돼 있을 것. (2) 서버와 단말 로그의 **시각이 동기화**돼 있을 것
+— 측정 도구는 GPS 시간, 서버는 온라인 시간 동기화 서비스(Nemo Server · Nemo Outdoor · Nemo
+Handy 매뉴얼 참조). 수동 동기화도 가능하며 **약 3초 정확도면 충분**합니다.
+
+**Step 1 — 로드.** 리본 `File | Measurement | Open Measurement` → `Open` 대화상자에서
+**서버 측정 파일과 단말 측정 파일을 Shift로 함께 선택** → `Open`. 진행은 `Activity`에서
+확인합니다.
+
+> *"In order for the uplink server data to be displayed correctly, the database must contain
+> both the server (UL) measurement file and the mobile terminal (DL) measurement file. Nemo
+> Analyze will correlate these files automatically."*
+
+**Step 2 — 질의.** Workspace에서 **다운링크(단말) 파일을 선택**하고(업링크 서버 파일은 선택하지
+않음), 음성 품질 파라미터를 우클릭 → `Open In | [Data view]`. 측정 파일 기준으로 워크북이 열립니다.
+
+**관련 절.** `Processing uplink voice quality data`(p191): Nemo Outdoor에서 `User Interface
+Measurements | Use time from GPS`, Nemo Server에서 NSM 메뉴의 `NTP`. 측정 전에 서버 전화선 번호를
+서버에 수동 설정(로그 헤더에 기록됨). 두 로그를 모두 로드하면 Outdoor 파일에서 UL MOS를 볼 수
+있습니다.
+
+**그림.** `uc02-ul-voice-quality-workbook_p69`.
 
 **우리.** 범위 밖 — 음성 품질 측정도, 그것을 받는 서버도 데이터 모델에 없습니다.
 
-#### UC3 · p69 · IP/UDP 패킷 트레이스 데이터 보기 — ○
+#### UC3 · p69–72 · IP/UDP 패킷 트레이스 데이터 보기 — ●
 
-**목차상 위치.** Workspace 하단 탭의 `IP Traces` 페이지(p24)와 `Options – IP Trace`(p457)가
-짝입니다. 즉 패킷 트레이스는 측정 파일과 **별도의 자산 종류**로 Workspace에 들어오고, 이
-유즈케이스는 그것을 데이터 뷰에 여는 절차로 보입니다.
+**전제 — Microsoft Network Monitor 3.4.** Nemo Analyze **보다 먼저** 설치돼 있어야 전체 IP/UDP
+상세가 표시됩니다. 나중에 설치했다면 `C:\Program Files\Microsoft Network Monitor 3\NMAPI.dll`을
+`C:\Program Files\Keysight\Nemo Analyze`로 복사하면 활성화됩니다. 없으면 **제한된 상세만**
+표시됩니다.
+
+**데이터.** IP 패킷 캡처는 단말별 **`.pcap`** 파일에 저장되고 Ethereal 같은 제3자 도구로도
+후처리할 수 있습니다. 측정 파일과 `.pcap`은 **같은 세션, 동일한 타임스탬프**여야 두 워크북이
+동기화됩니다.
+
+**절차.**
+
+1. *(설치)* Microsoft 다운로드 센터에서 `NM34_x64.exe` → 실행 → `Typical` → `Install` → `Finish`.
+2. 측정 파일 우클릭 → 관련 워크북(예: `HSDPA full details`) 선택 → 워크북이 열림.
+3. Parameters 뷰 아래 패널의 **`IP Traces`** 아이콘 → Workspace의 IP Traces 페이지. 파일이 없으면
+   배경 우클릭 → `Open` → `.pcap` 선택 → `Open`.
+4. IP Traces 페이지에서 해당 측정에 대응하는 `.pcap`을 **더블클릭** → 별도의 IP trace information
+   워크북이 열리고 측정 워크북과 **자동 동기화**됩니다.
+5. 측정 워크북에서 관심 이벤트(예: Throughput이 급락하는 시점)를 선택 → IP trace 워크북으로
+   전환해 그 전후의 IP 메시지(IP 계층의 원인 후보)를 봅니다.
+
+**설정 쪽.** `Options – IP Trace`(p457): `Autoload pcap files`(측정 파일에 붙은 pcap을 자동 업로드,
+DB가 아니라 로컬 저장), 서버 환경에서는 다른 사용자가 `Workspace | Measurement | Open trace file`로
+직접 올려야 함, `Time offset`(시간대 차 보정).
+
+**그림.** `uc03-ip-traces-page_p71`.
 
 **우리.** 범위 밖 — 패킷 캡처를 수집하지 않습니다.
 
-#### UC4 · p72 · 바이너리 로그 데이터 보기 — ○
+#### UC4 · p72–74 · 바이너리 로그 데이터 보기 — ●
 
-**목차상 위치.** Workspace의 `Binary Logs` 페이지(p24)가 짝. 단말 칩셋의 바이너리 로그를
-디코딩해 보는 절차로 보입니다.
+**목적.** 평소에는 측정 파일만으로 충분하지만, 특정 파라미터의 해상도가 부족한 경우 칩셋
+**바이너리 진단 로그**(`.nmfb` 또는 `.dfl`)를 측정과 동기화해 봅니다. 두 파일은 같은 세션,
+동일 타임스탬프여야 합니다.
+
+**절차.**
+
+1. 측정 파일 우클릭 → 관련 워크북 선택 → 워크북이 열림.
+2. Parameters 뷰 아래 패널의 **`Binary Logs`** 아이콘 → Binary Logs 페이지. 파일이 없으면 배경
+   우클릭 → `Open` → 바이너리 로그 선택 → `Open`.
+3. Binary Logs 페이지에서 해당 로그를 **더블클릭** → binary log information 워크북이 열리고 측정
+   워크북과 자동 동기화.
+4. 측정 워크북에서 이벤트 선택 → 바이너리 로그 워크북에서 전후 메시지를 봅니다.
+
+**그림.** `uc04-binary-logs-page_p73`.
 
 **우리.** 범위 밖 — 입력이 CSV이고 벤더 바이너리 디코더가 없습니다.
 
 ### 8.2 파라미터 필터링 (p74–p82) — UC5
 
-앞 절: `Parameter filtering`(p74), `Filtering based on polygon area`(p75). 즉 필터에는 **값
-조건**과 **폴리곤 영역** 두 입력이 있고, UC5는 값 조건 쪽의 심화입니다.
+**Parameter filtering (p74–75).** 측정 파일 선택 → 파라미터 우클릭 → `Open Filtered in |
+[dataview]` → 빈 워크북과 **`Filters` 대화상자**. `Add`로 필터 줄을 더합니다. `Name` 목록에는
+`<Secondary parameter>` · `Area` · `Base station identification code` · `Cell ID` ·
+`Channel number` · `Description` · `Device label` · `Device name` · `Distance` · `Ec/N0` ·
+`Equipment ID` · `Event ID` · `Exclude event` · `Extension` · `GPS status` · `Height` … 가 있습니다
+(그림 `filters-dialog-name-list_p75`). 필터는 질의에 포함된 파라미터에 걸립니다.
 
-#### UC5 · p77 · 2차 파라미터에 의한 전역 파라미터 필터링 — ●
+**Filtering based on polygon area (p75–77).** 경로의 일부에만 값 기반 색상셋을 입히고 나머지는
+기본색으로 두는 용도입니다.
 
-**목적.** 사업자가 "커버리지 영역"을 특정 파라미터 임계로 정의하는 실무를 그대로 옮긴
-시나리오입니다. **1차 데이터셋을 2차 파라미터로 거릅니다** — 결과에는 2차 파라미터 조건을
-만족하는 시점의 1차 값만 남습니다.
+1. 측정 파일 선택, Parameters 필터 칸에 `Ec/N0 best active set` 입력 → 우클릭 → `Open Filtered
+   In | Map`.
+2. `Analyze Wizard - Filters`에서 `Add` → `Name`에 **`Area`** → `…` 버튼 → `Select Area` 대화상자:
+   - `Area | Name` — 저장해 둔 폴리곤 선택
+   - `Area` — 지도를 클릭해 폴리곤을 그리고 **더블클릭으로 닫음** → `Add polygon`에서 이름 부여
+   - `Pan`(드래그 이동) · `Reset`(선택 지움) · 줌 인/아웃
+3. `Finish` → 폴리곤 구간만 Ec/N0 색상셋, 나머지는 기본색(예에서는 파랑).
+   (그림 `polygon-filter-route_p77`)
 
-> *"all data with Received Signal Code Power (RSCP) of -100 or higher will be considered
-> measurement data from coverage area … The global filter created based on this condition
-> will exclude all data with RSCP values lower than -100 from all subsequent Nemo Analyze
-> operations."*
+#### UC5 · p77–82 · 2차 파라미터에 의한 전역 파라미터 필터링 — ●
+
+**목적.** 사업자는 커버리지 영역을 특정 파라미터의 임계로 정의합니다. 그 임계를 **전역 필터**로
+걸면 이후 모든 Nemo Analyze 조작(단, **Crystal Reports 템플릿은 제외**)이 그 필터를 통과한
+데이터만 씁니다.
+
+> *"Filtering by secondary parameter enables the filtering of a primary parameter data set
+> based on a selected secondary one. The resulting data set will contain only those values
+> from the primary data set that coincide with the values in the secondary one."*
+
+예제 조건: **`RSCP best active set >= -100`** 인 구간만 커버리지 영역으로 간주.
 
 **절차.**
 
-1. 리본 `Utilities | Global Filters` → `Edit`
-2. `Add` → `Name`에서 `<Secondary parameter>` 선택
-3. `Value` 열의 `…` 버튼 → 2차 파라미터로 `RSCP best active set` 선택
-4. 다시 `Add` → `RSCP >= -100`
-5. `Finish`. 이후 **모든 조작**이 이 필터를 통과한 데이터에만 적용됨
+1. 리본 `Utilities | Global Filters` → `Global Filters` 대화상자(`Active global filters` ·
+   `Saved global filter sets` 두 칸과 `Edit… / Clear / Save`, `Set Active / Modify / Delete`).
+2. `Edit` → `Analyze Wizard – Filters` → `Add` → 빈 줄.
+3. `Name`에서 **`<Secondary parameter>`** 선택 → `Value` 열의 `…` → `Analyze Wizard – Secondary
+   Measurement Parameters`에서 **`RSCP best active set`** 선택 → `Next`.
+4. 두 번째 `Analyze Wizard – Filters`(*Filters For Secondary Parameter*) → `Add` → `Name` = `RSCP`,
+   연산자 = `>=`, `Value` = `-100` → `Finish`.
+5. 첫 대화상자로 돌아와 `Finish` → `Active global filters`에 필터가 표시됩니다.
+6. **세션 동안** 모든 조작이 필터를 통과합니다. 다음 세션에도 쓰려면 `Save` → `Save Filter`에
+   이름 입력(기본값은 필터 문자열 자체, 그림에서 `… = 0 AND "order" = 1 AND ("rscp" >= -100)`) →
+   `OK` → `Saved global filter sets`에 나타남.
+7. 저장된 세트 활성화: 세트 선택 → `Set Active`. 제거: 선택 → `Delete`.
 
-**메뉴 쪽 근거.** `Utilities | Global Filters`(p467)의 설명은 *"applied to all operations
-performed with Nemo Analyze"* 이고, 예시로 **폴리곤 영역 선택**을 듭니다. 즉 지도에서 그린
-도형도 같은 전역 필터의 입력이 됩니다 — 앞 절 p75와 이어집니다.
+**셀 단위 전역 필터.** 지도에서 기지국 섹터 위를 우클릭 → **`Create Global Filter From Cell
+ID`** → 이후 모든 워크북·질의가 **그 셀이 서빙하던 지점**의 결과만 돌려줍니다.
 
-**우리.** 전역 필터라는 개념이 없습니다. 우리 필터는 화면 단위(Statistics의 범위 필터,
-지도의 임계 색상)라 화면을 옮기면 초기화됩니다. 2차 파라미터 게이팅 자체는 워크벤치로
-표현됩니다 — `SOURCE_KPI(RSRP) + SOURCE_KPI(대상) → COMBINE → FILTER: rsrp >= -100 →
-OUTPUT` — 결과가 새 KPI가 되어 이후 모든 화면에서 쓸 수 있습니다. 남는 차이는 "지금 보고
-있는 화면에 즉시" 걸리지 않는다는 것, 그리고 폴리곤 같은 **공간 조건은 전역으로 걸 수
-없다**는 것입니다.
+**이벤트 제외(p94).** 측정 우클릭 → `Exclude Events` → 대화상자에서 이벤트 지정 → `Utilities |
+Edit`의 Global Filters에 `Exclude event <> 1`을 추가하면 결과에서 빠집니다(예: 측정 시스템 오류로
+실패한 호 제거).
+
+**메뉴 쪽 근거.** `Utilities | Global Filters`(p467): *"applied to all operations performed with
+Nemo Analyze"*, 예시로 폴리곤 영역 선택.
+
+**그림.** `uc05-secondary-parameter-dialog_p79`, `uc05-filter-rscp_p80`, `uc05-save-filter_p81`,
+`uc05-global-filters-saved_p82`.
+
+**우리.** 전역 필터라는 개념이 없습니다. 우리 필터는 화면 단위(Statistics의 범위 필터, 지도의
+임계 색상). 2차 파라미터 게이팅은 워크벤치로 표현됩니다 — `SOURCE_KPI(RSRP) + SOURCE_KPI(대상) →
+COMBINE → FILTER: rsrp >= -100 → OUTPUT` — 결과가 새 KPI가 되어 이후 모든 화면에서 쓸 수 있습니다.
+남는 차이: 지금 보는 화면에 즉시 걸리지 않고, 폴리곤·셀 ID 같은 **공간 조건은 전역으로 걸 수
+없습니다**.
 
 ### 8.3 그래프 (p94–p112) — UC6 · UC7 · UC8 · UC9
 
-앞 절: 그래프 종류(line / bar / scatter / **color grid** / **surface**, p94), Graph Tools 메뉴,
-팝업 메뉴(Change graph type · Query · Pick parameter · Add function · Add reference line, p95–97),
-Side panel(p99), 3D mode(p101), Group values(p101), Graph properties(p103), **Layer
-properties**(p104, 라인·바·산점도별 p106–107).
+**그래프 절의 배경 (p94–107).** 그래프 종류는 `line` · `bar` · `scatter` · `pie` · `color grid` ·
+`surface`(`Change Graph Type`). 팝업 메뉴: `Reset` · `Query`(Cut/Copy/Paste — 다른 뷰로 같은
+질의를 옮김, Query Clipboard) · `Pick Parameter`(그래프에는 새 레이어, 그리드에는 열, 지도에는
+경로) · `Add Function`(Average · Exponential moving average(`2 / (Period + 1)`) · High · Low ·
+Median · Mode · Moving average · Trend, `Period` = 표본 수) · `Add Reference Line` · `Tool`(Scroll /
+Zoom) · `Mode` · `Bin data`(산점도·컬러 그리드를 가로·세로 한계로 4구역으로 나눠 구역별 표본
+비율 또는 개수 표시).
 
-#### UC6 · p108 · 다중 그래프 레이어 — ◐
+**Mode (p97–98).** `Single` — 레이어를 겹쳐 그리고 축은 **활성 레이어**(Layers 패널에서 연한
+파랑)만. `Stacked` — 레이어를 위아래로 쌓고 레이어마다 축. 순서는 Layers 패널 우클릭 `Move Up /
+Move Down`. `Automatic` — 같은 Y축을 가진 레이어는 한 그래프에, 다른 축은 쌓음.
 
-**절 위치로 읽히는 것.** `Layer properties`(p104–107) 바로 뒤입니다. 한 그래프 데이터 뷰에
-여러 파라미터를 **레이어**로 겹쳐 올리고, 레이어마다 속성(선/막대/산점, 축, 색)을 따로
-두는 절차입니다. 절차의 단계 본문은 작업 공간에 없습니다.
+**Layer properties (p104–107).** `Name` · `Show marks`(값 라벨) · `Title (on x-tab)` · `Scale
+automatically to values` 또는 `Top / Bottom` 수동 · **`Parameter` 탭**(필터 — N 파라미터 예:
+`Ec/N0 Nth best`는 `N = 1`이 자동 설정, 2번째로 바꾸려면 `N = 2`) · `Default color` · `Coloring
+mode` · `Color set`. 라인 그래프: `Line width` · **`Hold value constant until next`**(값이 바뀔
+때까지 수평 유지) · `Show value points`. 바: `Style`(사각·타원·다이아몬드 등) · `Sorting`(X/Y 값
+기준 오름·내림). 산점도: `Mode` · `Style`.
 
-**우리.** ✅ — 구성 워크북의 페인에 KPI를 겹쳐 그립니다. 레이어 체크 해제는 **숨기기이지
-삭제가 아닙니다**(`visible`을 소속과 분리). `verify-ui.mjs`가 확인합니다.
+#### UC6 · p108–109 · 다중 그래프 레이어 — ●
 
-#### UC7 · p110 · 그래프의 알림 아이콘 — ◐
+- 한 그래프에 **레이어 수 제한 없음**. 예제는 3개 레이어를 stacked 모드로.
+- 레이어가 많으면 페이지를 키웁니다: 그래프 우클릭 → `Page | Properties` → `Page` 탭 →
+  - `Fit to window` — 모든 레이어를 보이는 영역 안에. 레이어를 더할수록 각 레이어가 작아짐.
+  - **`Fixed size`** — 픽셀 단위로 정확한 크기(그림의 예 `Width 1483 · Height 640`; *"The size is
+    at least the size of the actual window even if smaller size is specified"*). 레이어마다 공간이
+    넓어지고 스크롤바로 오르내림. 옵션 `Copy page for each device` · `Copy page for each
+    inbuilding floor`.
+- **single 모드에서 두 레이어의 축을 모두 표시**: 그래프 우클릭 → `Properties` → `Graph` 탭 →
+  `Axes`의 `Left` / `Right`에 두 레이어를 각각 지정(예: 왼쪽 `RSCP 1. best`, 오른쪽 `MIMO RSCP`).
 
-**관련 절.** 알림(notification)은 매뉴얼에서 하나의 횡단 개념입니다 — 지도의 알림
-아이콘(p65), 타임라인의 알림(p207), 그리고 설정 쪽 `Configuring notification icons`(p451) ·
-`Configuring notifications using the Parameters view`(p451) · `Notification configuration`(p453).
-UC7은 그것을 **그래프 위에** 띄우는 절차입니다.
+**그림.** `uc06-three-layers-stacked_p108`, `uc06-page-properties_p108`,
+`uc06-graph-properties-axes_p109`.
 
-**우리.** ✅ — 브리프 ②의 차트 이벤트 마크: 시각 위치에 점선 + 타입 글리프
-(`TimeSeriesChart`). 이벤트의 이름과 색은 `event_type` 레지스트리 한 곳에서 나와
-지도·차트·독·파이가 같은 것을 씁니다.
+**우리.** ✅ — 구성 워크북의 페인에 KPI를 겹쳐 그립니다. 레이어 체크 해제는 숨기기이지 삭제가
+아닙니다. 없는 것: 좌·우 이중 축, stacked/single 모드 전환, 고정 페이지 크기.
 
-#### UC8 · p110 · 컬러 그리드·표면 그래프로 파라미터 상관 보기 — ◐
+#### UC7 · p110 · 그래프의 알림 아이콘 — ●
 
-**절 위치로 읽히는 것.** 그래프 종류 중 color grid와 surface(p94), 3D mode(p101)를 쓰는
-절차. 두 파라미터를 X·Y축에 놓고 셀 색(또는 높이)으로 세 번째 값을 보는, **두 파라미터
-상관을 보는 유일한 뷰**입니다.
+1. 그래프 우클릭 → `Pick Parameter`.
+2. `Pick Parameter` 대화상자에서 **`Notifications and markers`** 선택 → `OK`.
+3. `Notifications Properties`에서 표시할 알림을 선택 → `OK`. **픽셀 오프셋**도 정할 수 있음.
+4. 알림 아이콘이 그래프에 표시됩니다.
 
-**우리.** ✕ 미룸 — 가치는 인정하되 순위가 낮습니다([백로그 §6](../../ui-ux-backlog.md)).
+**관련.** 지도의 알림(p65–66, 경로 `Properties → Notifications` 탭, `Pixel offset` Horizontal /
+Vertical, `Apply to all routes`), 타임라인의 알림(p207), 설정 `Configuring notification
+icons`(p451) · `Notification configuration`(p453).
 
-#### UC9 · p112 · 3D Visualizer로 5G 측정 결과 보기 (옵션) — ○
+**그림.** `uc07-notification-icons-graph_p110`.
 
-**우리.** 범위 밖 — 레퍼런스에서도 **별매 옵션**입니다(제목에 optional). 관련 자료는
-2026-08-31 정리 때 저장소에서 뺐습니다(`MANIFEST.md` §0).
+**우리.** ✅ — 차트 이벤트 마크(시각 위치에 점선 + 타입 글리프). 이벤트의 이름과 색은
+`event_type` 레지스트리 한 곳에서 나와 지도·차트·독·파이가 같은 것을 씁니다.
 
-### 8.4 그리드 (p112–p121) — UC10 · UC11 · UC12
+#### UC8 · p110–112 · 컬러 그리드·표면 그래프로 파라미터 상관 보기 — ●
 
-앞 절: Side panel(p112), Row details(p115), Export data to(p115), Grid properties(p116).
+**목적.** color grid와 surface는 **두 파라미터를 상관시키기 위한** 그래프 종류입니다. 설명은
+color grid 기준이며 surface에도 그대로 적용됩니다. 빈 color grid에서 `Pick parameter`를 하면
+기본 파라미터 쌍(예: `Rx quality sub` vs `Rx level sub`)이 제안되고, 직접 쌍을 정의할 수도 있습니다.
 
-#### UC10 · p118 · 그리드의 색상셋 — ◐
+**절차.**
 
-**절 위치로 읽히는 것.** `Grid properties`(p116) 뒤. 그리드 셀을 파라미터의 **색상셋**으로
-칠하는 절차입니다. 색상셋은 12장에서 만들고(UC28–29), 지도(UC30)와 그리드(UC31)에 각각
-적용하는데, UC10은 그리드 쪽의 첫 등장입니다. 색상셋 자체는 [§12](#12장--other-tasks--색상셋-uc28uc31) 참조.
+1. `View | Add Workbook | Graph` → 빈 데이터 뷰 우클릭 → `Change Graph Type` → `Color grid`.
+   (이미 그래프가 있으면 우클릭 → `Change Graph Type` → `Color grid`.)
+2. 빈 color grid 우클릭 → **`Correlate Parameters`** → 대화상자:
+   - `Scope` — 포함할 측정 데이터
+   - `Color set` — 그리드 색상셋
+   - `X Parameter` 페이지: `Parameter` · `Filters` · `Minimum` · `Maximum` · **`Steps`**(색상
+     그리드 눈금 수)
+   - `Y Parameter` 페이지: 동일
+3. `OK` → color grid 생성.
 
-**우리.** ◐ — KPI별 임계 사다리를 편집·저장합니다. **이름 붙은 재사용 색상셋은 미룸**.
-그리드 셀은 스케일 색이 아니라 심각도 클래스(`sev-*`)로 칠합니다.
+**그림.** `uc08-change-graph-type-popup_p111`, `uc08-color-grid_p112`.
 
-#### UC11 · p120 · 오디오 샘플 재생 — ○
+**우리.** ✕ 미룸 — 두 파라미터 상관을 보는 유일한 뷰. 가치는 인정하되 순위가 낮습니다
+([백로그 §6](../../ui-ux-backlog.md)).
 
-**관련 파라미터.** Parameters 트리 `Services › Voice/video call › Voice › Voice quality` 아래에
-`Audio quality reference sample filename DL` / `UL`이 있습니다(작업 공간의 그림
-`manual10.2_cell-locator-estimated-site_p174.png`에 우연히 찍혀 있음 — 아래
-[그림 라벨 정정](#그림-라벨-정정) 참조). 즉 음성 품질 측정에 쓰인 참조 샘플과 녹음을 재생하는
-절차로 보입니다.
+#### UC9 · p112 · 3D Visualizer로 5G 측정 결과 보기 (옵션) — ●
+
+1. 5G 측정 파일을 Workspace 창에 **드래그 앤 드롭**으로 추가.
+2. Workspace 하단 아이콘으로 `Base Stations` 페이지 → BTS 파일을 드래그 앤 드롭 → BTS 파일 선택,
+   측정 파일 우클릭 → `Active`.
+3. `Workspace | Measurements`의 `All Measurements`에서 5G 파일 선택 → Parameters 뷰에서 5G
+   파라미터 선택 → `Open In | 3D Visualizer` → 새 창.
+4. 주의: 모든 파라미터가 BTS 기능을 지원하지는 않음 — 3D Visualizer에서는 열리지만 **셀에서
+   경로로 빔을 그리지 못하는** 파라미터가 있음. 조작법은 Keysight의 3D Visualizer User Guide.
+
+**우리.** 범위 밖 — 레퍼런스에서도 별매 옵션.
+
+### 8.4 그리드 (p112–p122) — UC10 · UC11 · UC12
+
+**그리드 절의 배경.** 팝업 처음 셋(`Reset` · `Query` · `Pick Parameter`)은 그래프와 같음.
+**`Play Audio Sample`은 오디오 샘플 파일 열이 있는 그리드에만** 표시. Side panel의 `Search`
+(불리언 지원, `Highlight matches` / `Filter in` / `Filter out`, `Search decoded messages` —
+디코딩된 본문 값으로 행 검색), `Layers`, `Information`(선택 메시지를 디코딩해 표시). `Row
+Details`(더블클릭 — Info View에 디코딩). `Export Data To` — MS Excel · text · **MapInfo Tab** ·
+**Google KML**(Tab/KML은 지도에 경로로 다시 열 수 있음); 여러 파라미터를 열별로 내보내려면 먼저
+상관시켜 그리드로 본 뒤 내보냄, **보이는 데이터만** 내보냄. `Grid Properties`: `Visible columns`,
+열 순서, `Use coordinate projection`(기본 `EPSG:4326 WGS84`, 4000+ 투영 지원, 예 Lambert 2
+`EPSG:27572`), `Add / Delete`, 열별 색상셋(열 이름 선택 → 나타나는 버튼 → 드롭다운),
+`Show heading` · `Vertical text in heading` · `Show row numbers` · `Show time intervals` · `Font`.
+
+#### UC10 · p118–120 · 그리드의 색상셋 — ●
+
+**목적.** 지도뿐 아니라 그리드의 열마다 다른 색상셋을 써서 시각화합니다. **그리드에서 색상셋은
+막대그래프처럼 동작**합니다 — 셀 안 막대의 크기와 색이 값에 대응합니다.
+
+1. 그리드 우클릭 → `Properties` → **`Color Sets`** 탭.
+2. 색상셋을 입힐 열 선택 → 나타나는 버튼 클릭 → 드롭다운에서 색상셋 선택 → `OK`.
+   예제: `Scr. code` 열에 `Scrambling code`, `Ec/No` 열에 `EcNo`.
+3. 선택한 열이 색상셋을 표시합니다.
+4. 대안: `Color Sets` 탭의 **`Color whole cell`** — 막대 대신 셀 전체를 칠하고 색만으로 값을
+   나타냄.
+
+**그림.** `uc10-grid-color-sets-tab_p119`, `uc10-grid-color-bars_p120`,
+`uc10-grid-color-whole-cell_p120`.
+
+**우리.** ◐ — KPI별 임계 사다리를 편집·저장합니다. 그리드 셀은 심각도 클래스(`sev-*`)로
+칠합니다. 이름 붙은 재사용 색상셋과 셀 내 막대 표시는 미룸.
+
+#### UC11 · p120–121 · 오디오 샘플 재생 — ●
+
+**배경.** Nemo 음성 품질 측정 파일에는 **수신 오디오 샘플**이 들어 있어 원본 송신 샘플과 품질을
+비교할 수 있습니다.
+
+1. 음성 품질 측정 선택, Parameters 뷰에서 **`Audio Quality Sample File Name UL`** 선택 → 우클릭 →
+   `Open In | Grid`.
+2. 그리드에서 듣고 싶은 샘플의 행 우클릭 → **`Play Audio Sample`**.
+
+**그림.** `uc11-play-audio-sample_p121`.
 
 **우리.** 범위 밖 — 오디오를 수집하지 않습니다.
 
-#### UC12 · p121 · L3·RRC 메시지 검색 파라미터 사용 — ●
+#### UC12 · p121–122 · L3·RRC 메시지 검색 파라미터 사용 — ●
 
-**목적.** 디코딩된 시그널링 본문에서 값을 뽑아 **새 열(파라미터)로 승격**시킵니다. 메시지
-목록을 보는 것이 아닙니다.
+**목적.** 디코딩된 L3·RRC 시그널링 메시지에서 **특정 종류의 값**을 검색해 결과 데이터셋의
+**열로** 만듭니다.
 
-**절차.**
+1. `Workspace | Measurements | Measurements`에서 측정 파일 선택.
+2. 필요에 맞는 검색 파라미터 선택(예: **`L3 signaling parameter search`**) → **더블클릭**.
+3. `Analyze Wizard – Filters`에서 **search text**(예: `Short MAC value`)와 **search message**(예:
+   `SERVICE_REQUEST`) 입력 → `Finish`.
+4. **`Parameter name`** — 검색된 값을 표시할 결과 열의 이름을 사용자가 정합니다.
 
-1. 측정 파일 선택 → `L3 signaling parameter search` 파라미터를 더블클릭
-2. `Filters` 다이얼로그에 검색 텍스트(예: `Short MAC value`)와 검색 대상 메시지(예:
-   `SERVICE_REQUEST`)를 입력
-3. `Parameter name`으로 결과 열의 이름을 직접 정함
+**그림.** `uc12-search-parameter-result_p122`.
 
-**질의 API 쪽 대응.** Appendix 5의 Decoder 스칼라 13개와 Appendix 6의 `MSG_DECODER_*`
-프로시저 8개가 같은 능력의 SQL 층입니다([`query-api.md`](query-api.md)).
+**질의 API 쪽 대응.** Appendix 5 Decoder 스칼라 13개 · Appendix 6 `MSG_DECODER_*` 8개
+([`query-api.md`](query-api.md)).
 
-**우리.** ◐ — Signaling 화면은 목록·필터·커서 동기화·본문 펼치기까지 있으나, 본문 필드를
-KPI 열로 만드는 경로가 없습니다. 우리 시그널링은 이벤트 타입과 시각이 주 정보이고 **본문이
-구조화돼 있지 않아** 데이터 모델에서 시작하는 격차입니다.
+**우리.** ◐ — Signaling 화면은 목록·필터·커서 동기화·본문 펼치기까지. 본문 필드를 KPI 열로
+만드는 경로가 없고, 본문이 구조화돼 있지 않아 데이터 모델에서 시작하는 격차입니다.
 
 ### 8.5 지도 · MapX · BTS 파일 (p122–p179) — UC13 ~ UC23
 
-이 구간이 유즈케이스 **11개**로 가장 두껍습니다. 앞 절의 구성:
+**BTS 파일 절 (p140–146) — 이 구간의 전제.**
 
-| 절 | p | 내용 |
-|---|---|---|
-| Maps / Viewing in live maps / Google Street View | 122–125 | |
-| Map popup menu | 126–129 | Add · Find · **Generate color set** · **Export to KML file** · Zoom to Layers · **Create New Folder From This Area** · Set As Default Location · Street View |
-| Side Panel – Map · Drawing options · Tool | 130–132 | |
-| MapX · Map Properties · Route Properties · Draw route as symbols | 132–139 | MapInfo 계열 |
-| **BTS files** · BTS properties | 140–146 | BTS 파일을 지도로 드래그해 경로와 연결 |
+- Workspace 하단 아이콘 → `Base Stations` 페이지: `Files`(DB의 BTS 파일) · `Sites`(사이트·안테나
+  상세). 사이트 정보에 **사용자 정의 열**을 추가할 수 있음.
+- 같은 BTS 파일의 **날짜별 버전**: 파일명을 `filename_YYYY-MM-DD.nbf` 규약으로 지으면 측정
+  시각에 맞는 버전이 **자동 선택**됩니다. 규약을 안 따르면 관련 버전을 **활성화**해야 하고,
+  아무것도 활성화하지 않으면 *"reliable results cannot be guaranteed"*.
+- BTS 파일을 열면 `Set Active BTS Files` 대화상자 — 체크로 활성화. 이미 DB에 있는 파일은 BTS
+  페이지에서 우클릭 → `Active`.
+- 지도에 표시: `Workspace | Base Stations | Files`에서 지도로 드래그. **초록 섹터가 안테나
+  방향**. 줌 아웃하면 빨간 점으로 바뀜. 아이콘 더블클릭으로 상세.
+- 경로와 BTS 연결: 경로 우클릭 → `Properties` → `BTS` 탭 → `Draw line to active base station`
+  (연결되지 않은 경로에는 선이 그려지지 않음). BTS 파일이 여럿이면 `BTS` 탭 → `Modify`로 연결할
+  파일 선택.
+- `BTS Properties`(측면 패널의 BTS 레이어 우클릭): `Draw line to active base station` · `Icon
+  size`(Fixed / Dynamic, max size) · `Show site names` · `Draw frame` · `Site transparency` ·
+  `Show cell information`(+`Add`) · `Hide cell texts on low zoom levels` · **`Use cell beam range
+  from BTS file`** · **`use estimation from antenna height and tilt`** · `Beam transparency` ·
+  `Default color` · `Mode (parameter/custom)` · `Technology` · `BTS parameter` · `Custom query` ·
+  `Color set` · `Beam color`.
 
-BTS 파일이 이 구간의 축입니다 — UC14 · 17 · 18 · 19 · 20 · 21이 전부 BTS 파일(기지국 위치·
-방위·채널 목록)을 전제로 합니다. 우리는 그 정보를 **`cell_ref` 테이블**로 DB 안에 갖고 있어
-"BTS 파일을 드래그해 연결한다"는 단계 자체가 없습니다.
+우리는 이 정보를 **`cell_ref` 테이블**로 DB 안에 갖고 있어 "BTS 파일을 드래그해 연결한다"는
+단계 자체가 없습니다.
 
-#### UC13 · p147 · 맵 레이어 추가와 레이어 조합을 지오셋으로 저장 — ◐
+#### UC13 · p147–148 · 맵 레이어 추가와 레이어 조합을 지오셋으로 저장 — ●
 
-**제목이 말하는 것.** 지도 데이터 뷰에 레이어(경로·BTS·MapInfo 맵)를 더하고, 그 **조합을
-geoset으로 저장**해 다시 불러오는 절차. 기존 스크린샷
-`nemo-analyze_live-map_route-coloring_color-legend.jpeg`의 `Loaded MapX Maps (.TAB/.GST)`에서
-`.GST`가 이 지오셋 파일입니다.
+1. `Workspace | Maps | Loaded MapX Maps`에서 **`.TAB`** 파일을 열린 지도 뷰로 드래그 앤 드롭 →
+   레이어 추가. 레이어 정리는 "MapX"(p132).
+2. 필요한 레이어를 다 올린 뒤, 조합 전체를 **Geoset**으로 저장: 지도 우클릭 → **`MapX | Save
+   Geoset`**. *"Note that to have these options, a MapX must be used."*
+3. `Save As`에 지오셋 **파일** 이름 → `Save` → `Geoset Name`에 지오셋 이름 → `OK`.
+4. 이후 레이어 조합 전체를 DB에 로드해 **하나의 지도로** 엽니다.
 
-**우리.** ✅ — Layers 도크 + 서버 저장 워크북. 지오셋 **파일** 개념은 없고 워크북이 그
-역할을 합니다.
+**그림.** `uc13-drag-tab-layer_p147`, `uc13-mapx-save-geoset_p148`.
 
-#### UC14 · p148 · BTS 커버리지로 경로 채색 — ◐
+**우리.** ✅ — Layers 도크 + 서버 저장 워크북. 지오셋 파일 개념은 없고 워크북이 그 역할을 합니다.
 
-**제목이 말하는 것.** 경로의 각 지점을 값이 아니라 **어느 셀이 서빙했는가**로 칠합니다. BTS
-파일의 셀 목록이 색의 범주가 됩니다.
+#### UC14 · p148–149 · BTS 커버리지로 경로 채색 — ●
 
-**우리.** ✅ — 브리프 ④의 **서빙 셀(PCI) 채색**. 색이 바뀌는 지점이 곧 핸드오버 경계입니다.
-정체성 색은 `view/paint.ts` 한 곳에서 나오고, 이벤트 팔레트를 재사용하지 않습니다.
+**목적.** **단일 기지국의 커버리지**를 지도에서 봅니다. 전제: 좌표가 있는 측정 파일, BTS 파일,
+대응하는 지도가 DB에 있음.
 
-#### UC15 · p150 · 영역 비닝 수행 — ●
+- **Step 1.** 지도 파일을 열고 측정을 드래그 앤 드롭. **파라미터는 열지 않습니다.** BTS 파일을
+  지도에 드래그해 경로와 연결.
+- **Step 2.** 기지국 우클릭 → **`Color Layers Based On Scrambling Code [번호]`** → 경로가 **그
+  기지국의 Ec/N0 또는 RSCP 값**으로 칠해집니다. 같은 팝업에 `Highlight Sectors With Same Channel
+  Number And Scrambling Code` · `Highlight Neighboring Cells` · `Create Global Filter From Cell
+  ID`가 있습니다.
+- 경로의 일부에 대한 영역 비닝은 UC15로.
 
-**목적.** 지도에서 고른 영역 안의 측정을 격자로 나눠 집계합니다.
+**그림.** `uc14-color-layers-popup_p149`, `uc14-route-colored-by-bts_p149`.
+
+**우리.** ✅ — 서빙 셀(PCI) 채색(`view/paint.ts`). 레퍼런스가 "한 셀의 Ec/N0·RSCP"라면 우리는
+"어느 셀이 서빙했나"라 목적이 조금 다릅니다 — 색이 바뀌는 지점이 핸드오버 경계입니다.
+
+#### UC15 · p150–157 · 영역 비닝 수행 (+ Distance-based binning) — ●
+
+**Step 1 — 영역 선택.** Tools 패널의 **Area Binning 아이콘** 클릭 → 지도에서 영역 선택.
+
+**Step 2 — 측정 선택.** `Analyze Wizard – Select Measurement`: `Folder`(측정 폴더) · `Filter`
+(검색) · `Selected measurements`(선택 목록) · `>>` / `<<`. **지도 위 경로는 기본 포함.** → `Next`
+→ `Analyze Wizard – Measurement parameters`(예: `RSCP best active set`) → `Next` → `Analyze
+Wizard – Filters`. 단일 기지국에 대한 비닝이면 `Finish` 후 필터 대화상자가 한 번 더 열리고,
+`Value` 드롭다운에서 **scrambling code 또는 channel number**를 고릅니다(그림
+`uc15-filters-scrambling-code_p151` — `Area = 25.4632:64.9976 …`, `X steps = 10`, `Scrambling code`
+목록).
+
+**가중.** *"The area binning statistics are by default weighted by time. Although area binning
+as an operation is location-based, each sample has its unique time and distance weights that
+can be used in calculating time and distance averages per bin."* 거리 가중을 쓰려면
+`View | Options | Environment | Statistics`의 `Calculate statistics based on`을 **`<Ask every
+time>`**으로 두면, `Finish` 뒤 `Choose Statistics Type` 대화상자에서 `Distance`를 고를 수 있습니다.
+결과는 지도에 **새 레이어**로.
+
+**Step 3 — 빈 크기.** Layers 패널의 area binning 레이어 우클릭 → `Properties`:
+
+| 필드 | 뜻 |
+|---|---|
+| `Name` | 기준 파라미터 이름 |
+| **`X steps` / `Y steps`** | 빈 크기. **값이 클수록 빈이 작아짐** |
+| `Scrambling code` | 기지국의 scrambling code |
+| `Draw method` | `Fixed size`(줌과 무관한 고정 크기) / `Actual size` |
+| `Print value` | 측정점의 숫자 값을 지도에 인쇄 |
+| **`Statistic`** | `Average`(기본) · `Minimum` · `Maximum` · `Sample count` · `Std. deviation` · `Variance` · `Mode` |
+| `Color set` · `Transparency` | |
+
+**Step 4 — 내보내기.** 레이어 우클릭 → `Export Data To | Excel` 또는 `| File`(.txt · MapInfo
+.tab). KML(Google Earth)은 "Export to KML file" 절.
+
+**Distance-based binning (p153–157).** 워크플로는 같고, area binning이 **좌표**로 빈을 만드는
+반면 distance binning은 **측정 파일의 거리 값**으로 빈을 만듭니다.
+
+1. Tools 패널의 **Distance Binning 아이콘** → 지도에서 영역 선택.
+2. `Select Measurement` → `Next` → `Measurement Parameters` → `Next` → `Filters` → `Finish`.
+3. 결과가 새 레이어로. `Zoom in`으로 측정점까지 확대.
+4. 레이어 `Properties`는 `Statistics` · `Color` 두 뷰: `Name` · `Info`(측정 정보) · `Draw frame` ·
+   `Print value` · `Draw method`(Fixed size circle / Actual size) · `Size`(고정 원의 크기) ·
+   `Filters`(`X steps = 100`, `Area = <area>` 식) · `Statistics`(위 목록) · `Color set` ·
+   `Transparency`.
+
+**설정 쪽.** `Options – Statistics`(p457): 통계 기준 기본값(Time / Distance / Sample, 매번
+묻기), 색상 범례 통계 기준, **dB 파라미터를 선형 산술로 계산할지**, `Area binning`의 X/Y steps와
+`Bins in meters`, `Distance binning`의 구간 길이(m) — *"the statistics collected in distance
+binning are based on the measuring point GPS coordinates closest to the midpoint of the defined
+segment, not necessarily the mean value."*
+
+**그림.** `area-binning_p150`(선택 도구 + 사각형 영역), `uc15-area-binning-result_p152`,
+`uc15-bin-layer-properties_p156`, `uc15-statistic-dropdown_p157`.
+
+**우리.** ✅ — 격자 비닝(50/150/500 m) + 지도 위 임의 폴리곤(`AreaStatsService`). 폴리곤 안의
+통계에 **통과 목록**이 함께 나옵니다. 통계 기준(`[Distance]` / `[Sample]`)과 dB 선형 평균은
+브리프 ⑦에서 한 자리(`AggregationBasis`)로 들어갔습니다. 없는 것: 빈별 `Statistic` 전환(최소·
+최대·표준편차·분산·최빈), 빈 값 인쇄, 레이어 내보내기.
+
+#### UC16 · p158–162 · 같은 경로의 두 측정 그룹 비교 (Delta plotting) — ●
+
+**목적.** 같은 경로에서 얻은 **두 측정 그룹**의 파라미터 값 차이를 지도에 그립니다. 전제:
+좌표가 있는 측정 파일과 대응 지도.
+
+**Step 1.** 지도 파일을 열고 측정을 드래그 앤 드롭.
+
+**Step 2 — Delta Plotting.**
+
+1. Tools 패널의 **Delta Plotting 아이콘** → 지도에서 영역 선택(가는 점선으로 표시).
+2. `Delta Plotting` 대화상자: `Measurement Group 1` / `Measurement Group 2`, 각각 `Group` ·
+   `Parameter` · `Measurements` · **`Configure`**.
+3. Group 1의 `Configure` → `Analyze Wizard – Select Measurement`(폴더·필터·선택 목록). **그룹마다
+   측정 1개 이상**. *"A measurement group average is calculated from all measurements within a
+   Measurement Group. The difference value plotted on map represents the difference between the
+   two measurement group averages."* → `Next`.
+4. `Measurement parameters` — 비교 기준 파라미터. **두 그룹에 같은 파라미터**를 골라야 함
+   (원문 규칙. 다만 원문 그림 p161은 Group 1 = `Ec/N0 best active set`, Group 2 = `Ec/N0 detected
+   set`으로 다른 파라미터를 보여 줌 — 같은 측정 파일 하나의 두 파라미터 차이를 낸 예) → `Next`.
+5. `Filters`(선택) → `Finish`.
+6. Group 2에 대해 반복 → `Delta Plotting`에서 `OK`.
+7. **`Choose Statistics Type`** — `Time` / `Distance` / `Sample`(가중 없음). *"Although delta
+   plotting as an operation is by default distance-based, each sample has its unique time and
+   distance weights … In delta plotting this average per bin is calculated for bins of both
+   routes separately. To find out the difference between the bin values of one route and the
+   bin values of the other, a subtraction is performed between the bin values of the routes."*
+8. 결과가 지도에 새 레이어로.
+
+**그림.** `uc16-tools-delta-plotting_p158`, `uc16-area-selection_p158`,
+`uc16-delta-plotting-dialog_p159`, `uc16-delta-plotting-configured_p161`,
+`uc16-delta-plotting-result_p162`(경로를 따라 비닝된 타일 — RSCP · Throughput `[Distance]` 범례).
+
+**우리.** ✅ — 공간 차분 지도(`SpatialDiffService`): 두 주행을 하나의 격자에 담아 타일별 차이.
+한쪽만 지나간 타일은 0이 아니라 null. 레퍼런스와 같은 "빈별 평균 → 빼기"이고, 가중 기준 선택도
+같습니다. 없는 것: 그룹당 여러 측정의 그룹 평균(우리는 주행 1 대 1).
+
+#### UC17 · p162–168 · 기지국 셀 빔 범위를 지도에 표시 — ●
+
+1. 지도에서 셀을 **우클릭으로 선택** → 그 셀의 빔 범위가 **섹터**로 표시됩니다.
+2. BTS 파일에 빔 범위 데이터가 없으면 옵션에서 설정: `View | Options` → **`BTS | General`**.
+
+**`Options – BTS` (p163–164, p459 전문).**
+
+| 항목 | 뜻 |
+|---|---|
+| `BTS texts options` | BTS 텍스트 크기·스타일 |
+| `Display BTS overlay on top of other layers` | BTS 레이어를 최상위로 |
+| `Do not zoom to BTS layers` (기본 켜짐) | BTS가 첫 레이어여도 경로에 줌 |
+| `Default BTS filter` · `Carrier` | 기본 필터. UMTS/LTE는 `Carrier number`로 필터의 어느 부분을 쓸지 정함 |
+| `Optimization` | 셀·사이트를 언제 그릴지 (`Do not draw cells when visible area width is more than N`) |
+| `Turn off BTS workspace` | 사이트 트리를 숨겨 성능 향상 |
+| `Cell size` — `Fixed` / `Dynamic, max size` | 셀 아이콘 픽셀 크기 |
+| `Show site names` · `Draw frame` · `Organize by name` · `Site transparency` | `Organize by name`: 같은 이름의 사이트가 넓게 퍼져 있으면 긴 여분 선이 그려질 수 있음; 끄면 분산 사이트의 선이 일부 안 그려질 수 있음 |
+| `Show cell information` (+`Add`) | 셀별 표시 항목. **기술·밴드별로** 메트릭 지정(그림: `Antenna beam width`, `GSM`, `900`) |
+| `Hide cell texts on low zoom levels` | 슬라이더 |
+| **`Use cell beam range from BTS file`** | BTS 파일의 빔 범위 데이터 사용 |
+| **`use estimation from antenna height and tilt`** | 안테나 높이·틸트로 커버리지 추정 |
+| **`Default beam`** (m) · **`Default beam angle`** (°) · `Beam transparency` | 기본 빔 길이·각도 |
+| `Default color` · `Default beam color` · `Default settings for BTS parameter`(BTS 파라미터별 기본 색상셋) · `Gradient color` | |
+| `BTS Technology Based Settings` — `Use technology based settings (overrides icon size settings)` → `Add` → `Set Technology Setting`(System · Band · Carrier · Cell size · Icon color) | 기술·캐리어별 색과 크기 |
+
+**셀별 속성 (p165–168).** 기지국 아이콘 우클릭 → `Properties`: `Current` 탭(현재 셀), `BTS` 탭
+(`Draw line to active base station`), `Site` 탭(`Cell size` Fixed/Dynamic · `Show site names` ·
+`Draw frame` · `Site transparency`), `Cell` 탭(`Show cell information` +`Add` · `Hide cell texts on
+low zoom levels` · `Use cell beam range from BTS file` · `use estimation from antenna height and
+tilt` · `Beam transparency`), **`Beam range`(m)**. 빔 범위는 `Workspace | Base Stations | File
+Contents`에서 셀을 좌클릭해도 표시됩니다.
+
+**그림.** `uc17-cell-beam-range-sector_p162`(경로 위 연한 초록 섹터), `uc17-options-bts-general_p163`,
+`uc17-cell-properties-beam-range_p166`, `uc17-bts-tab-beam-options_p167`.
+
+**우리.** ✕ 미구현 — `cell_ref`에 방위각이 있어 부채꼴을 그릴 데이터는 있습니다. 레퍼런스의
+빔 길이는 (a) BTS 파일 값, (b) 기본값(m), (c) 안테나 높이·틸트 추정 셋 중 하나이므로, (b)만으로도
+시작할 수 있고 (c)는 nullable 두 열이면 열립니다.
+
+#### UC18 · p168–171 · BTS 지도 오버레이와 그리드 행 동기화 — ●
+
+1. 측정 파일(p61)과 BTS 파일(p63)을 지도에 엽니다.
+2. 지도 우클릭 → **`Data View | Split | Vertically`** → 뷰가 둘로 나뉨.
+3. 빈 쪽 우클릭 → **`Data View | Insert | Grid`**.
+4. Workspace에서 **`.nbf`** 파일을 그리드로 드래그 앤 드롭.
+5. BTS 데이터 그리드가 표시되고, **그리드에서 고른 셀로 지도가 자동 줌**합니다.
+
+**그림.** `uc18-split-vertically-popup_p169`, `uc18-insert-grid_p170`,
+`uc18-grid-synced-with-bts-map_p171`.
+
+**우리.** ✅ — 공유 시간 커서가 지도·그리드·차트·L3를 함께 움직입니다. 레퍼런스의 이 유즈케이스는
+시간이 아니라 **셀 행 → 지도 줌** 동기화라, 우리의 셀 목록(Monitored set 표)에서 행을 고르면
+지도가 그 셀로 가는 동작이 정확한 대응물입니다.
+
+#### UC19 · p171–172 · BTS 참조 파라미터 사용 — ●
+
+**개념.** Parameters 뷰에 이름이 **`BTS reference`**로 시작하는 파라미터 묶음이 있습니다. BTS
+참조 파일(=BTS 파일)에 근거해 **현재 서빙·이웃 셀의 정보**를 표시합니다. 용도: 워크북에 서빙 셀
+**이름**을 측정값과 함께 표시, 또는 **KPI workbench의 입력 데이터셋**으로 써서 서빙 셀 등으로
+집계를 그룹핑.
 
 **절차.**
 
-1. Tools 패널의 **Area Binning 아이콘** → 지도에서 영역 선택
-2. `Select Measurement` 다이얼로그에서 대상 측정 파일 추가 (선택 영역에 걸친 경로는 기본
-   포함)
-3. `Measurement parameters`에서 집계할 파라미터 선택
+1. 관련 BTS 파일이 DB에 있어야 하고 **활성화**돼 있어야 합니다(열 때 `Set Active BTS Files`
+   체크; 이미 있으면 BTS 페이지에서 우클릭 → `Activate`). 날짜별 버전이 여럿이면 맞는 버전을
+   활성화.
+2. Workspace `Measurements` 페이지 → 측정 또는 폴더 선택 → Parameters 필터에 **`reference`**
+   입력 → BTS 참조 파라미터 목록(그림: `Other › All BTS reference cells`, 그리고 `Services ›
+   Voice quality › Audio quality reference sample filename DL/UL`도 검색에 걸림).
+3. 파라미터 더블클릭 → 기본 뷰, 우클릭 → 다른 뷰. 통계는 우클릭 → `Parameter Launchpad`(p57).
 
-**그림.** `manual10.2_area-binning_p150.png` — Tools의 아이콘 하나가 빨간 원으로 표시돼 있고,
-지도 위에 반투명 사각형 선택 영역이 그려져 있습니다. Color Legends는 `RSCP (dBm) [Distance]`
-— 아직 건수가 0인, 선택 직후의 상태입니다. 배경에 BTS 섹터 부채꼴이 함께 보입니다.
+**질의 API 쪽.** Appendix 6 `BTS_QUEST`(p499) — 측정과 BTS 파일로 "언제 어느 사이트·셀에 붙어
+있었나"(`type` 1 = serving, 0 = neighbor).
 
-**메뉴 쪽 근거.** `Map | Area binning` · `Distance binning`(p469). 통계 방식으로는
-Parameters 뷰의 `Statistics by: Fixed Geographical Bin Area`(p52)가 같은 것입니다.
+**그림.** `uc19-set-active-bts-files_p171`, `uc19-bts-reference-parameters-workspace_p172`.
 
-**우리.** ✅ — 격자 비닝(50/150/500 m) + 브리프 ⑤의 **지도 위 임의 폴리곤**. 레퍼런스와 같은
-"지도에서 영역을 고른다" 진입점이 생겼고, 폴리곤 안의 통계에 **통과 목록**(같은 사거리를
-세 번 지났으면 세 번의 통과)이 함께 나옵니다(`AreaStatsService`, `AreaSelection.inside`).
+**우리.** ◐ — `cell_ref`(PCI · ARFCN · 밴드 · GSCN · 방위각)를 DB가 갖고 있어 임포트·활성화
+절차가 불필요합니다. "서빙 셀 이름을 열로 붙이기"는 `SOURCE_SAMPLE`의 `serving_pci`가 절반을
+합니다(이름이 아니라 PCI).
 
-#### UC16 · p158 · 같은 경로의 두 측정 그룹 비교 — ○
+#### UC20 · p172–174 · 파일럿 오염 기반 기지국 연결선 표시 — ●
 
-**제목이 말하는 것.** 제목이 인덱스에서 `"…from the same route on"`으로 잘려 있습니다. 문맥상
-`on map`입니다. Map 메뉴의 **`Delta plotting`**(p469)이 이 유즈케이스를 교차 참조하는 것으로
-보이며(인덱스의 p469가 그 자리), 두 주행(예: 최적화 전·후, 사업자 A·B)의 차이를 지도 위에
-그리는 절차입니다.
+1. `Measurements`에서 측정 파일 선택 → Parameters 뷰에서 **`Pilot pollution`** 우클릭 →
+   `Open In | Map`.
+2. **carrier number**를 묻습니다 — `Select query values`에서 값 입력. **BTS 파일의 값과 일치해야**
+   합니다. 원문 그림의 필터 대화상자 값:
 
-**페이지.** 목차에 줄이 빠져 있고, 다음 줄의 `"158 Use Case 17"` 흔적으로 p158을 채택했습니다
-([페이지 번호에 대해](#페이지-번호에-대해)).
+   | Name | Value |
+   |---|---|
+   | `Polluter level window from the best active set` | `-6` |
+   | `Ec/N0 active set best below threshold (dB)` | `-12` |
+   | `RSCP active set best above threshold (dBm)` | `-95` |
+   | `Pilot count threshold` | `3` |
+   | `Carrier number` | `1538` |
 
-**우리.** ✅ — 브리프 ⑤의 **공간 차분 지도**(`SpatialDiffService`): 두 주행을 하나의 격자에
-담아 타일별 차이. 한쪽만 지나간 타일은 0이 아니라 null이고, 색과 라벨은 `verdict()` 한
-곳에서 정해집니다. A/B 통계 비교(Compare 모드)와 함께.
+3. `Select columns` 대화상자(Type `Route`, Longitude → `gps_longitude`, Latitude → `gps_latitude`,
+   Time → `time`, Distance) → `OK`. 질의가 끝나면 결과가 지도에 그려집니다.
+4. `Base stations` 탭에서 BTS 파일을 지도로 드래그 → "경로를 BTS와 연결할까요?" → **`Yes`**.
+5. 앞서 입력한 query value와 같은 **channel number** 입력 → **측정된 파일럿들이 선으로**
+   그려집니다.
+6. 그려진 BTS 선을 보려면 `Tools | Layers` → 우클릭 → **`Properties | BTS`** — "Select which lines
+   to draw" 목록: `Mobile serving and neighboring cells` · `CDMA / EVDO / LTE / UMTS scanner
+   measured pilots` · `GSM scanner top N measured BCCHs` · `LTE / UMTS scanner top N measured
+   pilots` · `GSM neighbor list` · `UMTS neighbor list` · **`Missing CDMA / GSM / UMTS
+   neighbors`** · `UMTS Mobile Detected Set Cells` · **`UMTS Mobile Pilot Pollution`**; `Apply
+   to all routes`. 범례는 `Number of cells [Time]` — 1 · 2 · 3 · 4 · 5 · 6 · 7 · >7.
 
-#### UC17 · p162 · 기지국 셀 빔 범위를 지도에 표시 — ◐
+**판정 규칙(필터 값에서 읽히는 것).** 파일럿 오염 = best active set에서 **`-6` dB 창 안에** 드는
+파일럿이 **3개 이상**이고, best active set의 Ec/N0가 `-12` dB보다 **나쁘며** RSCP가 `-95` dBm보다
+**좋은** 구간. 즉 레퍼런스에도 RSCP 하한이 있습니다 — 커버리지 홀을 오염으로 오탐하지 않기 위한
+조건입니다.
 
-**설정 쪽 근거.** `Options – BTS`(p459)에 **기본 빔 길이·각도**와 *"use estimation from
-antenna height and tilt"* 옵션이 있습니다. 즉 빔 범위(섹터 부채꼴)의 길이는 고정값이거나
-**안테나 높이·틸트로 추정**한 값입니다. p150 그림의 부채꼴이 이 표시입니다.
+**그림.** `uc20-pilot-pollution-filters_p173`, `uc20-select-columns_p173`,
+`uc20-pilots-drawn-on-map_p174`, `uc20-bts-lines-properties_p174`.
 
-**그림.** `manual10.2_cell-beam-range-on-map_p162.png`이 이 이름으로 저장돼 있으나, 열어 보면
-경로를 따라 **비닝된 타일**(RSCP · Throughput `[Distance]` 범례)이 그려진 화면이고 빔 범위가
-두드러지지 않습니다. 라벨과 내용이 맞는지 원문 확인이 필요합니다 — [그림 라벨 정정](#그림-라벨-정정).
+**우리.** ✅ — Mobility 탭의 모니터드 셋 점선 + `MonitoredSetService`의 오염 구간. 우리도
+하한(`POLLUTION_MIN_BEST_DBM = -110`)을 답니다. **정정**: 2026-09-01 브리프 ⑤와 대조표는 "매뉴얼의
+UC20에는 이 조건이 없다"고 적었는데, 원문 필터 대화상자에 `RSCP active set best above threshold
+(dBm) = -95`가 있습니다. **레퍼런스에도 같은 종류의 하한이 있고, 값만 다릅니다**(−95 대 −110).
+"우리가 더 낫다"는 판정은 철회하고 "같은 설계, 다른 기본값"으로 고칩니다. 레퍼런스의 창(−6 dB)·
+개수(3)·Ec/N0 상한(−12)도 우리 상수와 대조할 기준값입니다.
 
-**우리.** ✕ 미구현 — `cell_ref`에 방위각이 있어 부채꼴을 그릴 데이터는 있습니다. 안테나
-높이·틸트 두 열을 nullable로 더하면 레퍼런스식 **설계 커버리지 추정**까지 열립니다.
-
-#### UC18 · p168 · BTS 지도 오버레이와 그리드 행 동기화 — ○
-
-**제목이 말하는 것.** 그리드에서 행을 고르면 지도의 BTS 오버레이(서빙 셀 선 등)가 그 시점으로
-따라오는 절차. 기존 스크린샷 `nemo-analyze_basestation-map-synchronized-views.png`가 이 결과
-화면입니다.
-
-**우리.** ✅ — 공유 시간 커서가 지도·그리드·차트·L3를 함께 움직입니다.
-
-#### UC19 · p171 · BTS 참조 파라미터 사용 — ◐
-
-**그림에서 읽히는 것.** Parameters 트리 `Other` 아래에 **`All BTS reference cells`** 파라미터가
-있습니다(작업 공간 그림 `…_p174.png`, 아래 정정 참조). 즉 BTS 파일의 셀 목록을 측정
-파라미터처럼 질의·표시하는 진입점이고, UC19는 이것을 쓰는 절차입니다. Appendix 6의
-`BTS_QUEST` 프로시저(p499) — 측정과 BTS 파일로 "언제 어느 사이트·셀에 붙어 있었나"의 목록을
-만드는 것 — 가 그 SQL 층입니다.
-
-**우리.** ◐ — `cell_ref`(PCI · ARFCN · 밴드 · GSCN · 방위각)를 DB가 갖고 있어 **임포트 절차
-자체가 불필요**합니다. 별도 참조 파일 형식은 지원하지 않습니다.
-
-#### UC20 · p172 · 파일럿 오염 기반 기지국 연결선 표시 — ●
-
-**목적.** 측정 지점에서 **보이는(측정된) 파일럿들**로 기지국까지 선을 그어, 여러 셀이 비슷하게
-강한 곳(파일럿 오염)을 지도에서 보이게 합니다.
-
-**절차.**
-
-1. Parameters 뷰에서 `Pilot pollution`을 우클릭 → `Open In | Map`
-2. **carrier number**를 묻습니다 — BTS 파일의 값과 일치해야 합니다
-3. `Base stations` 탭에서 BTS 파일을 지도로 드래그 → "경로를 BTS와 연결할까요?" → `Yes`
-4. 같은 channel number를 입력하면 측정된 파일럿들이 선으로 그려집니다
-
-**그림.** `manual10.2_pilot-pollution-connections_p172.png` — 지도 워크북 위에 `Properties ›
-BTS` 탭이 열려 있고, **"Select which lines to draw"** 목록이 보입니다:
-
-| 그릴 수 있는 선 (원문 목록) |
-|---|
-| Mobile serving and neighboring cells |
-| CDMA / EVDO / LTE / UMTS scanner measured pilots · GSM scanner top N measured BCCHs · LTE / UMTS scanner top N measured pilots |
-| GSM neighbor list · UMTS neighbor list |
-| **Missing CDMA / GSM / UMTS neighbors** |
-| UMTS Mobile Detected Set Cells · **UMTS Mobile Pilot Pollution** |
-
-Layers의 `Pilot pollution` 레이어 설명에 판정 창이 보입니다 — *Polluter level window from
-Ec/N0 active set best below · RSCP active set best above · Pilot count threshold: 3*. Color
-Legends는 `Number of cells [Time]`로 1 · 2 · 3 · 4 … > 7 구간(그림에서 3이 59.44 %, 4가
-40.52 %).
-
-**우리.** ✅ — Mobility 탭의 모니터드 셋 점선 + `MonitoredSetService`의 파일럿 오염 구간.
-매뉴얼에 없는 **하한 조건** `POLLUTION_MIN_BEST_DBM = -110`을 답니다 — 없으면 모든 셀이 똑같이
-약한 커버리지 홀이 "여러 셀이 비슷하게 강함"으로 오탐됩니다. 검증이 매번 확인합니다. 절차는
-훨씬 짧습니다 — carrier number를 두 번 입력하고 BTS 파일을 드래그하는 대신 탭 하나입니다.
-
-#### UC21 · p174 · Cell locator 분석 — ●
-
-**목적.** 측정된 셀별 신호 강도만으로 **사이트 위치와 안테나 방향을 역추정**합니다.
+#### UC21 · p174–176 · Cell locator 분석 — ●
 
 > *"Cell locator is an algorithm that estimates the site locations and antenna directions of
-> individual cells based on measured signal strength per cell … a confidence number (1—10)
-> is reported per estimated cell location, with accuracy of <100 meters when data is
-> collected from opposite sides of the BTS."*
+> individual cells based on measured signal strength per cell. The accuracy of the estimate
+> depends on the geographical coverage of the collected data; a confidence number (1—10) is
+> reported per estimated cell location, with accuracy of <100 meters (110 yards) when data is
+> collected from opposite sides of the BTS. The Cell locator works for WCDMA, LTE, and 5G
+> scanner and mobile data collected outdoors."*
 
-**실행 시 입력 셋.**
+예제 그림에서 **실제 셀 위치는 초록, 드라이브 데이터로 추정한 위치는 보라**.
+
+**진입.** Parameters 트리의 `LTE mobile cell locator` · `LTE scanner cell locator` · `UMTS
+mobile cell locator` · `UMTS scanner cell locator` · `5G mobile cell locator` · `5G scanner cell
+locator`.
+
+**입력 (실행 시 묻는 값; 그림의 예 `3` · `5780` · `-120`).**
 
 | 입력 | 의미 |
 |---|---|
-| Minimum accuracy | 6 이상이면 <100 m급만. 9–10은 데이터가 조밀하지 않으면 결과가 전부 걸러질 수 있음 |
-| Carrier number | 채널 번호 단위로 분석 |
-| Minimum received power | 임계 미만 제거. 매우 낮은 전력에서 단말·스캐너가 유령 셀을 보고하므로 정확도가 올라감 (LTE −120 dBm, UMTS −100 dBm) |
+| `Minimum accuracy score (0-10)` | **6 이상**이면 가장 정확한(<100 m) 셀·사이트만. 9–10은 데이터가 조밀하지 않으면 결과가 전부 걸러질 수 있음 |
+| `Carrier number` | 캐리어(채널 번호) 단위로 분석. 데이터셋의 채널 번호 목록에서 선택 |
+| `Minimum received power` | 임계 미만 표본 제거. 매우 낮은 값(LTE **−120 dBm**, UMTS **−100 dBm**, 5G −100 또는 −120)을 걸러야 정확도가 오름 — 단말·스캐너가 저전력에서 **유령 셀**을 보고하기 때문 |
 
-**그림.** 브리프 ②와 `MANIFEST.md`는 `manual10.2_cell-locator-estimated-site_p174.png`를 "실제
-위치(초록)와 추정 위치(보라)"로 적었으나, **그 파일은 Workspace 패널 그림**입니다. Cell
-locator의 결과 그림은 작업 공간에 없습니다 — [그림 라벨 정정](#그림-라벨-정정).
+**출력.** 트리에서 분석을 더블클릭 → 지도에 **BTS 참조 오버레이**로 열림. 측면 패널의 레이어
+우클릭 → `.kml` · MapInfo `.tab`으로 내보내기. 우클릭 → `Open in | Grid`로 표 → `Export Data To`로
+Excel · `.tab`.
 
-**우리.** ✕ 미구현 — 그런데 유리한 위치입니다. 이 알고리즘은 "추정 위치 대 실제 위치"의
-오차가 전부인데, 우리는 `cell_ref`에 **실제 좌표와 방위각**이 있어 추정 오차를 수치로
-단언하는 검사를 붙일 수 있습니다. 입력(푸트프린트 볼록 껍질 + `sample_neighbour`)은
-갖춰져 있습니다.
+**그림.** `uc21-real-vs-estimated-site_p175`(초록 = 실제, 보라 = 추정), `uc21-cell-locator-parameters_p175`,
+`uc21-inputs-dialog_p176`, `uc21-result-overlay_p176`.
 
-#### UC22 · p177 · 5G 빔 시각화 — ○
+**우리.** ✕ 미구현 — 유리한 위치입니다. 우리는 `cell_ref`에 **실제 좌표와 방위각**이 있어 추정
+오차를 수치로 단언하는 검사를 붙일 수 있습니다. 레퍼런스의 세 입력(정확도 하한 · 캐리어 ·
+전력 하한)과 confidence 1–10 출력이 그대로 사양이 됩니다.
 
-**제목이 말하는 것.** SSB 빔 인덱스별 측정을 지도·3D에 그리는 절차. UC9(3D Visualizer)와
-같은 계열입니다.
+#### UC22 · p177 · 5G 빔 시각화 — ●
 
-**우리.** ✕ 미구현 — 빔 인덱스별 측정이 데이터 모델에 없습니다.
+1. 관련 BTS 파일을 로드하고 **활성화**.
+2. 5G 측정 경로를 지도 워크북에 그림.
+3. 경로 위를 우클릭 → **`Beam lines`**.
+4. 5G 경로가 자동 인식되고, 경로의 **모든 점에서 best beam의 사이트/셀로 선**이 그려집니다.
+   선 색은 **beam index**(자동 색상셋).
 
-#### UC23 · p177 · 서빙 셀 선을 Google Earth로 내보내기 — ◐
+**그림.** `uc22-beam-lines_p177`('Serving beam lines', 5G 스캐너 예).
 
-**메뉴 쪽 근거.** Map 팝업 메뉴의 `Export to KML file`(p128), Map 메뉴의 `Export to KML`(p468).
-측정 지점에서 서빙 셀까지 그은 선을 KML로 내보내 Google Earth에서 보는 절차입니다.
+**우리.** ✕ 미구현 — 빔 인덱스별 측정이 데이터 모델에 없습니다. 있다면 UC23의 서빙 셀 선과 같은
+그리기이고 색만 빔 인덱스입니다.
 
-**우리.** ◐ — **GeoJSON**으로 내보냅니다. KML이 아니라 플래닝 도구용 형식을 골랐습니다.
+#### UC23 · p177–179 · 서빙 셀 선을 Google Earth로 내보내기 — ●
 
-### 8.6 스프레드시트 그리드 (p180–p190) — UC24
+**전제.** 측정에 맞는 BTS 파일이 로드되고 **활성 BTS로 설정**돼 있을 것.
 
-앞 절: Editing cell format(p182) · Filtering data(p186) · Creating formulas(p188) · Adding
-functions(p189). 셀 서식·수식·함수가 있는 **엑셀형 그리드**입니다.
+1. 파라미터를 지도에 열어 경로와 BTS 아이콘이 보이게 함.
+2. 측면 패널의 파라미터 레이어 우클릭 → **`Serving Cell Lines`** → 측정점과 그 점을 서빙한 BTS
+   아이콘 사이에 선이 그려짐.
+3. 다시 레이어 우클릭 → **`Export Data To | Google KML-file`**.
+4. 위치와 이름을 정해 저장 → Google Earth에서 엽니다.
 
-#### UC24 · p190 · 최소화된 데이터셋에서 데이터 조회 — ○
+**그림.** `uc23-serving-cell-lines-popup_p178`, `uc23-serving-cell-lines_p178`,
+`uc23-export-kml-popup_p179`.
 
-**제목이 말하는 것.** "minimized data set"은 임포트 시 원시 표본을 버리고 **사전 계산된
-통계만** 남긴 데이터셋으로 보입니다 — KPI Workbench의 Parameter 설명(p347)에 *폴더를 고르면
-원시 샘플이 아니라 사전 계산된 통계로 제한된 데이터셋이 들어온다*는 문장이 같은 개념을
-가리킵니다. UC24는 그런 데이터셋에서 스프레드시트 그리드로 값을 꺼내는 절차로 보입니다.
+**우리.** ◐ — GeoJSON으로 내보냅니다. 서빙 셀 선 자체는 Mobility 탭에 있습니다.
 
-**우리.** ✕ 해당 없음 — 우리 저장은 `sample_kpi` 세로형이 전부를 보관하고, 최소화라는
-단계가 없습니다.
+### 8.6 스프레드시트 그리드 (p180–p191) — UC24
+
+#### UC24 · p190–191 · 최소화된 데이터셋에서 데이터 조회 — ●
+
+**개념.** 스프레드시트에 연 파라미터 데이터셋을 **셀 하나 크기로 최소화**할 수 있습니다
+("Editing cell format", p182). 최소화된 표에서 값을 꺼내려면 수식으로 참조합니다.
+
+**규칙.**
+
+- 별도 데이터셋의 첫 열은 시트 위치와 무관하게 **항상 `Column A`**, 둘째는 `B` …
+- **질의(데이터셋) 이름**을 알아야 합니다.
+- 수식은 `=`로 시작 → 함수 연산자(예: 평균은 `AVG`; 함수 목록은 "Adding functions" p189 —
+  `ABS` · `AND` · `AVG` · `CONCATENATE` · `COUNT` · `COUNTIF` · `EXACT` · `FACT` · `FALSE` · `IF` …)
+  → 괄호 안에 데이터셋 정의: **여는 괄호, 별표, 질의 이름, 느낌표, 첫 셀, 콜론, 끝 셀, 닫는 괄호**.
+
+**예.** `BLER DL` 데이터셋의 Column A 1–15행 평균:
+
+```
+=AVG(*BLER DL!A1:A15)
+```
+
+**그림.** `uc24-avg-formula_p190`(`=AVG(B7:B12)`), `uc24-minimized-dataset-formula_p191`.
+
+**우리.** ✕ 해당 없음 — 우리 저장은 `sample_kpi` 세로형이 전부를 보관하고, 스프레드시트 층이
+없습니다.
 
 ---
 
 ## 10장 — Reports (UC25)
 
-리포트 장(p231–p318)의 마지막 절 `Report Automation`(p293) → `Scheduling events with Nemo
-Analyze client`(p294) 안에 있습니다. 그 뒤가 `Reporting automation with Nemo Analyze
-Enterprise`(p310)입니다.
+#### UC25 · p307 · 이벤트 트리거 — ◐ (원문 p300–399 미제공, 2026-09-01 추출본)
 
-#### UC25 · p307 · 이벤트 트리거 — ●
-
-**목적.** "파일이 도착하면 리포트가 자동으로 만들어진다"는 파이프라인. 정기 드라이브 테스트를
-돌리는 조직의 실제 운영 형태입니다.
+리포트 장의 `Report Automation`(p293) → `Scheduling events with Nemo Analyze client`(p294) 안.
 
 > *"Triggering events enables report automation with server autoload, making running final
-> measurement reports more convenient for the end-user. … please note that triggering
-> events is not possible without a server connection."*
+> measurement reports more convenient for the end-user. … please note that triggering events
+> is not possible without a server connection."*
 
 **절차.**
 
-1. Nemo Analyze **Server**에서 backup/retrieve, autoload, FTP autoload를 켬
-2. `Backup & Retrieve`와 `Autoload`에서 `*.nmf`와 `*.zip`을 선택
-3. FTP 설정에서 하위 폴더 재귀 로드와 로드 후 서버에서 삭제를 선택
-4. FTP 서버에 폴더(예: `test`)를 만들고 측정 파일을 넣음 → 자동 로드되어 클라이언트의 같은
-   이름 폴더에 나타남
-5. 클라이언트에서 `Tools | Event scheduler` → 달력 → `Triggering events` → `Add`
-6. `Schedule Event Batch`의 `Triggering folder`에 FTP와 같은 폴더 이름을 입력
+1. Nemo Analyze **Server**에서 backup/retrieve, autoload, FTP autoload를 켬.
+2. `Backup & Retrieve`와 `Autoload`에서 `*.nmf`와 `*.zip`을 선택.
+3. FTP 설정에서 하위 폴더 재귀 로드와 로드 후 서버에서 삭제를 선택.
+4. FTP 서버에 폴더(예: `test`)를 만들고 측정 파일을 넣음 → 자동 로드되어 클라이언트의 같은 이름
+   폴더에 나타남.
+5. 클라이언트에서 `Tools | Event scheduler` → 달력 → `Triggering events` → `Add`.
+6. `Schedule Event Batch`의 `Triggering folder`에 FTP와 같은 폴더 이름을 입력.
 
-**우리.** ◐ — 이벤트 스케줄러도 자동 로드도 없고, 임포트는 사람이 파일을 올려 시작합니다.
-다만 구조는 오히려 가깝습니다 — 레퍼런스는 데스크톱 클라이언트가 별도 서버 제품에 붙는
-구조라 서버 설정 6단계와 FTP 폴더 규약이 필요한데, 우리는 처음부터 서버가 임포트하고 서버가
-리포트를 만듭니다(`report.html`이 이미 HTTP 엔드포인트). 없는 것은 **트리거뿐**입니다.
-브리프 ⑧의 여러 파일 임포트는 사람이 고르는 쪽이고 트리거가 아닙니다.
+**우리.** ◐ — 이벤트 스케줄러도 자동 로드도 없습니다. 구조는 오히려 가깝습니다 — 우리는
+처음부터 서버가 임포트하고 서버가 리포트를 만듭니다(`report.html`이 HTTP 엔드포인트). 없는 것은
+**트리거뿐**입니다.
 
 ---
 
 ## 11장 — Customization · KPI Workbench (UC26 · UC27)
 
-11장은 SQL 질의(p319–p332) → Query Manager(p333–p344) → **Custom KPI Workbench**(p344–p396)
-순서이고, UC26이 워크벤치 요소 설명의 끝(p396)에, UC27이 그 뒤 **24페이지짜리 실전
-예제**(p403–p426)로 붙어 있습니다. 요소별 명세는 [`kpi-workbench.md`](kpi-workbench.md).
+11장은 SQL 질의(p319–332) → Query Manager(p333–344) → Custom KPI Workbench(p344–396) 순서이고,
+UC26이 Filter 요소 설명의 끝(p396)에, UC27이 24페이지짜리 실전 예제(p403–426)로 붙어 있습니다.
+요소별 명세는 [`kpi-workbench.md`](kpi-workbench.md).
 
-#### UC26 · p396 · 다중 조건으로 복합 필터 만들기 — ●
+#### UC26 · p396–403 · 다중 조건으로 복합 필터 만들기 — ◐(p396–399) / ●(p400–403)
 
-**예제.** scrambling code를 12–21, 29–30, 74–88 세 범위로 거릅니다.
+**예제.** scrambling code를 **12–21, 29–30, 74–88** 세 범위로 거릅니다.
 
 ```
 (scr<=21 AND scr>11) OR (scr<=30 AND scr>=29) OR (scr<=88 AND scr>=74)
 ```
 
-**제약.**
+**제약.** *"The logic of the filter element follows that of a binary tree, and thus one node can
+always have only two child nodes."* Filter 요소의 `Properties` → `Filter` 탭의 트리에서
+`Add` / `Modify` / `Remove`로 조건을 하나씩 붙이고, 노드의 논리 연산자는 **우클릭 → AND / OR**로
+바꿉니다. 아래 줄에 완성된 식이 텍스트로 표시됩니다.
 
-> *"The logic of the filter element follows that of a binary tree, and thus one node can
-> always have only two child nodes."*
+**p400–403 절차(원문).**
 
-즉 Filter 요소의 조건은 다이얼로그에서 `Add`로 하나씩 트리에 붙이며, 세 번째 범위를 넣으려면
-**남은 자리가 어디인지 세어 가며** 넣어야 합니다.
+1. 첫 쌍 `scrambling_code <= 21 AND scrambling_code > 11`이 만들어진 뒤 `scrambling_code <= 30`을
+   더하면 트리는 `AND( AND(<=21, >11), <=30 )`. 한쪽 범위의 값만 있는 상황도 받아야 하므로
+   **상위 노드의 연산자를 우클릭 → `OR`**로 변경.
+2. 둘째 쌍 완성: `scr. code <= 30` 선택 → `Add` → `Condition` 대화상자에 `scr. code >= 29` → `OK`.
+   새로 생긴 노드의 연산자도 `OR` → 필요한 곳은 `AND`로(그림 p401: `OR( AND(<=21,>11),
+   AND(<=30,>=29) )`).
+3. 셋째 쌍: 마지막 쌍의 조건 하나 선택 → `Add` → `scr. code >= 74` → `OK` → **트리에 새 레벨이
+   자동 추가**. `scr. code >= 74` 선택 → `Add` → `scr. code <= 88` → `OK`.
+4. `OK`로 Workbench에 복귀 → Filter 요소가 **빨강에서 초록**으로 바뀜(동작 가능).
+5. 이 시점에서 테스트: Output에 연결 → Workspace `Measurements`에서 측정 선택 → 캔버스 배경
+   우클릭 → **`Run Script`** ("Running and testing KPIs").
 
-**우리.** ✅ — 여기는 우리가 낫습니다. `FILTER` 노드는 조건식을 텍스트 한 줄로 쓰고, 파서
-(`ColumnCondition`)가 AND/OR/괄호를 지원해 중첩 깊이 제한이 없습니다. 안전성은 파싱
-방식으로 보장합니다 — 연산자는 하드코딩 목록과 대조해 상수를 출력하고, 열 이름은 알려진
-집합과 대조하며, 사용자 입력의 어떤 조각도 SQL로 복사되지 않습니다.
+**그림.** `uc26-filter-tree-operator_p401`, `uc26-filter-tree-complete_p403`.
 
-#### UC27 · p403–p426 · 이웃 누락(핸드오버 누락)에 의한 호 단절 KPI 만들기 — ●
+**우리.** ✅ — 여기는 우리가 낫습니다. `FILTER` 노드는 조건식을 텍스트 한 줄로 쓰고 파서
+(`ColumnCondition`)가 AND/OR/괄호를 지원해 중첩 깊이 제한이 없습니다. 안전성은 파싱 방식으로 —
+연산자는 하드코딩 목록과 대조해 상수를 출력하고, 열 이름은 알려진 집합과 대조하며, 사용자
+입력의 어떤 조각도 SQL로 복사되지 않습니다.
+
+#### UC27 · p403–426 · 이웃 누락(핸드오버 누락)에 의한 호 단절 KPI 만들기 — ●
 
 매뉴얼에서 가장 긴 유즈케이스이고, 우리가 워크벤치를 설계할 때 본 "스크린샷"의 정체가 이
-유즈케이스의 완성 그래프(p425)였습니다. 이 절은 [`kpi-workbench.md` §7](kpi-workbench.md)의
-요약이며, 세부는 그쪽이 원본입니다.
+유즈케이스의 완성 그래프(p425)였습니다. 진입: 리본 `Tools | KPI workbench`.
 
-**문제 (p403).** 도심에서 건물 모서리가 서빙 셀을 순간 차단하면 핸드오버를 알릴 시간이
-없어 호가 끊깁니다. 이런 드롭콜만 골라내는 KPI를 만듭니다.
+**Step 1 — 계획과 파라미터 추가 (p403–406).**
 
-**지표 선택 (p404).** 핸드오버 누락 시 두 파라미터가 거의 동시에 움직입니다 — BLER이 오르고,
-active set의 Ec/N0가 monitored set의 것보다 낮아집니다.
+핸드오버 누락은 도심에서 건물 모서리가 서빙 셀 커버리지를 **순간적으로** 막아 다음 셀에 신호할
+시간이 없을 때 생깁니다. 그때 두 파라미터가 거의 동시에 움직입니다 — **BLER이 오르고, active set의
+Ec/N0가 monitored set보다 낮아집니다.**
 
-> *"if Ec/N0 1. best is better than Ec/N0 best active set, the handover has not occurred."*
+> *"if Ec/N0 1. best is better than Ec/N0 best active set, the handover has not occurred. …
+> if the result of the subtraction of Ec/N0 1. best from Ec/N0 best active set is smaller than
+> zero, a better Ec/N0 value exists than that of the active set."*
 
-즉 `Ec/N0 best active set − Ec/N0 1. best < 0`이면 더 좋은 셀이 있는데 옮겨가지 않은 것입니다.
-**설정된 이웃 목록은 쓰지 않습니다** — 측정값만으로 판정합니다.
+파라미터: `BLER`, `Ec/N0 best active set`, `Ec/N0 1. best`(= `Ec/N0 Nth best`에 N=1).
+드롭콜과 상관시키려면 누락 핸드오버를 **격리**해야 하고, 그것을 **state machine**으로 합니다.
+상태는 `OK`(idle) · `Bad BLER`(Bad BLER가 누락 핸드오버에 **반드시 선행**하므로) · `Missing
+handover`. 임계: **BLER ≥ 20**이 나쁨, **Ec/N0 difference < 0**이 누락 핸드오버.
 
-**상태 기계 설계 (p404–p405).** `OK` → `Bad BLER` → `Missing handover` 3상태. `OK →
-Missing handover` 직행 전이가 **없다**는 점이 핵심입니다 — Ec/N0 차이가 음수여도 BLER이 먼저
-나빠진 상태를 거쳐야만 누락 핸드오버로 판정됩니다.
+> *"It is very important that there is always a returning transition from each state in case
+> the conditions of the transitions to the state are not fulfilled anymore. … It is also
+> recommended to always plan the operation of the state machine in the form of a flow chart,
+> complete with trigger values."*
 
-| 전이 | 조건 | Output 필드 |
-|---|---|---|
-| OK → Bad BLER | `BLER >= 20` | (비움) |
-| Bad BLER → OK | `BLER < 20` | (비움) |
-| Bad BLER → Missing handover | `Ec/N0 difference < 0` | (비움) |
-| **Missing handover → OK** | `BLER < 20` | **`Missing handover`** |
-| **Missing handover → Bad BLER** | `Ec/N0 difference >= 0` | **`Missing handover`** |
+원문 p405의 흐름도(벡터 텍스트라 그림 파일이 없어 여기 다시 그림):
 
-Output 이름은 상태가 아니라 **그 상태에서 나가는 전이**에 붙입니다. 매뉴얼의 설명: *"Because
-the only relevant state in terms of the KPI is Missing handover and the output should not
-include any data from the state OK, leave the Output field empty"*(p415), *"As the output
-should include the data from the state Missing handover, enter the name Missing handover
-to the Output field"*(p421). 그래서 행은 그 상태를 **빠져나올 때** 기록되고, `time_interval`이
-"그 상태에 머문 시간"이 됩니다.
+```mermaid
+stateDiagram-v2
+    [*] --> OK
+    OK --> BadBLER : BLER >= 20
+    BadBLER --> OK : BLER < 20
+    BadBLER --> MissingHandover : Ec/N0 difference < 0
+    MissingHandover --> BadBLER : Ec/N0 difference >= 0
+    MissingHandover --> OK : BLER < 20
+```
 
-**그래프 제작 절차 (p405–p426).**
+`OK → Missing handover` 직행 전이가 **없습니다** — BLER이 먼저 나빠진 상태를 거쳐야만 판정됩니다.
 
-| # | 노드 | 매뉴얼이 밝힌 이유 |
-|---|---|---|
-| 1 | 파라미터 3개 드롭 — `BLER`, `Ec/N0 best active set`, `Ec/N0 Nth best`(Value = 1) | Nth best의 Value=1이 "1. best" |
-| 2 | Ec/N0 둘 → **All Values Within Time Range** | 시간 기준 결합 |
-| 3 | → **Math 뺄셈** (`- ec/no AND 1. best Ec/No AS Ec/No difference`) | 차이를 열 하나로 |
-| 4 | `BLER` + 차이 → **Union** | *"a correlation method that does not remove any data from either of the sets, namely Union"* (p407) |
-| 5 | → **Ascending sort** (Column = time) | *"rows are not ordered by time. As most operations require the input data to be ordered by time, you need to sort the data set before performing any further operations"* (p409) |
-| 6 | → **State Machine** (OK / Bad BLER / Missing handover) | |
-| 7 | `Call dropped` + 상태 기계 → **All Values Within Time Range** | 상태 기계가 **primary**(가장 왼쪽 소켓) |
-| 8 | → **Output** (`Column count: 19`) | |
-| 9 | 우클릭 → `Save` → 이름 입력 → **Column Aliases** 마법사 | 저장하면 *"can now be found in the Parameters view under the User item"* (p426) |
+절차: Parameters 뷰에서 `BLER`, `Ec/N0 best active`, `Ec/N0 Nth best`를 캔버스로 드래그. Nth best를
+놓으면 `Analyze Wizard – Filters`가 열리고 **`Value` 필드가 `1`인지 확인** → `Finish`.
 
-**그림 4장.** `…_uc27-state-flow_p405.png`(파라미터 3개와 빨간 Output만 놓인 시작 상태) ·
-`…_uc27-graph-partial-union_p408.png`(Union까지 연결, Output은 아직 빨강) ·
-`…_uc27-complete-graph_p425.png`(완성 그래프 — BLER + (best active set − 1. best) → Union →
-Ascending time → State Machine → Call dropped와 상관 → Output 19열) ·
-`…_uc27-result-grid_p426.png`(실행 결과).
+**Step 2 — 원시 데이터셋 결합 (p406).** 뺄셈은 두 값이 **같은 데이터셋** 안에 있어야 하므로
+`Correlations` 메뉴의 **`All Values Within Time Range`**를 놓고 `Ec/N0 best active set`과 `Ec/N0 Nth
+best`의 출력 소켓에서 입력 소켓으로 선을 끕니다("동시에 발생하는 두 Ec/N0 값"이므로).
 
-> **정정 이력.** 처음에는 p405 그림을 "상태 흐름도"로, p408을 "완성 그래프"로 적었습니다.
-> 열어 보면 p405는 노드 3개 + Output만 놓인 **시작 화면**이고, 완성 그래프는 p425입니다.
-> `MANIFEST.md`의 p405 설명("상태 흐름도")도 그림 내용과 다릅니다.
+**Step 3 — 연산 추가 (p406–424).**
 
-**실행 결과 (p426).** 전체 측정에서 **2행**입니다.
+1. `Math` 메뉴의 **`Subtraction (-)`** → All Values Within Time Range에 연결 → 우클릭 `Properties`:
+   `Left column` = `Ec/N0`, `Right column` = `1. best Ec/N0`, `Right value` 비움, **`Result title` =
+   `Ec/N0 difference`**.
+2. 이제 입력 데이터셋이 둘(`BLER`, `Ec/N0 difference`). *"you need to select a correlation method
+   that does not remove any data from either of the sets, namely **Union**."* `Joins` 메뉴의
+   `Union`에 둘을 연결.
+3. 중간 테스트: Union → Output 연결 → 측정 선택 → 배경 우클릭 → `Run Script` → 출력 그리드가 새
+   워크북으로. *"although the two tables and their time columns have been merged, the rows are
+   not ordered by time. As most operations require the input data to be ordered by time, you
+   need to sort the data set before performing any further operations on it."*
+4. `Sorting` 메뉴의 **`Ascending sort`** → Union에 연결 → `Properties` → `Column` = **`time`** →
+   `OK`. 다시 테스트하면 시간순.
+5. `Operations` 메뉴의 **`State Machine`** → Ascending sort에 연결 → `Properties`:
+   - `Add` → `State` 대화상자 `Name` = `OK` → `OK`. 같은 식으로 `Bad BLER`, `Missing handover`.
+   - **`Initial state`** = `OK`.
+   - 전이는 상태를 선택 → `Modify` → `State` 대화상자에서 `Add` → **`Transition`** 대화상자
+     (`Conditions` 목록 + `Add / Modify / Remove`, `Target`, **`Output`**) → `Add` → **`Condition`**
+     대화상자(`Left column` · `Operator` · `Right column` / `<Value>` · `Value`).
+
+   | 출발 | Target | Condition | Output 필드 | 원문 근거 |
+   |---|---|---|---|---|
+   | OK | Bad BLER | `BLER >= 20` | **비움** | *"Because the only relevant state in terms of the KPI is Missing handover and the output should not include any data from the state OK, leave the Output field empty"* (p415) |
+   | Bad BLER | OK | `BLER < 20` | 비움 | (p418) |
+   | Bad BLER | Missing handover | `Ec/N0 difference < 0` | 비움 | (p419) |
+   | Missing handover | OK | `BLER < 20` | **`Missing handover`** | *"As the output should include the data from the state Missing handover, enter the name Missing handover to the Output field"* (p421) |
+   | Missing handover | Bad BLER | `Ec/N0 difference >= 0` | **`Missing handover`** | (p423) |
+
+   → `OK`로 닫으면 State Machine 요소가 동작 가능.
+6. `Call dropped` 파라미터를 캔버스로 드래그. `Correlations`의 **`All Values Within Time Range`**를
+   하나 더 놓고, *"the state machine has to be the primary data set and the parameter Call
+   dropped the secondary one"* — **state machine을 가장 왼쪽 입력 소켓에**, `Call dropped`를 다음
+   소켓에 → 이 요소를 Output에 연결.
+
+**Step 4 — 실행과 저장 (p425–426).** 측정 선택 → `Run Script`. *"The final output includes only
+the rows with Missing handover events from the measurement data, and if there are Call dropped
+events within the time range of the Missing handover events, these will be displayed as well."*
+저장: 배경 우클릭 → `Save` → `Analyze Wizard – Properties`의 `Name`·`Title` = `Dropped calls
+resulting from missing handover` → `Next` → `Column Aliases` → `Finish` → **Parameters 뷰의 `User`
+항목** 아래에 나타남.
+
+**실행 결과 (p426).** 전체 측정에서 **2행**:
 
 | start_time | end_time | time_interval | index | text | Event ID | Event |
 |---|---|---|---|---|---|---|
 | 15:55:46.435 | 15:55:51.776 | **5341** | 1 | Missing handover | CAD | Call dropped |
 | 15:55:48.986 | 15:55:51.776 | 5341 | 1 | Missing handover | CAD | Call dropped |
 
-*"The final output includes only the rows with Missing handover events … and if there are
-Call dropped events within the time range of the Missing handover events, these will be
-displayed as well"*(p425). 우측 Information 패널에는 `Measurement` · `Time` · `System (UMTS
-FDD)` · `Downlink Band (2100)` · `Status (Dropped call…)` · `Call type (Voice call)`까지 19열이
-이어집니다. 수만 표본에서 행 2개가 남고, 각 행이 "언제부터 언제까지, 몇 ms 동안, 무엇
-때문에"를 답합니다.
+우측 Information에 `Measurement` · `Time` · `System (UMTS FDD)` · `Downlink Band (2100)` · `Status
+(Dropped call…)` · `Call type (Voice call)`까지 **19열**.
 
-**우리.** ◐ — 노드 그래프의 **구조**(배치·연결 방향·상태 이름)는 일치합니다. 같은 KPI를
-만들 수 있는가는 **아니오**이고, 막는 것이 넷입니다: (1) 우리 `STATE_MACHINE`은 표본별 `CASE`라
-"Bad BLER를 거쳐야 Missing handover"라는 **순서**를 표현 못 함, (2) 출력이 표본별 값이라
-`start_time`/`time_interval` 구간 행을 못 냄, (3) primary 게이팅이 없음, (4) `sample_neighbour`에
-**active set 개념이 없음**. 반면 "설정된 이웃 목록이 없어 원천 불가"라던 기존 판단은
-틀렸습니다 — 레퍼런스도 측정값만 씁니다. 실제로 막는 것은 시드 생성기가 매 표본 argmax를
-서빙으로 골라 "이웃이 서빙보다 강한" 표본이 0개라는 점입니다([`corrections.md` C1·C2·C9](corrections.md)).
-브리프 ⑥에서 `SOURCE_EVENT`가 생겨 7단계의 상관 상대는 이제 캔버스에 올릴 수 있습니다.
+**Output 규칙의 함의.** 행은 그 상태를 **빠져나올 때** 기록되고, 이름은 방금 있었던 상태를
+가리키며, `time_interval`이 "그 상태에 머문 시간(ms)"입니다. 관심 상태에서 **나가는 모든 전이**에
+같은 Output 이름을 적어야 빠짐없이 잡힙니다.
+
+**그림.** `uc27-start-canvas_p405`(파라미터 3개와 빨간 Output), `uc27-subtraction-properties_p407`,
+`uc27-graph-partial-union_p408`, `uc27-sort-column_p410`, `uc27-states-initial_p414`,
+`uc27-transition-dialog_p415`, `uc27-condition-dialog_p415`, `uc27-transition-with-output_p421`,
+`uc27-missing-handover-transitions_p423`, `uc27-complete-graph_p425`, `uc27-result-grid_p426`.
+(`state-machine-states_p368.png`은 p413의 State Machine `Properties` 그림과 동일합니다.)
+
+**우리.** ◐ — 노드 그래프의 구조(배치·연결 방향·상태 이름)는 일치합니다. 같은 KPI를 만들 수
+있는가는 **아니오** — (1) 우리 `STATE_MACHINE`은 표본별 `CASE`라 "Bad BLER를 거쳐야"라는 순서를
+표현 못 함, (2) 출력이 표본별 값이라 `start_time`/`time_interval` 구간 행을 못 냄, (3) primary
+게이팅이 없음, (4) `sample_neighbour`에 active set 개념이 없음. "설정된 이웃 목록이 없어 원천
+불가"라던 기존 판단은 틀렸고, 실제로 막는 것은 시드 생성기가 매 표본 argmax를 서빙으로 골라
+"이웃이 서빙보다 강한" 표본이 0개라는 점입니다([`corrections.md` C1·C2·C9](corrections.md)).
+`SOURCE_EVENT`가 생겨 6단계의 상관 상대는 이제 캔버스에 올릴 수 있습니다.
 
 ---
 
 ## 12장 — Other tasks · 색상셋 (UC28–UC31)
 
-12장(p427)의 첫 절이 색상셋입니다 — `Editing color sets`(p427) · `Importing color sets`(p428) ·
-`Automatic generation of color sets`(p429) — 그리고 유즈케이스 넷이 이어집니다. 색상셋은
-레퍼런스에서 **독립된 1급 자산**입니다: 이름을 붙여 저장·임포트하고, 파라미터의 기본값으로
-매고(`Change defaults`, p59), 지도(UC30)·그리드(UC31)·리포트(`Passing color set information to
-MS Excel charts`, p245)에 적용합니다. 지도 팝업 메뉴에도 `Generate color set`(p128)이 있고,
-`Options – Color`(p457)가 전역 설정입니다.
+**색상셋 절의 배경 (p427–432).**
 
-#### UC28 · p432 · 값 범위에서 색상셋 자동 생성 — ◐
+- `Tools | Color set editor` → `Color Set Editor`: 전체 목록, `Type`·`Group`으로 정렬, 이름 검색,
+  더블클릭으로 편집, `Add / Modify / Delete / Copy`. 원격 DB에 연결돼 있으면 **`Update to Server`**
+  로 로컬 색상셋을 서버에 올림(편집기를 닫고 재시작할 때 서버 파일을 **대체**).
+- `Color Set Properties`: `Name` · `Short name` · `Description` · **`Groups`**(연결할 기술·항목:
+  CDMA · DVB-H · EVDO · GAN · GSM · LTE · Other · Services · Statistics · TD-SCDMA · TETRA · Tetrapol ·
+  UMTS · User · WiMAX · Xynergy …) · **`Type`**(`numerical` · `gradient` · `string`) ·
+  `Automatically generate missing values` · `Values` 표(Color · Limits / String · Description) ·
+  `Add` · `Add Range…` · `Modify…` · `Delete` · 순서 화살표.
+- **가져오기**: Nemo Outdoor의 `.csf` — `File | Settings (Import)` → 파일 선택 → `Import Settings`
+  에서 색상셋 체크. 사용자 설정 전체(`.aex`)의 가져오기·내보내기는 p460–461
+  (`File | Settings (Import/Export)`, 파라미터·워크북·이벤트·질의·색상셋·KPI 포함).
+- **자동 생성 (p429–432)**: 빈 지도를 열고 측정의 파라미터(예: `RX level full`)를 지도로 드래그 →
+  기본은 **color rotation**으로 칠해짐 → 지도 우클릭 → **`Generate Color Set`** → `Color Set
+  Wizard`에서 질의(파라미터)와 `Column` 선택 → `Next` → 이름·short name·group → `Finish`. 적용:
+  경로 우클릭 → `Properties` → `Color` 페이지 → `Mode` = **`Based on value`**, `Color set` = 새
+  색상셋(예: `RX level full 2(dBm)`), `Scheme`/`Parameter` = `RX level full` → `OK`. 범례에서 값을
+  클릭하면 지도에서 그 값이 **강조**됨. 범례 우클릭 → `Export To Text File`.
+- `Options – Color`(p457): 팔레트(이웃형 그래프·경로 색), `.aex`로 다른 PC에 가져오기, 색상
+  범례 기본값.
 
-**절 위치로 읽히는 것.** `Automatic generation of color sets`(p429)의 실습. 파라미터의
-값 범위(최소·최대)를 N개 구간으로 나눠 색을 자동 배정합니다.
+#### UC28 · p432–434 · 값 범위에서 색상셋 자동 생성 — ●
 
-**우리.** ✅ — `AutoScale`: 임계값이 없는 KPI에 이 세션의 **사분위**로 자동 구간. 판정이 아님을
-범례가 명시합니다.
+**목적.** **scrambling code · cell ID · BSIC**처럼 값이 이산적이고 범위가 넓은 파라미터에 특히
+유용합니다.
 
-#### UC29 · p434 · 색상셋 만들기 — ◐
+1. Workspace `Maps` 페이지의 `Loaded` 뷰에서 지도를 더블클릭해 빈 지도를 엶(지도는 Map Folder
+   에서 미리 로드돼 있다고 가정).
+2. 측정 선택 → Parameters에서 파라미터(예: **`Cell identification`**)를 지도로 드래그 → color
+   rotation으로 칠해진 경로. 경로가 심볼로 보이면 우클릭 → `Properties` → `Route` 페이지의
+   `Draw Mode` = `Line`.
+3. 측면 패널의 `Color Legend` 우클릭 → **`Editor`** → `Add…` → `Color Set Properties`에서
+   **`Add Range`**.
+4. `Add Range` 대화상자: `From` · `To` · `Step`. 예: **`116731` ~ `117419`, step `1`** → `OK`.
+5. 새 값 범위가 생기고, 사용자 정의 범위 덕에 값들이 지도에서 더 뚜렷이 구분됩니다.
 
-**절 위치로 읽히는 것.** `Editing color sets`(p427)의 실습 — 구간 경계와 색을 손으로 정해
-이름 붙여 저장.
+**그림.** `uc28-color-set-properties_p433`, `uc28-add-range_p434`.
 
-**우리.** ◐ — 임계 편집기로 만들지만 **KPI에 매입니다**. 이름 붙여 재사용하는 색상셋은 미룸.
-또 하나의 차이: `Change defaults`의 Statistics 탭에는 구간 경계의 **포함 방향**(Up/Down —
-`>0 and <=25` 대 `>=0 and <25`)이 있는데, 우리는 "하한 포함, 상한 배제"로 고정입니다.
+**우리.** ✅ — `AutoScale`: 임계값이 없는 KPI에 이 세션의 사분위로 자동 구간(판정이 아님을 범례가
+명시). 레퍼런스의 `Add Range`는 **연속 구간이 아니라 이산값 하나하나에 색을 배정**하는 것이라
+셀 ID 채색(우리의 서빙 PCI 채색, `view/paint.ts`)이 더 가까운 대응물입니다.
 
-#### UC30 · p436 · 색상셋을 지도에 만들어 적용 — ◐
+#### UC29 · p434–436 · 색상셋 만들기 — ●
 
-**우리.** ✅ — 경로선·영역 빈·거리 빈이 모두 같은 스케일을 씁니다. 브리프 ④의 **범례 구간
-클릭 격리**가 여기 붙습니다.
+1. `Tools | Color set editor` → `Add` → 빈 `Color Set Properties`.
+2. 상단 설정(이름 · short name · 설명 · Groups · Type = `numerical`)을 먼저 정의.
+3. `Add` → **`Range Properties`**: `Description` · `Color` · `Limits` — 연산자와 값 두 줄, 사이에
+   `And` 체크. 원문 예:
 
-#### UC31 · p440 · 색상셋을 그리드에 만들어 적용 — ◐
+   | Description | Color | Limits |
+   |---|---|---|
+   | Very good | 분홍 | `>= 0` And `< 2` |
+   | Good | 노랑 | `> 2` And `< 4` |
+   | Bad | 빨강 | `> 4` |
 
-**우리.** ◐ — 그리드 셀은 **심각도 클래스**(`sev-*`)로 칠합니다. 스케일 색 그대로 칠하는 것은
-미룸([백로그 ④](../../ui-ux-backlog.md)). UC10과 같은 항목입니다.
+4. 값 집합이 완성될 때까지 반복 → `OK` → 편집기 목록에 추가(예: `Parameter X`, Group `User`).
+
+**그림.** `uc29-range-properties_p435`, `uc29-color-set-complete_p436`.
+
+**우리.** ◐ — 임계 편집기로 만들지만 KPI에 매입니다. 레퍼런스는 구간마다 **연산자를 골라
+포함 방향**(`>=` 대 `>`)을 정하는데, 우리는 "하한 포함, 상한 배제"로 고정입니다.
+
+#### UC30 · p436–439 · 색상셋을 지도에 만들어 적용 — ●
+
+1. `Tools | Color set editor` → `Add` → 이름(예 `EcN0 gradient`), group(`UMTS`), **Type =
+   `gradient`** → `Add`.
+2. **`Value Properties`**: `Description` · `Color` · **`Limit`**(값 하나). **최솟값**부터 — 예
+   `Bad`, 빨강, `-20` → `OK`. **최댓값**에 대해 반복 — `Good`, 초록, `0`.
+
+   > *"You should always define the values from lowest to highest. Otherwise, the color set
+   > will not work properly. If the values are not in the correct order Nemo Analyze will
+   > confirm in a separate popup whether you wish to continue."*
+
+3. `OK` → 편집기에 추가 → `Close`.
+4. 빈 지도를 열고 측정 선택 → Parameters 필터에 `Ec/N0 best active set` → 지도로 드래그(위치
+   데이터가 있으면 경로가 나타남).
+5. 경로 우클릭 → `Properties` → `Color` 페이지: `Mode` = **`Based on value`**, `Parameter` =
+   `Ec/N0 best active set`, `Color set` = `EcN0 gradient` → `OK`.
+6. 경로가 그라디언트 규칙으로 칠해집니다.
+
+**그림.** `uc30-value-properties_p437`, `uc30-gradient-color-set_p438`,
+`uc30-route-color-properties_p439`, `uc30-route-gradient-map_p439`.
+
+**우리.** ✅ — 경로선·영역 빈·거리 빈이 모두 같은 스케일을 씁니다. **그라디언트(연속) 타입**은
+없고 구간(numerical)만 있습니다.
+
+#### UC31 · p440–443 · 색상셋을 그리드에 만들어 적용 — ●
+
+1. `Tools | Color set editor` → `Add` → 이름(예 `Measurement report 2` — **기존 이름과 겹치지 않게**),
+   group(`GSM`), **Type = `string`** → `Add`.
+2. **`String Properties`**: `Text`(칠할 문자열, 예 **`MEASUREMENT_REPORT`**) · `Color`(예 시안) ·
+   `Description` → `OK` → `Values`에 문자열이 표시됨 → `OK`로 편집기에 추가.
+3. Layer3 시그널링 그리드 열기: 장치 선택 → Parameters 필터에 `L3` → `L3 signaling` 우클릭 →
+   `Open in | Grid`.
+4. 그리드 우클릭 → `Properties` → `Color Sets` 탭 → 열 **`Message Name`**에 방금 만든 색상셋 →
+   `OK` → 그 메시지 이름의 셀이 칠해집니다.
+
+**그림.** `uc31-string-properties_p441`, `uc31-l3-grid-colored_p443`.
+
+**우리.** ◐ — 그리드 셀은 심각도 클래스로 칠합니다. **문자열 타입 색상셋**(이벤트·메시지 이름에
+색)은 우리 `event_type` 레지스트리가 사실상 같은 일을 하지만 사용자가 편집하지 못합니다.
 
 ---
 
 ## 유즈케이스를 가로지르는 개념 여섯
 
-31개를 따로 읽으면 놓치는, 여러 유즈케이스가 공유하는 전제입니다.
-
 | 개념 | 걸린 UC | 매뉴얼 | 우리 |
 |---|---|---|---|
-| **BTS 파일** — 기지국 위치·방위·채널의 별도 자산. 지도로 드래그해 경로와 "연결" | 14 · 17 · 18 · 19 · 20 · 21 · 23 | p63, p140–146, `BTS_QUEST`(p499), `Options – BTS`(p459) | `cell_ref` 테이블. 연결 단계가 없음. 안테나 높이·틸트는 없음 |
-| **색상셋** — 이름 붙은 1급 자산, 파라미터 기본값으로 매임 | 1 · 10 · 14 · 28–31 | p59, p128, p245, p427–443, p457 | KPI별 임계 사다리 + `AutoScale`. 이름 붙은 재사용은 미룸 |
-| **전역 필터** — 값 조건 또는 폴리곤, 이후 모든 조작에 적용 | 5 · 15 · 16 | p74–82, p467 | 없음. 파생 KPI로 우회. 공간 조건은 전역 불가 |
-| **시간 기반 파일** — 값이 바뀔 때만 표본이 생김. 집계는 시간 가중, 경로 균등은 거리 가중 | 15 · 16 · 27 | p353·375·378, Appendix 3(p477), `QSR_TIME`/`QSR_DISTANCE`(p495–497) | 1 Hz 균일이라 시간 가중 불필요. **거리 가중은 필요**했고 브리프 ⑦에서 넣음 |
-| **선택 구성요소** — Troubleshooting Toolkit(드릴다운·KPI Workbench), 3D Visualizer, Lee's criteria | 9 · 22 · 26 · 27 (+ 드릴다운) | p87, p112, p55, p466 | 기본 포함. "격차"의 상당수가 레퍼런스 기본 제품에도 없는 것 |
-| **상태 점유 = 한 행** — State Machine의 출력은 표본별 값이 아니라 구간 행 (`start_time`, `time_interval`) | 27 | p370, p426 | 우리 `STATE_MACHINE`은 분류기. 구간 출력은 저장 모델을 건드려야 하는 유일한 항목 |
+| **BTS 파일** — 기지국 위치·방위·채널의 별도 자산. 지도로 드래그해 경로와 "연결", 날짜 버전은 `_YYYY-MM-DD` 규약, 활성화 필요 | 9 · 14 · 17 · 18 · 19 · 20 · 21 · 22 · 23 | p63, p140–146, p459, `BTS_QUEST`(p499) | `cell_ref` 테이블. 연결·활성화 단계가 없음. 안테나 높이·틸트·빔 범위는 없음 |
+| **색상셋** — 이름 붙은 1급 자산. `numerical` / `gradient` / `string` 세 타입, Groups로 분류, 파라미터 기본값으로 매임(`Change defaults` p59), `.csf`/`.aex`로 이동 | 1 · 10 · 14 · 28–31 | p59, p128, p427–443, p457, p460 | KPI별 임계 사다리 + `AutoScale`. gradient·string 타입과 이름 붙은 재사용은 없음 |
+| **전역 필터** — 값 조건 · 2차 파라미터 · 폴리곤 · 셀 ID · 이벤트 제외. 이후 모든 조작에 적용(Crystal Reports 제외) | 5 · 15 · 16 | p74–82, p94, p467 | 없음. 파생 KPI로 우회. 공간 조건은 전역 불가 |
+| **통계 기준 Time / Distance / Sample** — 비닝·델타·통계에서 매번 고를 수 있음 | 15 · 16 | p151, p161, p457, Appendix 3(p477), `QSR_*`(p495–497) | `AggregationBasis`로 `[Distance]` / `[Sample]` / `[Sample, linear dB]` |
+| **동기화된 워크북** — 같은 세션의 다른 파일(IP trace · 바이너리 로그 · 서버 로그)을 별도 워크북으로 열면 시간으로 자동 동기화 | 2 · 3 · 4 · 18 | p68–74, p94 | 공유 시간 커서 (한 세션 안) |
+| **상태 점유 = 한 행** — State Machine의 출력은 표본별 값이 아니라 구간 행(`start_time` · `end_time` · `time_interval`) | 27 | p370, p426 | 우리 `STATE_MACHINE`은 분류기. 구간 출력은 저장 모델을 건드려야 하는 유일한 항목 |
 
 ---
 
-## 그림 라벨 정정
+## 그림 라벨 정정 (2026-09-02, 원문으로 확정)
 
-작업 공간의 `manual10.2_*` 14장 중 유즈케이스 페이지의 그림을 이 문서를 쓰며 **전부 열어
-보았습니다.** 둘이 라벨과 내용이 다릅니다.
+2026-09-01에 추출된 그림 16장을 이번 원문과 **픽셀 단위로 대조**했습니다. 넷이 실제 페이지·내용과
+달랐고, 파일명을 바꿨습니다. 같은 날 오전 판의 이 표는 두 파일을 서로 바꿔 적었던 것이라 함께
+고쳤습니다.
 
-| 파일 | 라벨(MANIFEST · 브리프 ②) | 실제 내용 | 조치 |
-|---|---|---|---|
-| `manual10.2_cell-locator-estimated-site_p174.png` | "Cell locator — 실제 셀 위치(초록)와 추정 위치(보라)" | **Workspace 패널** — Folders(`localhost › All Measurements (3)`) · Measurements 3건 · Parameters에 `reference` 검색 → `Other › All BTS reference cells`, `Services › … › Audio quality reference sample filename DL/UL`. 지도도, 초록·보라 표식도 없음 | 내용상 **UC19(BTS 참조 파라미터, p171)** 쪽 그림. Cell locator 결과 그림은 저장소에 **없음**. MANIFEST와 브리프 ②의 설명을 고쳤고, 파일명은 원문 페이지를 확인할 수 없어 그대로 둠 |
-| `manual10.2_cell-beam-range-on-map_p162.png` | "지도 위 셀 빔 범위(섹터)" | 경로를 따라 **비닝된 타일**(RSCP · Throughput `[Distance]` 범례). 빔 범위 부채꼴은 두드러지지 않음 | UC15/UC16 결과 화면일 가능성. **원문 확인 필요** — 라벨은 유지 |
+| 이전 파일명 | 실제 내용 (원문 위치) | 새 파일명 |
+|---|---|---|
+| `manual10.2_pilot-pollution-connections_p172.png` | **Workspace 패널** — Parameters에 `reference` 검색 → `All BTS reference cells`. **UC19의 그림**(p172 상단) | `manual10.2_uc19-bts-reference-parameters-workspace_p172.png` |
+| `manual10.2_cell-locator-estimated-site_p174.png` | 지도 워크북 + `Properties › BTS` "Select which lines to draw" + `Number of cells [Time]` 범례. **UC20의 마지막 그림**(p174) | `manual10.2_uc20-bts-lines-properties_p174.png` |
+| `manual10.2_cell-beam-range-on-map_p162.png` | 경로를 따라 비닝된 타일(RSCP · Throughput `[Distance]`). **UC16 Delta plotting의 결과**(p162 상단). 빔 범위 그림은 같은 페이지의 다른 그림 | `manual10.2_uc16-delta-plotting-result_p162.png` (+ 새로 `uc17-cell-beam-range-sector_p162`) |
+| `manual10.2_uc27-state-flow_p405.png` | UC27 **시작 캔버스** — 파라미터 3개와 빨간 Output. 상태 흐름도는 p405의 벡터 텍스트라 그림 파일이 없음(위 mermaid로 재현) | `manual10.2_uc27-start-canvas_p405.png` |
+| `manual10.2_state-machine-states_p368.png` | p413의 State Machine `Properties` 그림과 동일. p368에도 같은 그림이 있을 수 있으나 그 페이지는 미제공 | (유지) |
 
-반대로 `…_area-binning_p150.png`(선택 도구 + 사각형 영역), `…_pilot-pollution-connections_p172.png`
-(BTS 탭의 선 종류 목록 + 오염 범례), `…_cell-footprint_p66.png`(한 셀 페이지)는 라벨과 내용이
-맞습니다. UC27 그림 4장의 정정은 [UC27](#uc27--p403p426--이웃-누락핸드오버-누락에-의한-호-단절-kpi-만들기--) 절에.
+나머지 11장(`p24` · `p55` · `p66` · `p88` · `p150` · `p216` · `p346` · `p349` · `p408` · `p425` · `p426`)은
+라벨과 내용이 맞습니다(p24 · p55 · p88 · p216 · p346 · p349는 이번 대조 범위 밖이라 미확인).
 
 > 교훈은 `MANIFEST.md`가 이미 적어 둔 것과 같습니다 — **파일명과 치수는 동일성의 근거가
-> 아닙니다.** 열어 보는 비용이 훨씬 쌉니다.
+> 아닙니다.** 그리고 하나 더: 그림 여러 장을 한 번에 열어 보고 기억으로 대조하면 **순서가
+> 뒤바뀝니다.** 이번 확정은 원문 이미지와의 해시 비교로 했습니다.
+
+## 이 판이 이전 문서를 고친 곳
+
+| 문서 | 무엇 |
+|---|---|
+| 대조표 UC20 · 브리프 ⑤ "확인된 것" | "매뉴얼의 UC20에는 하한 조건이 없다 → 우리가 더 낫다"는 판정 철회. 원문 필터에 `RSCP active set best above threshold = -95`가 있음 |
+| 대조표 UC18 | 레퍼런스의 동기화는 시간 커서가 아니라 **그리드 셀 행 → 지도 줌**. 대응물은 셀 목록 행 선택 |
+| 대조표 UC28 | `AutoScale`(사분위 구간)보다 서빙 PCI 채색이 더 가까운 대응물 — 레퍼런스의 `Add Range`는 이산값별 색 |
+| 브리프 ② · ③ 캡션, `MANIFEST.md` | 그림 라벨 4건 |
+
+## 아직 원문이 없는 구간
+
+**p300–399**. 유즈케이스로는 UC25 전체와 UC26의 p396–399. 워크벤치 요소 명세(p344–396)는
+[`kpi-workbench.md`](kpi-workbench.md)에 2026-09-01 추출본이 있습니다. 그 구간이 다시 제공되면
+UC25·UC26을 ● 등급으로 올리고, State Machine의 `Time trigger`(p367–372)와 `Group By/Binning`
+(p372–376) 대화상자를 같은 깊이로 옮기면 됩니다.
 
 ---
 
-## 원문이 다시 손에 들어오면 확인할 것
-
-이 문서가 등급 ○·◐로 남긴 자리입니다. 원문 PDF를 다시 받으면 이 순서로 채우면 됩니다.
-
-1. **UC16 (p158?)** — 제목 끝(`on map`?)과 실제 페이지. Delta plotting과의 관계
-2. **UC17 (p162)** — 절차와 그림. 빔 길이가 고정값인지, 높이·틸트 추정인지의 선택 UI
-3. **UC19 (p171)** — `All BTS reference cells` 파라미터로 무엇을 여는가
-4. **UC18 (p168)** — 동기화가 그리드→지도 한 방향인지 양방향인지
-5. **UC6 · UC7 · UC8 (p108–111)** — 레이어 속성 다이얼로그의 항목, 알림 아이콘의 설정 경로,
-   color grid의 축 배정 방식
-6. **UC13 (p147)** — geoset 파일(`.GST`)의 저장 위치와 공유 방식
-7. **UC24 (p190)** — "minimized data set"의 정확한 정의와 만드는 시점(임포트 옵션인지)
-8. **UC28–31 (p432–443)** — 색상셋 다이얼로그의 필드(구간 수 · 경계 포함 방향 · 이름) 와
-   저장 단위
-9. **UC21 (p174)** — 결과 화면 그림. 저장소의 그림은 다른 것이었음
-10. **UC2 · 3 · 4 · 9 · 11 · 22** — 범위 밖이지만, 데이터 모델을 넓힐 결정을 할 때의 근거로
-    절차의 입력 파일 형식만이라도
-
----
-
-출처: Nemo Analyze User Guide · NTN00000A-90013 · Edition 1, 2023-11-27. 인용은 2026-09-01
-추출본(`kpi-workbench.md` · `data-views.md` · `corrections.md` · 브리프 ①–⑥)에서 옮겼고, 그림은
+출처: Nemo Analyze User Guide · NTN00000A-90013 · Edition 1, 2023-11-27. 그림은
 `docs/assets/screenshots/manual10.2_*`이며 재배포하지 않습니다(`docs/assets/NOTICE.md`).
