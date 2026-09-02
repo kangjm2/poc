@@ -202,6 +202,14 @@ Nemo Tools ──Field-To-Lab Conversion──▶ UXM 5G Wireless Test Platform 
 | 레이어가 **KPI 하나**여서 주행을 레이어로 올릴 수 없음 | 중 — *2026-09-02 신규.* 레이어 타입이 `{kpiName, visible}`뿐이고(`types.ts:436`, `WorkbookService.java:31`) 트랙 조회는 단일 세션입니다(`App.tsx:265`). 레퍼런스의 "같은 지도에 두 주행"(UC16 p469)과 `Highlight active route`가 여기 걸려 있습니다 |
 | Layers 도크의 **레이어 상한 8을 UI가 모름** | 매우 작음 — *2026-09-02 신규, 결함.* 서버는 `MAX_LAYERS_PER_PANE = 8`로 400을 던지는데(`WorkbookService.java:41·116`) `+ add layer…` 셀렉트는 9개째도 계속 제시합니다(`ComposedWorkbook.tsx:83-86`). 실패가 조작 지점에서 멀리 떨어져 있습니다 |
 | **워크북 삭제에 확인이 없음** | 매우 작음 — *2026-09-02 신규, 결함.* `remove()`가 곧바로 지웁니다(`ComposedWorkbook.tsx:151-156`). 워크북·페인·레이어 전체가 사라지는데, 세션 삭제(`App.tsx:517`)와 스케일 초기화(`LegendEditor.tsx:93`)에는 있는 확인이 이것만 없습니다 |
+| **파일럿 오염에 서빙 품질 조건이 없음** | 작음 — *2026-09-02 신규, 정확도.* 레퍼런스 UC20의 판정은 조건 **넷**입니다 — 창 `-6` dB · 개수 `3` · RSCP `> -95` · **`Ec/N0 best active set < -12`**. 우리는 앞의 셋만 겁니다(`MonitoredSetService.java:239` — `rsrp >= best_rsrp - ? AND best_rsrp >= ?`, `HAVING count(*) >= ?`). 서빙 품질이 멀쩡한 곳도 "여러 셀이 비슷하게 강하다"는 이유로 오염이 됩니다. `RSRQ`·`SINR`이 이미 표본별로 있어(`KpiSeed.java:47,55`) **데이터는 갖춰져 있고 조건 한 줄**입니다 |
+| **푸트프린트를 좁힐 방법이 없음** | 작음 — *2026-09-02 신규.* `cellFootprints(sessionId, minSamples)`(`GeoAnalysisService.java:192`)의 유일한 필터가 최소 표본 수입니다. 레퍼런스는 **셀당 한 페이지**로 넘겨 보게 하고 `Scrambling code / Channel number` 필터(`3,10-30,42,100-` 형식)를 겁니다. 우리는 전부 겹쳐 그리는 쪽을 골랐고 중첩이 곧 오염이라는 이점이 있지만, 셀이 수십 개면 **좁힐 수단이 하나도 없습니다** |
+| 빈을 **어느 통계로 칠할지** 못 고름 | 매우 작음 — *2026-09-02 신규.* 레퍼런스는 빈 레이어 `Properties`의 `Statistic`에서 `Average`(기본)·`Minimum`·`Maximum`·`Sample count`·`Std. deviation`·`Variance`·`Mode`를 고릅니다. 우리는 평균 고정입니다 — 다만 `AreaBin`이 이미 `minValue`·`maxValue`·`sampleCount`를 실어 보내므로(`GeoAnalysisService.java:39`) 셋은 **표시만 바꾸면 됩니다** |
+| 공간 차분이 **주행 1 대 1** | 작음 — *2026-09-02 신규.* `SpatialDiffService.diff(long sessionA, long sessionB, …)`. 레퍼런스 UC16은 **측정 그룹**(각 그룹 N개)의 평균끼리 뺍니다 — *"A measurement group average is calculated from all measurements within a Measurement Group"* |
+| **폴리곤을 필터로** 쓰기 | 작음 — *2026-09-02 신규.* ⑤가 만든 것은 폴리곤 → **통계**입니다. 레퍼런스 p75–77은 폴리곤 → **필터** — 도형 안 구간만 값 색으로 칠하고 나머지는 기본색으로 둡니다. 도형과 포함 판정(`AreaSelection`)은 이미 있으므로 남은 것은 그 술어를 색칠 경로에 거는 일입니다 |
+| 셀 ID로 **전역 필터 만들기** · 이벤트 제외 | 중 — *2026-09-02 신규.* 지도에서 섹터 우클릭 → `Create Global Filter From Cell ID` → 이후 모든 질의가 그 셀이 서빙하던 지점만. `Exclude Events`도 같은 자리(측정 오류로 실패한 호 빼기). **전역 필터** 항목의 구체적 진입점 둘입니다 |
+| KPI 실행 시 **묻는 변수** `{?이름}` | 매우 작음 — *2026-09-02 신규.* 레퍼런스 Filter 조건의 `Value`에 `{?variable}`을 쓰면 KPI를 돌릴 때마다 사용자에게 값을 묻습니다(p398). 우리 `FILTER`는 상수만 받습니다 |
+| 색상셋 **gradient·string 타입** | 중 — *2026-09-02 신규.* 레퍼런스 색상셋은 `numerical` · **`gradient`**(연속) · **`string`**(문자열별 색) 세 타입입니다(p427–443). 우리는 구간(numerical)만 있습니다. `string` 타입은 `event_type` 레지스트리가 사실상 하고 있으나 **사용자가 편집하지 못합니다** |
 | ~~Activity 탭~~ / Log 탭, 전역 필터 표시 (§2) | 작음 — **Activity는 ⑧에서 완료**(진행 중인 잡 + 취소). Log window와 전역 필터는 남음 |
 | `5G Physical Layer` 탭 (§3) | 작음 — 값은 이미 있고, **구성 워크북으로 사용자가 직접 만들 수 있습니다** |
 | RACH `maximum preamble`·`preamble response` 2필드 (§3) | 작음 |
@@ -355,6 +363,6 @@ created on a timeline only when **changes occur**)"*.
 | 판단 | 매뉴얼 |
 |---|---|
 | 정렬 노드를 넣지 않음 | **근거까지 확인** — 정렬이 필요한 이유는 Union이 순서를 파괴하기 때문(p359) |
-| 파일럿 오염에 하한 조건(`best RSRP ≥ −110`) | **우리가 더 나음** — UC20에 이 조건이 없습니다. 없으면 커버리지 홀을 오탐합니다 |
+| 파일럿 오염에 하한 조건(`best RSRP ≥ −110`) | ~~우리가 더 나음~~ → **같은 설계, 다른 값.** *2026-09-02 철회* — 원문 p173의 필터에 `RSCP active set best above threshold = -95`가 있습니다. 하한이 필요하다는 판단은 맞았고, "레퍼런스엔 없다"는 근거가 틀렸습니다. **그리고 반대 방향의 격차가 드러났습니다** — 레퍼런스는 `Ec/N0 active set best < -12`도 함께 걸어 *서빙 품질이 실제로 나쁠 때만* 오염으로 봅니다. 우리 질의에는 그 조건이 없습니다(아래 (b)) |
 | 필터를 텍스트 조건식으로 | **우리가 더 나음** — 레퍼런스는 이진 트리라 한 노드에 자식이 둘뿐(UC26, p396) |
 | 세로형 `sample_kpi` 스키마 | **구조적 우위** — 매뉴얼이 밝힌 워크벤치의 존재 이유 중 하나가 *"셋 이상 테이블의 시간 상관이 impossible"*(p332)인데, 우리는 같은 키의 조인입니다 |
