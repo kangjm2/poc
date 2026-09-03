@@ -174,16 +174,43 @@ export function MonitoredSetPage({ sessionId, set, onJump }: {
    */
   const [windowDb, setWindowDb] = useState(6)
   const [minCells, setMinCells] = useState(3)
+  const [busy, setBusy] = useState(false)
 
-  // The two session-wide fetches are owned here and run once per session, so the table and
-  // the pollution list cannot disagree about what they are showing.
+  /**
+   * The two questions, clamped once, to the range the inputs themselves offer.
+   *
+   * Raw box state is not a question the server can answer. A cleared box is `Number('')`
+   * === 0 and a half-typed one is whatever the first digit says, and the service silently
+   * substitutes its own default for anything below 2 cells or at or under 0 dB. So the
+   * caption said "≥0 cells" over a three-cell answer. Clamping here means the request and
+   * the sentence above it carry the SAME number, and it is the number the answer came from.
+   */
+  const askedWindowDb = Math.min(20, Math.max(1, windowDb || 6))
+  const askedCells = Math.min(8, Math.max(2, Math.round(minCells) || 3))
+
+  // A new measurement invalidates both answers. A new threshold does not - it REPLACES
+  // them, so the previous ones stay on screen until the new ones land. Nulling `data` on a
+  // threshold change tripped the early return below and unmounted the very inputs being
+  // typed into: the second digit of "12" had nothing left to land in.
+  useEffect(() => { setData(null); setSpans(null); setError(null) }, [sessionId])
+
+  // The two session-wide fetches are owned here and run on one pair of values, so the
+  // table and the pollution list cannot disagree about what they are showing.
   useEffect(() => {
     if (sessionId == null) return
-    setData(null); setSpans(null); setError(null)
-    api.neighbourBreakdown(sessionId, null, null, windowDb)
-      .then(setData).catch((e) => setError(String(e)))
-    api.pilotPollution(sessionId, windowDb, minCells).then(setSpans).catch(() => setSpans([]))
-  }, [sessionId, windowDb, minCells])
+    let live = true
+    setBusy(true)
+    const settle = () => { if (live) setBusy(false) }
+    Promise.all([
+      api.neighbourBreakdown(sessionId, null, null, askedWindowDb)
+        .then((d) => { if (live) setData(d) })
+        .catch((e) => { if (live) setError(String(e)) }),
+      api.pilotPollution(sessionId, askedWindowDb, askedCells)
+        .then((sp) => { if (live) setSpans(sp) })
+        .catch(() => { if (live) setSpans([]) }),
+    ]).then(settle, settle)
+    return () => { live = false }
+  }, [sessionId, askedWindowDb, askedCells])
 
   if (error) return <div className="error">{error}</div>
   if (!data) return <div className="loading">Loading…</div>
@@ -267,7 +294,7 @@ export function MonitoredSetPage({ sessionId, set, onJump }: {
               so a caption that looked like one statement was half assertion and half
               measurement - and would have gone on saying 3 at any threshold. */}
           <div style={{ padding: '6px 10px', color: '#666', whiteSpace: 'normal' }}>
-            Stretches where {'≥'}{minCells} cells sit within {data.strongWithinDb} dB of the
+            Stretches where {'≥'}{askedCells} cells sit within {data.strongWithinDb} dB of the
             best, so the terminal has no clean choice. Computable only now that the
             monitored set is recorded &mdash; with one serving cell per sample there was
             nothing to count.
@@ -284,7 +311,8 @@ export function MonitoredSetPage({ sessionId, set, onJump }: {
                      onChange={(e) => setMinCells(Number(e.target.value))} />
             </label>
             <span className="dim">
-              asked before the map is drawn in the reference too (UC20 p173)
+              {busy ? 'asking again\u2026'
+                : 'asked before the map is drawn in the reference too (UC20 p173)'}
             </span>
           </div>
           {spans != null && spans.length === 0 && (

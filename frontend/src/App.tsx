@@ -46,27 +46,41 @@ import { describeLayers } from './view/maplayers'
  * `isolates` says whether this screen draws anything the colour scale paints, and so
  * whether clicking a legend band can do what the legend says it does.
  *
- * It is a column here rather than a check inside the legend because the legend cannot see
- * the screen. Before this column the dock offered isolation on all fourteen tabs while
- * four honoured it: on the other ten the legend answered a click with "the rest of the
- * drive is drawn grey" over a screen that had no drive on it. Adding a screen now means
- * answering the question in the same row that names it.
+ * `reads` says which toolbar groups this screen actually consumes. Same reason, same
+ * shape: the toolbar cannot see the screen either. Before this column every group was
+ * offered on every tab while three tabs consumed them, so "Ask an area" latched to
+ * "Drawing…" on screens with no map, "Area bins" fetched tiles Mobility never drew,
+ * "Distance bins" wrote a dead `ds=` into a shared link, and "Colour by: Serving cell"
+ * swapped the legend beside a map still painted by KPI. A control that is offered and
+ * ignored is worse than one that is absent - the user concludes the data has nothing to
+ * say.
+ *
+ * It is a column here rather than a check inside the legend or the toolbar because
+ * neither can see the screen. Before these columns the dock offered isolation on all
+ * fourteen tabs while four honoured it: on the other ten the legend answered a click with
+ * "the rest of the drive is drawn grey" over a screen that had no drive on it. Adding a
+ * screen now means answering both questions in the same row that names it.
  */
+type ToolGroup = 'colour' | 'areaBins' | 'distanceBins' | 'area' | 'footprints'
 const WORKBOOKS = [
-  { id: 'overview', label: 'Overview', isolates: true },
-  { id: 'radio', label: 'Radio Quality', isolates: false },
-  { id: 'throughput', label: 'Throughput', isolates: false },
-  { id: 'fronthaul', label: 'Fronthaul', isolates: false },
-  { id: 'cells', label: 'Cells', isolates: true },
-  { id: 'neighbours', label: 'Monitored Set', isolates: false },
-  { id: 'mobility', label: 'Mobility', isolates: true },
-  { id: 'signaling', label: 'L3 Signalling', isolates: false },
-  { id: 'problems', label: 'Problem Survey', isolates: false },
-  { id: 'degradation', label: 'Degradation', isolates: false },
-  { id: 'coverage', label: 'Coverage Issues', isolates: true },
-  { id: 'statistics', label: 'Statistics', isolates: false },
-  { id: 'fieldtolab', label: 'Field-to-Lab', isolates: false },
-  { id: 'spatialdiff', label: 'Compare on the Ground', isolates: false },
+  { id: 'overview', label: 'Overview', isolates: true,
+    reads: ['colour', 'areaBins', 'distanceBins', 'area', 'footprints'] },
+  { id: 'radio', label: 'Radio Quality', isolates: false, reads: [] },
+  { id: 'throughput', label: 'Throughput', isolates: false, reads: [] },
+  { id: 'fronthaul', label: 'Fronthaul', isolates: false, reads: [] },
+  { id: 'cells', label: 'Cells', isolates: true, reads: [] },
+  { id: 'neighbours', label: 'Monitored Set', isolates: false, reads: [] },
+  // No area bins: tiles REPLACE the route, and this map exists for the fan of lines from
+  // the cursor to the monitored set. Drawing tiles here would delete the reason for it.
+  { id: 'mobility', label: 'Mobility', isolates: true, reads: ['colour', 'footprints'] },
+  { id: 'signaling', label: 'L3 Signalling', isolates: false, reads: [] },
+  { id: 'problems', label: 'Problem Survey', isolates: false, reads: [] },
+  { id: 'degradation', label: 'Degradation', isolates: false, reads: [] },
+  { id: 'coverage', label: 'Coverage Issues', isolates: true,
+    reads: ['colour', 'areaBins', 'footprints'] },
+  { id: 'statistics', label: 'Statistics', isolates: false, reads: [] },
+  { id: 'fieldtolab', label: 'Field-to-Lab', isolates: false, reads: [] },
+  { id: 'spatialdiff', label: 'Compare on the Ground', isolates: false, reads: [] },
 ] as const
 type BuiltInId = (typeof WORKBOOKS)[number]['id']
 /**
@@ -384,6 +398,18 @@ export function App() {
     api.track(sessionId, kpi, undefined, areaSpec).then(setTrack).catch(fail)
   }, [sessionId, kpi, scaleVersion, areaSpec, filterSpec, fail])
 
+  // The drawn area's statistics, on the same dependencies as the route it describes. The
+  // shape is the only input this panel adds; everything else that changes the numbers -
+  // the measurement, the KPI, the global filter, an edited scale - changes them here too.
+  useEffect(() => {
+    if (sessionId == null || areaSpec == null) { setAreaStats(null); return }
+    let live = true
+    api.areaStatistics(sessionId, kpi, areaSpec)
+      .then((a) => { if (live) setAreaStats(a) })
+      .catch((e) => { if (live) { setAreaStats(null); fail(e) } })
+    return () => { live = false }
+  }, [sessionId, kpi, scaleVersion, areaSpec, filterSpec, fail])
+
   useEffect(() => {
     if (sessionId == null) return
     api.distribution(sessionId, kpi, range, legendBasis)
@@ -475,9 +501,17 @@ export function App() {
    * and two independent reads of one typed string is how that happens.
    */
   const footprintFilter = parsePciFilter(footprintCells)
-  const shownFootprints = footprints == null ? null
-    : (footprintFilter.match == null ? footprints
-       : footprints.filter((f) => footprintFilter.match!(f.pci)))
+  // Memoised because RouteMap keys its footprint effect on this array's identity and
+  // rebuilds every hull when it changes. A fresh array per render meant the layer was torn
+  // down and re-added on every cursor move - up to 64 times a second at the top playback
+  // rate - closing any tooltip the pointer was on.
+  const shownFootprints = useMemo(() => (
+    footprints == null ? null
+      : (footprintFilter.match == null ? footprints
+         : footprints.filter((f) => footprintFilter.match!(f.pci)))
+  // footprintFilter is derived from footprintCells, so that string is the real input.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  ), [footprints, footprintCells])
   const footprintNote = !showFootprints || footprints == null ? null
     : footprintFilter.error != null
       ? `cell filter ignored: ${footprintFilter.error}`
@@ -515,31 +549,71 @@ export function App() {
   /**
    * Whether the screen in front of the user honours isolation.
    *
-   * A composed workbook is not in WORKBOOKS and its map panes paint from the same scale,
-   * so it isolates too. Read off the table rather than listed here a second time.
+   * A composed workbook is not in WORKBOOKS and does not honour it: a pane paints from
+   * its own layer's KPI and, when the layer is pinned to another measurement, its own
+   * drive - so the toolbar's scale is not what is on that screen. ComposedWorkbook takes
+   * no `isolate` prop at all, and offering the click anyway had the legend answer with
+   * "the rest of the drive is drawn grey" over a pane at full colour. Built-in screens are
+   * read off the table rather than listed here a second time.
    */
   const tabIsolates = typeof workbook === 'string' && workbook.startsWith('wb:')
-    ? true
+    ? false
     : (WORKBOOKS.find((w) => w.id === workbook)?.isolates ?? false)
 
   /**
-   * Everything the overview map is given, in one object.
+   * Everything THIS screen's map is given, in one object, or null where the screen has no
+   * map of its own.
    *
    * Spread into RouteMap and read by the Layers dock, so the list beside the map is
    * describing the map's own contents rather than a second account of what ought to be on
    * it. See view/maplayers.ts for why that distinction is the whole point of the dock.
+   *
+   * One object for all three map screens rather than one for Overview and hand-written
+   * prop lists for the other two. The hand-written lists drifted exactly as that file
+   * predicts: Mobility and Coverage Issues drew a serving-cell line the dock's own switch
+   * could not reach (RouteMap defaults `showServingLine` to true), showed events the dock
+   * had switched off, and took the unfiltered footprint set so the cell filter typed into
+   * the toolbar did nothing there.
    */
-  const overviewContents: MapContents = {
-    track, cells, bins, footprints, showServingLine: servingLine,
-    events: eventsHidden ? [] : events,
-  }
+  const shownEvents = eventsHidden ? [] : events
+  const mapContents: MapContents | null =
+    workbook === 'overview'
+      ? {
+        track, cells, bins, footprints: shownFootprints,
+        showServingLine: servingLine, events: shownEvents,
+      }
+      : workbook === 'mobility'
+        // The mobility map is where cell relationships are read, so it carries the fan of
+        // lines to the monitored set - and no area bins, because tiles replace the route
+        // the fan is anchored to.
+        ? {
+          track, cells, monitored: monitored?.cells ?? null, footprints: shownFootprints,
+          showServingLine: servingLine, events: shownEvents,
+        }
+        : workbook === 'coverage'
+          ? {
+            track, cells, bins, footprints: shownFootprints,
+            showServingLine: servingLine, events: shownEvents,
+          }
+          : null
   // The switched-off ones, so the dock can offer them back. Everything about whether a
   // layer IS drawn still comes from the contents above.
   const layersOff: LayerToggle[] = [
     ...(showFootprints ? [] : ['footprints' as LayerToggle]),
     ...(eventsHidden ? ['events' as LayerToggle] : []),
   ]
-  const mapLayers = describeLayers(overviewContents, layersOff)
+  const mapLayers = mapContents ? describeLayers(mapContents, layersOff) : []
+
+  /**
+   * Whether the screen on show consumes a toolbar group. One lookup, so a control is
+   * offered exactly where something answers it.
+   */
+  const tabReads = (g: ToolGroup) => {
+    const row = WORKBOOKS.find((w) => w.id === workbook)
+    // `as const` narrows each row's list to its own literal tuple, so the widening is
+    // here rather than on the table - the table is meant to be read, not annotated.
+    return (row?.reads as readonly ToolGroup[] | undefined)?.includes(g) ?? false
+  }
 
   /**
    * The one place a layer id meets the state that controls it.
@@ -727,19 +801,21 @@ export function App() {
   /**
    * A finished shape becomes a question immediately.
    *
-   * The shape itself is not kept: what the user wanted was the answer, and keeping the
-   * ring would mean deciding what happens to it when the drive changes - a shape drawn on
-   * one route applied to another selects arbitrary ground.
+   * All this does is record the shape. The answer comes from the effect below, for the
+   * reason every other panel's answer does: an area is a standing question, and the drive,
+   * the KPI and the global filter can all change under it. Fetching once here left the
+   * panel holding pre-filter numbers under a caption that said the filter had been applied,
+   * and after a change of measurement it showed drive A's means beside drive B's header -
+   * with rows that moved the cursor to seq numbers belonging to the other drive.
    */
   const askAboutArea = useCallback((rings: [number, number][] | null) => {
     setDrawingArea(false)
     if (rings == null || sessionId == null) return
-    // The shape does two things now: it produces the statistics, and it narrows what the
-    // route is coloured for. Both go through the same spec string so the panel and the
-    // map cannot end up describing different shapes.
+    // The shape does two things: it produces the statistics, and it narrows what the route
+    // is coloured for. Both read this one spec string, so the panel and the map cannot end
+    // up describing different shapes.
     setAreaSpec(rings.map(([a, b]) => `${a},${b}`).join(';'))
-    api.areaStatistics(sessionId, kpi, rings).then(setAreaStats).catch(fail)
-  }, [sessionId, kpi, fail])
+  }, [sessionId])
 
   const chart = (name: string, filled = false) => {
     const s = seriesFor(name)
@@ -790,19 +866,26 @@ export function App() {
       case 'overview':
         return (
           <>
-            <RouteMap {...overviewContents} cursorSeq={cursorSeq}
+            <RouteMap {...mapContents!} footprintNote={footprintNote} cursorSeq={cursorSeq}
                       frameKey={String(sessionId)} refitToken={refitToken}
                       onCursorChange={moveCursor} kpiName={activeDef?.displayName ?? kpi}
                       colorBy={colorBy} isolate={isolate}
                       drawingArea={drawingArea} onAreaDrawn={askAboutArea}
                       eventTypes={eventTypes} />
+            {/* Close clears the shape, not just the answer. The panel now follows the
+                shape - measurement, KPI and filter all re-ask it - so hiding the answer
+                while keeping the question drawn would have the next KPI change bring it
+                straight back. "Clear area" in the toolbar is the same act from the other
+                end of the screen. */}
             {areaStats && (
-              <AreaStatsPanel data={areaStats} onClose={() => setAreaStats(null)}
+              <AreaStatsPanel data={areaStats}
+                              onClose={() => { setAreaSpec(null); setAreaStats(null) }}
                               onPick={moveCursor} filterSpec={filterSpec} />
             )}
             {distanceStep > 0 && (
               <DistanceProfile sessionId={sessionId} kpiName={kpi} stepMeters={distanceStep}
-                               cursorSeq={cursorSeq} isolate={isolate} onJump={moveCursor} />
+                               cursorSeq={cursorSeq} isolate={isolate}
+                               filterSpec={filterSpec} onJump={moveCursor} />
             )}
             {chart(kpi)}
             <ParameterGrid snapshot={snapshot} />
@@ -837,13 +920,11 @@ export function App() {
                 that draws lines to the monitored cells as well as the serving one. The
                 other maps stay uncluttered: a fan of lines is an investigation aid, not
                 something every view needs. */}
-            <RouteMap track={track} cells={cells} cursorSeq={cursorSeq}
+            <RouteMap {...mapContents!} footprintNote={footprintNote} cursorSeq={cursorSeq}
                       frameKey={String(sessionId)} refitToken={refitToken}
                       onCursorChange={moveCursor} kpiName={activeDef?.displayName ?? kpi}
-                      monitored={monitored?.cells ?? null} footprints={shownFootprints}
-                      footprintNote={footprintNote}
                       colorBy={colorBy} isolate={isolate}
-                      events={events} eventTypes={eventTypes} />
+                      eventTypes={eventTypes} />
             <div className="panel">
               <header>
                 <span className="title">Cells</span>
@@ -917,12 +998,11 @@ export function App() {
       case 'coverage':
         return (
           <>
-            <RouteMap track={track} cells={cells} cursorSeq={cursorSeq}
+            <RouteMap {...mapContents!} footprintNote={footprintNote} cursorSeq={cursorSeq}
                       frameKey={String(sessionId)} refitToken={refitToken}
                       onCursorChange={moveCursor} kpiName={activeDef?.displayName ?? kpi}
-                      bins={bins} footprints={shownFootprints} footprintNote={footprintNote}
                       colorBy={colorBy} isolate={isolate}
-                      events={events} eventTypes={eventTypes} />
+                      eventTypes={eventTypes} />
             <div className="panel">
               <header>
                 <span className="title">Detected coverage issues</span>
@@ -1012,11 +1092,16 @@ export function App() {
               </select>
             </div>
             <div className="group">
-              <button className={drawingArea ? 'on' : undefined}
-                      title="Draw an area on the map and get its statistics"
-                      onClick={() => { setDrawingArea((v) => !v); setAreaStats(null) }}>
-                {drawingArea ? 'Drawing…' : 'Ask an area'}
-              </button>
+              {/* Drawing is offered only where a map takes it. `Clear area` is not: an
+                  area narrows the track fetch on every screen, so the way out of one has
+                  to be reachable from every screen too. */}
+              {tabReads('area') && (
+                <button className={drawingArea ? 'on' : undefined}
+                        title="Draw an area on the map and get its statistics"
+                        onClick={() => { setDrawingArea((v) => !v); setAreaStats(null) }}>
+                  {drawingArea ? 'Drawing…' : 'Ask an area'}
+                </button>
+              )}
               {areaSpec && !drawingArea && (
                 <button title="Colour the whole drive again"
                         onClick={() => { setAreaSpec(null); setAreaStats(null) }}>
@@ -1024,6 +1109,7 @@ export function App() {
                 </button>
               )}
             </div>
+            {tabReads('colour') && (
             <div className="group">
               <label>Colour by</label>
               <select value={colorBy} aria-label="Colour by"
@@ -1033,6 +1119,8 @@ export function App() {
                 <option value="pci">Serving cell (PCI)</option>
               </select>
             </div>
+            )}
+            {tabReads('areaBins') && (
             <div className="group">
               <label>Area bins</label>
               <select value={binSize} aria-label="Area bins"
@@ -1052,6 +1140,8 @@ export function App() {
                 </select>
               )}
             </div>
+            )}
+            {tabReads('distanceBins') && (
             <div className="group">
               <label title="Averages per unit of road travelled, so a stop at a light stops
                      dominating the average">Distance bins</label>
@@ -1064,6 +1154,8 @@ export function App() {
                 <option value={250}>250 m</option>
               </select>
             </div>
+            )}
+            {tabReads('footprints') && (
             <div className="group">
               <label title="The outline of where each cell was measured">
                 Footprints</label>
@@ -1087,6 +1179,7 @@ export function App() {
                        onChange={(e) => setFootprintCells(e.target.value)} />
               )}
             </div>
+            )}
             <div className="group">
               <label>Export</label>
               {sessionId != null && (
@@ -1115,10 +1208,15 @@ export function App() {
           {session.scenario ? ` · ${session.scenario}` : ''}</span>}
       </div>
 
-      {/* Above the panels rather than inside one, because it governs all of them. Shown
-          on the Analysis screen only: Compare, Lab and Import read more than one drive or
-          none, and the filter names one drive's samples. */}
-      {mode === 'analyze' && (
+      {/* Above the panels rather than inside one, because it governs all of them.
+          On Compare as well as Analysis, and that is not symmetry for its own sake: the
+          cohort endpoint HONOURS the filter (GlobalFilter.coverage names it), the
+          condition survives a change of screen, and the bar was the only way to see or
+          clear it. A cohort table computed over a subset, with nothing on screen saying
+          so, is exactly the silent narrowing this bar exists to prevent - and the reach
+          list it carries is what tells the reader that the two-drive panel beside it is
+          exempt. Lab and Import read no drive's samples, so there is nothing to state. */}
+      {(mode === 'analyze' || mode === 'compare') && (
         <GlobalFilterBar spec={filterSpec} onApply={applyFilter} />
       )}
 
@@ -1199,7 +1297,7 @@ export function App() {
           {cohortBy == null
             ? <CompareView sessions={sessions} />
             : <CohortView defs={defs} kpi={kpi} groupBy={cohortBy} holdConstant={cohortHold}
-                          onKpi={setKpi}
+                          filterSpec={filterSpec} onKpi={setKpi}
                           onDimension={(by, hold) => { setCohortBy(by); setCohortHold(hold) }} />}
         </div></div>
       ) : mode === 'lab' ? (
@@ -1260,7 +1358,7 @@ export function App() {
                   explains what a colour means, and this explains what the shapes are. Only
                   where there is a map - a Layers list beside a table would be the same
                   mistake the isolate notice was making. */}
-              {workbook === 'overview' && (
+              {mapContents != null && (
                 <div className="dock-section" style={{ maxHeight: 200 }}>
                   <h3>Layers ({mapLayers.length})</h3>
                   <div className="content" style={{ maxHeight: 170 }}>
@@ -1271,7 +1369,10 @@ export function App() {
               <div className="dock-section">
                 <h3>Color Legends</h3>
                 <div className="content">
-                  {colorBy === 'pci' ? (
+                  {/* Gated on the same fact the maps are: a per-PCI census beside a
+                      screen that no toolbar colour reaches is a legend for a picture that
+                      is not on show. */}
+                  {colorBy === 'pci' && tabReads('colour') ? (
                     <PciLegend colors={buildPciColors(track)} bars={pciBars}
                                total={session?.sampleCount ?? 0} />
                   ) : (

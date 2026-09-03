@@ -77,7 +77,18 @@ Tools 메뉴의 설명이 지나가듯 밝힙니다:
     속도는 배속이 아니라 <strong>초당 표본 수</strong>(1·4·16·64/s)입니다 — 걸음이 항상 한 표본이라
     어느 속도에서도 표본을 건너뛰지 않습니다</td></tr>
 <tr><td><strong>Global Filters</strong></td><td class="src">p467</td>
-    <td><span class="tag t-none">없음</span> <em>"applied to <strong>all operations</strong> performed with Nemo Analyze"</em>. 우리 필터는 전부 화면 단위입니다</td></tr>
+    <td><span class="tag t-same">✅ P3</span> <s>없음 — 우리 필터는 전부 화면 단위입니다</s>.
+    <em>"applied to <strong>all operations</strong>"</em>의 어려운 부분은 조건이 아니라
+    <strong>global이라는 단어</strong>였습니다 — 아홉 화면이 지키고 넷이 무시하는 필터는 없는 것보다
+    나쁘고, 무시하는 화면은 지키는 화면과 <em>똑같이 생겼기</em> 때문입니다. 그래서 조건은
+    <code>(session_id, seq)</code> 부분질의 하나로 내려가고
+    (<code>GlobalFilter.scope</code>), <strong>어느 엔드포인트가 그것을 통과시키는지</strong>가
+    문서가 아니라 코드의 목록입니다 — <code>GlobalFilter.coverage()</code>가
+    <strong>지키는 14개 + 면제 10개 = 24개</strong>를 이유와 함께 이름 짓고,
+    <code>verify-scenarios</code>가 <code>GET /api/global-filter/coverage</code>로 그것을 읽어
+    지키는 엔드포인트마다 필터를 걸고/빼고 두 번 호출합니다. 면제 사유도 감사 대상입니다 —
+    <code>coverage-issues</code>와 <code>problem-survey</code>는 <em>"불가능한 것이 아니라 배선되지
+    않은 것"</em>이라고 적혀 있습니다</td></tr>
 <tr><td><strong>Polygon region</strong></td><td class="src">p468</td>
     <td><span class="tag t-same">✅ ⑤</span> <s>없음 — 우리 영역 비닝은 고정 격자</s>.
     이제 지도에 도형을 그리면 그 안의 통계가 나오고, 함께 나오는 것이 <strong>통과 목록</strong>입니다
@@ -139,13 +150,26 @@ Tools 메뉴의 설명이 지나가듯 밝힙니다:
 </p>
 
 <div class="ours">
-<h5>우리 구현에는 어떻게 반영됐나</h5>
+<h5>우리 구현에는 어떻게 반영됐나 <span class="src">2026-09-03 갱신</span></h5>
 <p>
-전역 필터가 없으므로 <strong>"이 영역만 보기"를 표현할 방법이 없습니다.</strong>
-우리 대응은 <strong>파생 KPI</strong>입니다 — 워크벤치로 조건을 건 새 KPI를 만들면 이후 모든
-화면에서 쓸 수 있습니다. 다만 <em>지금 보고 있는 화면에 즉시</em> 걸리지는 않고,
-<strong>공간 조건은 아예 표현할 수 없습니다</strong>(워크벤치가 위경도를 읽지 못하므로 —
-<a href="05-findings.html">⑤ C9</a>).
+<s>전역 필터가 없으므로 "이 영역만 보기"를 표현할 방법이 없습니다. 우리 대응은 파생 KPI입니다 —
+다만 지금 보고 있는 화면에 즉시 걸리지는 않고, 공간 조건은 아예 표현할 수 없습니다(워크벤치가
+위경도를 읽지 못하므로).</s> <strong>세 문장 다 지금은 틀립니다.</strong>
+</p>
+<p>
+전역 필터는 P3에서 생겼고, 조건 두 가지가 UC5에서 그대로 왔습니다 —
+<code>kpi:NAME:OP:VALUE</code>(매뉴얼 자신의 예)와 <code>cell:PCI</code>
+(<em>"Create Global Filter From Cell ID"</em>). 조건은 화면을 옮겨도 남고,
+필터 바가 그것을 늘 문장으로 보여 줍니다. 워크벤치도 <code>SOURCE_SAMPLE</code>로
+위경도·속도·서빙 PCI를 읽습니다 — <a href="05-findings.html">⑤ C9</a>가 "지오메트리를 못 읽음"으로
+적어 둔 줄은 ⑥에서 닫혔습니다.
+</p>
+<p>
+<strong>남은 것은 매뉴얼이 예로 든 그 입력입니다</strong> — <em>폴리곤 영역</em>을 전역 필터로
+받는 경로. 도형을 그려 그 안의 통계를 내는 것은 ⑤에서 생겼고
+(<code>AreaSelection.inside</code>), 전역 필터의 조건 문법은 아직 <code>kpi:</code>와
+<code>cell:</code> 둘뿐이라 <strong>도형은 아직 조건이 되지 못합니다.</strong>
+아래 §4의 "전역 필터" 줄이 그 나머지를 가리킵니다.
 </p>
 </div>
 
@@ -197,12 +221,16 @@ OpenAccess SQL에 얹은 <strong>독자 확장</strong>이고, 전사본은
     <td>스키마에 관계가 없는 테이블을 시간으로 잇는 <strong>우회로</strong>입니다. 우리는 키 조인.
         <strong>단</strong> <code>Correlation type (-1, 0, 1)</code>이 곧 Previous/Current/Next이고,
         <code>0</code>의 정의(<em>"parent query timestamp is within the time range of the subquery
-        row's time interval"</em>)는 우리가 그 노드를 만들 때 쓸 <strong>정의 그 자체</strong>입니다</td></tr>
+        row's time interval"</em>)는 우리가 그 노드를 만들 때 쓸 <strong>정의 그 자체</strong>였습니다 —
+        <strong>P4-2의 <code>CORRELATE</code>가 그 정의로 만들어졌습니다</strong></td></tr>
 <tr><td>Time · Binary Time · Interval · SQL Time</td><td>18</td><td><span class="tag t-out">불필요</span></td>
     <td>전부 <strong>binary time</strong>이라는 그들 고유 표현을 다룹니다. 우리는 <code>TIMESTAMPTZ</code> 하나라 변환할 표현이 없습니다</td></tr>
 <tr><td><strong>Translator</strong></td><td>2</td><td><span class="tag t-none">필요</span></td>
-    <td>숫자 코드 ↔ 사람이 읽는 라벨의 <strong>코드북</strong>. 우리 <code>STATE_MACHINE</code>은 상태를
-        <strong>맨 정수</strong>로 내보내고 이름은 그래프 JSON에만 있습니다</td></tr>
+    <td>숫자 코드 ↔ 사람이 읽는 라벨의 <strong>코드북</strong>. 우리 <code>CLASSIFIER</code>
+        (P4-1 전의 <code>STATE_MACHINE</code>)는 상태를 <strong>맨 정수</strong>로 내보내고 이름은
+        그래프 JSON에만 있습니다. <strong>새 <code>STATE_MACHINE</code>은 다릅니다</strong> —
+        상태마다 <em>그 이름의 열</em>을 내고 값이 머문 시간(ms)이라 코드북이 필요 없습니다.
+        분류기 쪽에는 그대로 필요합니다</td></tr>
 <tr><td>Datatype</td><td>5</td><td><span class="tag t-diff">일부</span></td>
     <td><code>IS_FLOAT_EQUAL</code>이 <strong>정밀도 인자</strong>를 받습니다. 우리 <code>FILTER</code>는
         <code>double</code>에 맨 <code>=</code>를 허용합니다 — 사실상 항상 거짓일 수 있는 비교</td></tr>
@@ -255,7 +283,8 @@ calculated using <strong>linear math</strong>"</em> 토글이 있습니다 <span
 
 <h2>4. 이 문서에서 남은 일로 확인된 것</h2>
 
-<p class="note">이 표가 쓰인 뒤 백로그 ①–⑧이 진행되어 <strong>8개 중 5개가 닫혔고, 1개는 "하지 않기로" 판정됐습니다.</strong>
+<p class="note">이 표가 쓰인 뒤 백로그 ①–⑧과 P3가 진행되어 <strong>8개 중 6개가 닫혔고, 1개는 "하지 않기로" 판정됐습니다</strong>
+(2026-09-03 재집계 — 그 전에는 5개였습니다. 남은 하나는 <em>식 언어에 함수 도입</em>).
 지운 것이 아니라 <strong>무엇이 됐는지</strong>를 남깁니다 — 이 표는 판단의 기록이고,
 판단이 무엇으로 이어졌는지가 그 기록의 절반입니다.
 전체 대조는 <a href="../use-case-coverage.md">Use Case 31개 대조표</a>.</p>
@@ -268,8 +297,16 @@ calculated using <strong>linear math</strong>"</em> 토글이 있습니다 <span
 <tr><td><s>폴리곤 영역 통계</s></td><td>중</td><td><code>Polygon region</code>. 자산이 아니라 기능이었습니다 —
     <strong>✅ ⑤에서 완료.</strong> 지도에 도형을 그리면 그 안의 통계와 <em>통과 목록</em>이 나옵니다
     (같은 도로를 세 번 지났으면 하나의 장소, 세 번의 통과)</td></tr>
-<tr><td><strong>전역 필터</strong></td><td>중</td><td>모든 조작에 걸리는 필터. 우리는 화면 단위뿐.
-    <strong>여전히 남음</strong> — 폴리곤이 그 첫 입력이 될 수 있습니다</td></tr>
+<tr><td><s><strong>전역 필터</strong></s></td><td>중</td><td>모든 조작에 걸리는 필터. 우리는 화면 단위뿐이었습니다 —
+    <strong>✅ P3에서 완료.</strong> 조건은 <code>(session_id, seq)</code> 부분질의 하나로 내려가고
+    (<code>GlobalFilter.scope</code>), <strong>어느 화면이 그것을 지키는지가 코드의 목록</strong>입니다 —
+    <code>GlobalFilter.coverage()</code>의 <em>지키는 14 + 면제 10 = 24</em>를
+    <code>verify-scenarios</code>가 읽어 지키는 엔드포인트마다 필터를 걸고/빼고 두 번 호출합니다.
+    잊는 것이 <strong>실패하는 검사</strong>이지, 옆 화면과 조용히 다른 답을 내는 화면이 아닙니다.
+    <strong>남은 절반</strong>: 폴리곤이 그 입력이 되는 경로 — 조건 문법은 아직
+    <code>kpi:</code>와 <code>cell:</code> 둘뿐이라 <em>도형은 조건이 되지 못합니다</em>.
+    그리고 <code>spatial-diff</code>·<code>compare</code>·<code>coverage-issues</code>·<code>problem-survey</code>
+    넷은 면제 목록에 <em>"불가능한 것이 아니라 배선되지 않은 것"</em>으로 적혀 있습니다</td></tr>
 <tr><td><s>Delta plotting (공간 차분 비교)</s></td><td>중</td><td>우리 비교는 통계까지이고 지도 위 차분이 없었습니다 —
     <strong>✅ ⑤에서 완료.</strong> 두 주행을 <em>하나의 격자</em>에 담아 타일별 차이.
     한쪽만 지나간 타일은 0이 아니라 <code>null</code>입니다</td></tr>

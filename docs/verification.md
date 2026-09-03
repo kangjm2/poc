@@ -6,8 +6,8 @@
 | 검사기 | 지금 | 최초 기록 시점 |
 |---|---|---|
 | `scripts/verify-ui.mjs` | **125/125** | 15 → 30 |
-| `scripts/verify-scenarios.mjs` | **257/257 단계 / 25 시나리오** | 49 / 8 |
-| `tools/uxtest/api-surface.mjs` | 격차 없음 (엔드포인트 67 · 클라이언트 68 · KPI 18/18 도달) | 엔드포인트 14 |
+| `scripts/verify-scenarios.mjs` | **264/264 단계 / 26 시나리오** | 49 / 8 |
+| `tools/uxtest/api-surface.mjs` | 격차 없음 (엔드포인트 69 · 클라이언트 68 · KPI 18/18 도달) | 엔드포인트 14 |
 | `mvn test` | **89개** (`KpiGraphTest` 46 · `CohortTest` 13 · `GlobalFilterTest` 11 · `ColourRampTest` 7 · `ComputedKpisTest` 6 · `ConvexHullTest` 6) | 없었음 |
 | Flyway 마이그레이션 | V1–V13 | V1–V3 |
 

@@ -794,8 +794,15 @@ scenario('S12 · The monitored set is consistent with everything else')
 
   const serving = ms.cells.filter((c) => c.serving)
   step('exactly one cell is the serving cell', serving.length === 1)
-  step('it is the one `sample` records as serving', serving[0]?.pci === ms.servingPci,
-    `${serving[0]?.pci} vs ${ms.servingPci}`)
+  // Read from the track, which AnalysisService builds from `sample.serving_pci`, rather
+  // than from the monitored-set response again: MonitoredSetService sets the `serving`
+  // flag BY comparing to `servingPci`, so the two fields of one response agreed by
+  // construction and the check could not have failed.
+  const trackAt = (await apiGet(`/api/sessions/${cityId}/track?kpi=RSRP`))
+    .find((p) => p.seq === seq)
+  step('it is the one `sample` records as serving',
+    serving[0]?.pci != null && serving[0].pci === trackAt?.servingPci,
+    `monitored set says ${serving[0]?.pci}, the track says ${trackAt?.servingPci}`)
 
   // No neighbour may be stronger than the cell the terminal is actually using. This is
   // the invariant that caught the tunnel attenuating only the serving cell.
@@ -837,16 +844,33 @@ scenario('S12 · The monitored set is consistent with everything else')
   // Read back the serving quality at each reported sample rather than trusting the query
   // that produced them - this is the assertion that would fail if the JOIN were dropped,
   // on any measurement where a crowded sample has a healthy serving link.
+  // RSRQ, and the rule's own threshold. This read SINR against `< 5`, which is a
+  // different KPI and a number from nowhere: MonitoredSetService binds
+  // QUALITY_KPI = "RSRQ" against POLLUTION_MAX_SERVING_RSRQ_DB = -15, and documents at
+  // length why not SINR (it carries the receiver's performance, so the same road and the
+  // same pilots give a different verdict on a different modem).
+  //
+  // §1.5.12 - THIS STEP HAS NO WITNESS ON SEEDED DATA, and saying so is the point.
+  // Removing the RSRQ join entirely was tried and this suite stayed green at 1 span: the
+  // generator derives each cell's rsrq from the same per-cell powers the window test
+  // reads, so a crowded sample here is always also a low-RSRQ one and the gate excludes
+  // nothing to observe. The service's own comment predicts exactly that. What the step
+  // does buy is that the reported spans really are on a degraded link, read back from the
+  // snapshot rather than from the query that produced them - it would catch a rule
+  // inverted or bound to the wrong column. It would not catch the rule being deleted.
+  // A real witness needs a measurement where quality arrives independently of the
+  // neighbour powers, which is an imported drive with neighbour rows - something the
+  // importer does not yet load.
   const pollutedQuality = []
   for (const sp of spans) {
     const snap = await apiGet(`/api/sessions/${cityId}/snapshot?seq=${sp.fromSeq}`)
-    const sinr = Object.values(snap.byCategory ?? {}).flat()
-      .find((r) => r.kpi === 'SINR')?.value
-    if (sinr != null) pollutedQuality.push(sinr)
+    const rsrq = Object.values(snap.byCategory ?? {}).flat()
+      .find((r) => r.kpi === 'RSRQ')?.value
+    if (rsrq != null) pollutedQuality.push(rsrq)
   }
   step('every polluted sample has a degraded serving link',
-    pollutedQuality.length > 0 && pollutedQuality.every((v) => v < 5),
-    pollutedQuality.length ? `SINR: ${pollutedQuality.join(', ')}` : 'no SINR read')
+    pollutedQuality.length > 0 && pollutedQuality.every((v) => v < -15),
+    pollutedQuality.length ? `RSRQ: ${pollutedQuality.join(', ')}` : 'no RSRQ read')
 
   // Inside the deep fade the set must SHRINK rather than stay full - a fade that left the
   // neighbour count untouched would mean the fade was applied to the serving cell alone.
@@ -1637,11 +1661,74 @@ scenario('S19 · Loading a folder, and stopping when it is the wrong one')
   step('cancelling something that is not running says so, rather than silently passing',
     cancelBody.cancelRequested === false, cancelBody.message)
 
+  // And now a REAL one. Everything above this exercises the "that import is not running"
+  // branch: the loading loop, the flag read at the batch boundary, the rollback and the
+  // CANCELLED row were all untested, which is the entire claim the step above makes.
+  //
+  // 40,000 rows because the flag is only read every 5,000 (ImportService.BATCH) and the
+  // load has to still be running when the cancel arrives - measured at ~7 s here, against
+  // a poll that finds the job inside a second.
+  const rows = ['ts,latitude,longitude,rsrp']
+  const t0 = Date.parse('2026-01-01T00:00:00Z')
+  for (let i = 0; i < 40000; i++) {
+    rows.push(`${new Date(t0 + i * 1000).toISOString()},65.0${String(i % 900).padStart(3, '0')}`
+              + `,25.47${String(i % 900).padStart(3, '0')},${-70 - (i % 40)}`)
+  }
+  const bigName = 'S19 cancel me.csv'
+  // Not awaited: the endpoint is synchronous, so awaiting it here would mean waiting for
+  // the very load we intend to interrupt.
+  const running = page.request.post(`${API}/api/import/csv`, {
+    multipart: {
+      file: { name: bigName, mimeType: 'text/csv', buffer: Buffer.from(rows.join('\n')) },
+      sessionName: 'S19 cancelled measurement',
+    },
+    timeout: 120000,
+  })
+  let liveJob = null
+  for (let i = 0; i < 60 && liveJob == null; i++) {
+    await page.waitForTimeout(150)
+    liveJob = (await apiGet('/api/import/jobs'))
+      .find((j) => j.filename === bigName && j.status === 'RUNNING') ?? null
+  }
+  const asked = liveJob
+    ? await (await page.request.post(`${API}/api/import/jobs/${liveJob.id}/cancel`)).json()
+    : { cancelRequested: false, message: 'never saw it running' }
+  step('a running import can be found and asked to stop',
+    liveJob != null && asked.cancelRequested === true,
+    `${liveJob ? `job ${liveJob.id}` : 'no RUNNING job seen'} - ${asked.message}`)
+
+  const stoppedResp = await running
+  // 409, which is what ImportStopped exists to produce. It answered 500 until the handler
+  // that reads it was written - the type carried a comment promising 409 and no
+  // @ExceptionHandler named it, and no check had ever taken this path.
+  step('the interrupted request answers 409, not a fault',
+    stoppedResp.status() === 409,
+    `HTTP ${stoppedResp.status()} ${JSON.stringify(await stoppedResp.json()).slice(0, 80)}`)
+
+  const cancelledJob = (await apiGet('/api/import/jobs')).find((j) => j.filename === bigName)
+  step('the history records it as CANCELLED, with how far it got',
+    cancelledJob?.status === 'CANCELLED'
+    && cancelledJob.rows_read > 0 && cancelledJob.rows_read < 40000,
+    `${cancelledJob?.status} after ${cancelledJob?.rows_read} of 40000 rows`)
+
+  // The point of the whole exercise: a cancelled import is not a small measurement, it is
+  // no measurement.
+  const leftBehind = (await apiGet('/api/sessions'))
+    .find((x) => x.name === 'S19 cancelled measurement')
+  step('and the stopped import left no measurement behind, not even a short one',
+    leftBehind == null,
+    leftBehind ? `session ${leftBehind.id} survived with ${leftBehind.sampleCount} samples`
+      : 'nothing was created')
+
   // The history is a LOG - it accumulates across runs by design, which is the point of
   // keeping failed attempts in it. So this reads the two most recent S19 jobs, not every
   // S19 job that has ever existed.
   const jobs = await apiGet('/api/import/jobs')
-  const s19jobs = jobs.filter((j) => String(j.filename).startsWith('S19 ')).slice(0, 2)
+  // The two uploaded files by name, not "the two most recent S19 jobs" - the cancelled
+  // one above is also an S19 job and is more recent than both.
+  const s19jobs = jobs
+    .filter((j) => j.filename === 'S19 first.csv' || j.filename === 'S19 second.csv')
+    .slice(0, 2)
   step('the history records what each file did, with its row count',
     s19jobs.length === 2 && s19jobs.every((j) => j.status === 'COMPLETED' && j.rows_read > 0),
     s19jobs.map((j) => `${j.filename}: ${j.status} ${j.rows_read} rows`).join(' · '))
@@ -2745,11 +2832,29 @@ scenario('S24 · The half-built things, finished')
   await selectSession(CITY_A)
   await openWorkbook('Monitored Set')
   await page.waitForTimeout(1400)
-  const monHeads = await page.locator('table.grid thead th')
+  // The NUMBERS, not the heading. A header cell is there whether or not the column beside
+  // it is filled from `samplesStrong`, and `informative` was read from the API - so the
+  // screen contributed nothing to a step whose whole subject is what the screen shows.
+  // The panel asks with its own default window of 6 dB, which is the service's default
+  // too, so the parameterless read above is the same answer in the same row order.
+  // Scoped to the one panel. `table.grid` matches the pollution table on the same page
+  // too, so an unscoped `tbody tr` gathers rows from both and the comparison below is
+  // against a list that is not the neighbour table.
+  const monTable = page.locator('.panel:has(header .title:text-is("Across the whole drive"))'
+                                + ' table.grid')
+  const monHeads = await monTable.locator('thead th')
     .evaluateAll((ths) => ths.map((t) => (t.textContent ?? '').trim()))
+  const contendedCol = monHeads.indexOf('Contended')
+  const onScreen = await monTable.locator('tbody tr').evaluateAll(
+    (rows, col) => rows.map((r) => (r.children[col]?.textContent ?? '').trim()), contendedCol)
+  const expected = bars.map((b) => String(b.samplesStrong))
   step('the neighbour table shows how often a cell CONTENDED, not only that it was seen',
-    monHeads.includes('Contended') && informative.length > 0,
-    `${informative.length} of ${bars.length} bars differ from both neighbours`)
+    contendedCol > 0 && informative.length > 0
+    && onScreen.length === expected.length
+    && onScreen.every((v, i) => v === expected[i]),
+    `${informative.length} of ${bars.length} bars differ from both neighbours;`
+    + ` column ${contendedCol} reads ${onScreen.slice(0, 4).join(',')}`
+    + ` against ${expected.slice(0, 4).join(',')}`)
 
   // ── was the car moving. Already on every track point, rendered nowhere.
   await openWorkbook('Overview')
@@ -2889,15 +2994,22 @@ scenario('S25 · Four things the manual asks for before it draws')
   await page.waitForTimeout(1200)
   const after = await hulls()
   const note = await page.locator('.map-panel header .title').innerText()
-  // Exact, not "fewer": keeping two of N cells has to remove exactly N-2 hulls, and the
-  // header has to name both numbers. A `<` alone would pass on any narrowing at all,
-  // including one that dropped the wrong hulls.
+  // WHICH cells, not only how many. An exact count still passes on a filter that keeps
+  // the right NUMBER of the wrong hulls, and the header is not an independent witness -
+  // App derives the caption and the drawing from one expression. So the check names the
+  // survivors: each kept PCI has its hull, and a PCI that was filtered out has none.
   const flat = note.replace(/\n/g, ' ')
+  const drawn = (pci) => page.locator(`path.footprint-hull.pci-${pci}`).count()
+  const dropped = allCells[allCells.length - 1]
+  const keptA = await drawn(allCells[0])
+  const keptB = await drawn(allCells[1])
+  const goneC = await drawn(dropped)
   step('the cell filter narrows what is drawn, and the map says what it left out',
-    before - after === allCells.length - 2
+    before - after === allCells.length - 2 && keptA === 1 && keptB === 1 && goneC === 0
     && new RegExp(`2 of ${allCells.length} cells`).test(flat),
-    `${before} shapes -> ${after} for "${keep}" of ${allCells.length} cells; header says`
-    + ` "${flat.slice(0, 90)}"`)
+    `${before} shapes -> ${after} for "${keep}" of ${allCells.length} cells;`
+    + ` kept ${allCells[0]}:${keptA} ${allCells[1]}:${keptB}, dropped ${dropped}:${goneC};`
+    + ` header says "${flat.slice(0, 90)}"`)
 
   // A range and an open range, the two forms a bare list cannot express. `100-` is how an
   // operator says "the small-cell layer" without knowing where it ends.
@@ -2912,8 +3024,11 @@ scenario('S25 · Four things the manual asks for before it draws')
   await page.locator('input[aria-label="Footprint cells"]').fill('not a cell')
   await page.waitForTimeout(1000)
   const badNote = await page.locator('.map-panel header .title').innerText()
+  // One, not "fewer than before": `lo-lo` and `hi-` each select exactly one of these
+  // cells, and that number is derivable two lines above. `<` would pass on a range that
+  // matched everything but one.
   step('ranges and open ranges parse, and a typo is refused rather than silently obeyed',
-    single < before && openEnded < before && /ignored/.test(badNote),
+    single === 1 && openEnded === 1 && /ignored/.test(badNote),
     `${lo}-${lo} -> ${single}, ${hi}- -> ${openEnded}, typo -> `
     + `"${badNote.replace(/\n/g, ' ').match(/ignored[^—]*/)?.[0]?.slice(0, 40) ?? 'no notice'}"`)
   await page.locator('input[aria-label="Footprint cells"]').fill('')
@@ -2975,6 +3090,73 @@ scenario('S25 · Four things the manual asks for before it draws')
   step('and switching tabs changes the cases underneath, which is the point of keeping both',
     onFirst !== onSecond && /cases/.test(onFirst),
     `"${onSecond.trim()}" -> "${onFirst.trim()}"`)
+
+  await page.goto(BASE, { waitUntil: 'domcontentloaded' })
+  await page.waitForTimeout(2500)
+}
+
+// ─── S26 · A control is offered only where something answers it ──────────────
+//
+// The negative check §1.5.17 asks for. Every other step in this file drives a control on a
+// screen that consumes it, which is exactly how five toolbar groups came to be live on
+// fourteen tabs while three tabs read them: each check drove the one tab where its control
+// worked, and all of them passed.
+//
+// Cheaper than driving fourteen tabs, and it goes red the moment the WORKBOOKS table and
+// the toolbar disagree - which is the failure this is really guarding.
+scenario('S26 · A control is offered only where something answers it')
+{
+  const GROUPS = [
+    ['Colour by', 'colour'],
+    ['Area bins', 'areaBins'],
+    ['Distance bins', 'distanceBins'],
+    ['Footprint basis', 'footprints'],
+  ]
+  const shown = async () => {
+    const out = []
+    for (const [label] of GROUPS) {
+      out.push(await page.locator(`.toolbar [aria-label="${label}"]`).count() > 0)
+    }
+    return out
+  }
+  const areaShown = () => page.locator('.toolbar button', { hasText: /Ask an area|Drawing/ })
+    .count()
+
+  await selectSession(CITY_A)
+  await openWorkbook('Overview')
+  await page.waitForTimeout(1400)
+  // Footprints has to be ON for its basis select to exist, so the group is read through a
+  // control that is present whenever the group is.
+  await page.locator('.toolbar .group:has(label:text("Footprints")) button').click()
+  await page.waitForTimeout(1200)
+  const onOverview = await shown()
+  step('Overview offers all four of the groups its own row claims',
+    onOverview.every(Boolean) && await areaShown() === 1,
+    `${GROUPS.map(([l], i) => `${l}:${onOverview[i] ? 'yes' : 'no'}`).join(' ')}`
+    + ` · area:${await areaShown()}`)
+
+  // Statistics has a table and no map. Nothing here can answer any of them.
+  await openWorkbook('Statistics')
+  await page.waitForTimeout(1400)
+  const onStats = await shown()
+  step('a screen with no map offers none of them, rather than latching a dead button',
+    onStats.every((v) => v === false) && await areaShown() === 0,
+    `${GROUPS.map(([l], i) => `${l}:${onStats[i] ? 'yes' : 'no'}`).join(' ')}`
+    + ` · area:${await areaShown()}`)
+
+  // Mobility is the interesting row: it paints the toolbar's colour scale and draws
+  // footprints, and deliberately does NOT take area bins - tiles replace the route the
+  // monitored-set fan is anchored to. A blanket "map tabs get everything" would pass the
+  // two steps above and fail this one.
+  await openWorkbook('Mobility')
+  await page.waitForTimeout(1600)
+  const onMobility = await shown()
+  step('and a map screen offers exactly its own row, not every group a map could take',
+    onMobility[0] === true && onMobility[3] === true
+    && onMobility[1] === false && onMobility[2] === false
+    && await areaShown() === 0,
+    `${GROUPS.map(([l], i) => `${l}:${onMobility[i] ? 'yes' : 'no'}`).join(' ')}`
+    + ` · area:${await areaShown()}`)
 
   await page.goto(BASE, { waitUntil: 'domcontentloaded' })
   await page.waitForTimeout(2500)

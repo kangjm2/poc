@@ -103,7 +103,7 @@
 
 <table>
 <tr><th style="width:230px">Correlate Parameters 모드 <span class="src">p84</span></th><th>출력 행 생성 조건</th><th style="width:150px">우리</th></tr>
-<tr><td>left outer join</td><td><strong>첫 파라미터</strong>가 바뀔 때. 나머지는 current/previous/next</td><td><span class="tag t-none">표현 불가</span></td></tr>
+<tr><td>left outer join</td><td><strong>첫 파라미터</strong>가 바뀔 때. 나머지는 current/previous/next</td><td><span class="tag t-same">✅ <code>CORRELATE</code> (P4-2)</span> <s>표현 불가</s></td></tr>
 <tr><td>outer join</td><td>어느 파라미터든 바뀌면</td><td><span class="tag t-same">우리 <code>COMBINE</code></span></td></tr>
 <tr><td>inner join</td><td>전부 유효할 때만</td><td><span class="tag t-diff">하류 <code>FILTER</code>로 우회</span></td></tr>
 </table>
@@ -121,6 +121,14 @@ KPI Workbench의 Correlation 요소들은 <strong>항상 primary 게이팅</stro
 더 정확히는 <strong>그들은 세 가지를 고를 수 있고, 우리는 그중 하나만 할 수 있습니다.</strong>
 우리가 가진 것(outer join)은 정보를 가장 덜 버리는 선택이지만,
 <strong>"통화 중일 때만 보고 싶다"를 노드로 말할 방법이 없다</strong>는 것이 실제 격차입니다.
+</p>
+<p>
+<strong>정정 (2026-09-02)</strong>: 그 격차는 P4-2에서 닫혔습니다. <code>COMBINE</code>은 위에 적힌
+그대로이고, primary 게이팅은 그것을 고치는 대신 <strong>별도 노드</strong>
+(<code>CORRELATE</code>)로 갔습니다 — <em>"어느 입력이 순간을 정하는가"</em>가 드롭다운입니다.
+레퍼런스는 "가장 왼쪽이 primary"라는 배치 규약이지만 우리 컴파일러는 좌표를 읽지 않고
+(같은 그림이 항상 같은 SQL이 되도록 입력을 노드 id로 정렬합니다), 규약보다
+<strong>고르는 컨트롤</strong>이 배울 것이 적습니다.
 </p>
 </div>
 
@@ -219,8 +227,13 @@ p332의 <em>"with three or more tables the task becomes impossible"</em>을 우�
 <p>
 실무적 함의가 큽니다: <strong>우리 Combine 노드의 값어치는 그들만큼 크지 않습니다.</strong>
 반대로 <strong>우리 워크벤치의 값어치는 전적으로 State Machine과 상관(Previous/Current/Next)
-쪽에 있고 — 그 둘이 지금 우리에게 없거나 다릅니다.</strong>
-개발 시간을 어디에 쓸지가 여기서 갈립니다.
+쪽에 있습니다.</strong>
+</p>
+<p>
+<strong>정정 (2026-09-02)</strong>: 이 문단은 <em>"그 둘이 지금 우리에게 없거나 다릅니다.
+개발 시간을 어디에 쓸지가 여기서 갈립니다"</em>로 끝났습니다. <strong>그 판단대로 썼고, 둘 다
+만들어졌습니다</strong> — P4-1(구간을 내는 State Machine)과 P4-2(<code>CORRELATE</code>).
+아래 §3 순위표의 4·5번이 그 둘입니다.
 </p>
 </div>
 
@@ -257,6 +270,29 @@ p332의 <em>"with three or more tables the task becomes impossible"</em>을 우�
         이건 유일하게 <strong>모양 문제가 아니라 그냥 없는 것</strong></td></tr>
 </table>
 
+<div class="ours">
+<h5>이 표의 네 줄 중 셋은 이후 닫혔고, 한 줄은 <strong>진단이 틀렸습니다</strong> <span class="src">2026-09-02 추가</span></h5>
+<p>
+지워 두지 않는 이유는 이 표가 <em>왜 그렇게 사정했는지</em>의 기록이기 때문입니다. 지금 상태는:
+</p>
+<ul>
+<li><strong>이벤트를 캔버스에 못 올림 — ✅ ⑥.</strong> <code>SOURCE_EVENT</code>가 이벤트를 표본
+    척추에 얹습니다. 아래 §3의 2번.</li>
+<li><strong>State Machine이 구간을 못 냄 — ✅ P4-1, 그리고 이 줄의 진단이 틀렸습니다.</strong>
+    "표본당 한 행에 담을 곳이 없다"가 아니었습니다. 레퍼런스의 세 열
+    (<code>start_time · end_time · time_interval</code>) 중 <code>end_time</code>은 나머지 둘의 합이라
+    자유도가 둘이고, <code>sample_kpi</code>는 이미 <code>ts</code>와 <code>value</code> 둘을 갖고
+    있습니다. 머문 시간을 <em>상태에 들어간 표본</em>에 찍으면 <code>ts</code>가 곧
+    <code>start_time</code>이 되어 점유 하나가 평범한 KPI 행 하나에 손실 없이 들어갑니다.
+    <strong>두 번째 결과 모양도, 두 번째 실체화 경로도 필요하지 않았습니다</strong> —
+    그래서 그 구간이 기존의 모든 화면에서 색칠·비닝·필터·내보내기·리포트를 그대로 탑니다.</li>
+<li><strong>지오메트리를 못 읽음 — ✅ ⑥.</strong> <code>SOURCE_SAMPLE</code>이
+    <code>LATITUDE · LONGITUDE · SPEED_KMH · SERVING_PCI</code>를 읽습니다(허용 목록 고정).</li>
+<li><strong>Nth Best · Group By 불가 — 그대로 남았습니다.</strong> 행 수와 열 수를 바꾸는 노드라는
+    진단은 여전히 맞습니다.</li>
+</ul>
+</div>
+
 <div class="warn">
 <h5>그래서 우리가 공표한 우선순위 순서가 틀렸습니다</h5>
 <p>
@@ -283,9 +319,14 @@ UC27이 그것을 그림으로 보여 줍니다 — 그 그래프의 <strong>마
 
 <p>기준은 <strong>"이걸 안 하면 다음 구현을 잘못 만든다"</strong>의 정도입니다.</p>
 
-<p class="note">이 순위표가 쓰인 뒤 백로그 ①–⑧이 진행되어 <strong>0·1·2·6·7번이 닫혔습니다.</strong>
+<p class="note">이 순위표가 쓰인 뒤 백로그 ①–⑧과 P4가 진행되어
+<strong>0·1·2·4·5·6·7·8번이 닫혔고, 9번은 셋 중 하나가 닫혔습니다</strong>
+(2026-09-03 재집계 — 그 전에는 0·1·2·6·7이었습니다).
+<strong>남은 것은 3번과 9번의 나머지 둘</strong>입니다.
 순서가 맞았는지가 여기서 드러납니다 — 0번 결정이 먼저 필요하다고 본 판단은 맞았고,
 그 결정은 ⑥에서 <em>세 번째</em> 모양(발행하지 않는 미리보기)으로 내려졌습니다.
+4번과 5번을 "0번 이후"·"2번 이후"로 걸어 둔 것도 맞았습니다 — 다만 4번은 0번이
+<em>결정</em>돼서가 아니라 그 결정이 <strong>필요 없었다는 것이 밝혀져서</strong> 열렸습니다(C9의 추가 참조).
 전체 대조는 <a href="../use-case-coverage.md">Use Case 31개 대조표</a>.</p>
 
 <table>
@@ -318,13 +359,24 @@ UC27이 그것을 그림으로 보여 줍니다 — 그 그래프의 <strong>마
 </tr>
 <tr>
   <td>4</td>
-  <td><strong>진짜 State Machine</strong> — 전이 그래프 + 구간 출력 + <code>time_interval</code></td><td>큼</td>
-  <td>C2. <strong>0번 결정 이후</strong></td>
+  <td><s><strong>진짜 State Machine</strong> — 전이 그래프 + 구간 출력 + <code>time_interval</code></s></td><td>큼</td>
+  <td>C2. <strong>0번 결정 이후</strong> — <strong>✅ P4-1에서 완료.</strong>
+      머문 시간을 상태에 들어간 표본에 찍으므로 <code>ts</code>가 레퍼런스의
+      <code>start_time</code>이 되고, <strong>저장 모델은 건드리지 않았습니다</strong>
+      (C9의 추가 참조 — "담을 곳이 없다"는 진단이 틀렸습니다).
+      전이는 일반 그래프가 아니라 <strong>순서 있는 사다리</strong>이고
+      <code>Time trigger</code>는 없습니다. 그 한계는 인스펙터에 항상 떠 있습니다.
+      우리 쪽에만 있는 규칙 하나: 시작과 끝의 끊긴-걸음 카운트가 같을 때만 발행하므로
+      <strong>측정하지 않은 시간을 재지 않습니다</strong></td>
 </tr>
 <tr>
   <td>5</td>
-  <td><strong>Previous / Current / Next Value</strong> 상관 노드</td><td>중</td>
-  <td>C8. <strong>2번 이후</strong> — 상관시킬 이벤트가 있어야 의미가 생깁니다</td>
+  <td><s><strong>Previous / Current / Next Value</strong> 상관 노드</s></td><td>중</td>
+  <td>C8. <strong>2번 이후</strong> — 상관시킬 이벤트가 있어야 의미가 생깁니다.
+      순서가 맞았고 <strong>✅ P4-2에서 완료</strong>: 다섯 종에
+      <code>Primary input</code> 드롭다운, 창은 두 입력의 합집합 위에서 돌고 게이트는 마지막.
+      레퍼런스에 없는 <code>Within (ms)</code>는 <em>선택</em>이고 기본이 꺼짐이라,
+      끄면 정확히 레퍼런스입니다</td>
 </tr>
 <tr>
   <td>6</td>
@@ -344,14 +396,20 @@ UC27이 그것을 그림으로 보여 줍니다 — 그 그래프의 <strong>마
 </tr>
 <tr>
   <td>8</td>
-  <td>드릴다운 <strong>다중 탭</strong></td><td>중</td>
-  <td>C5. 재분류됨</td>
+  <td><s>드릴다운 <strong>다중 탭</strong></s></td><td>중</td>
+  <td>C5. 재분류됨 — <strong>✅ 2026-09-03에 완료.</strong> 원인 탭이 여는 순서대로 쌓이고
+      탭 색은 파이 조각에서 가져옵니다. 이미 열린 원인을 다시 누르면 닫히고, 탭을 닫으면
+      남은 탭으로 물러납니다</td>
 </tr>
 <tr>
   <td>9</td>
   <td><strong>Cell locator</strong> · 거리 빈 <strong>40λ 옵션</strong> ·
-      푸트프린트 <strong>3강 기준</strong></td><td>작음</td>
-  <td>UC21 · C4 · UC1. 데이터가 이미 있는 것들</td>
+      <s>푸트프린트 <strong>3강 기준</strong></s></td><td>작음</td>
+  <td>UC21 · C4 · UC1. 데이터가 이미 있는 것들 —
+      <strong>◐ 셋 중 하나.</strong> 푸트프린트 3강 기준은 2026-09-03에 완료
+      (<code>SERVING</code>/<code>TOP3</code>를 툴바에서 고름, 기본값은 <code>SERVING</code> 유지).
+      <strong>Cell locator와 40λ는 그대로 남았습니다</strong> — 거리 빈은 여전히
+      50 / 100 / 250 m이고, 40λ를 계산해 제안하는 자리는 아직 없습니다</td>
 </tr>
 </table>
 
@@ -381,7 +439,9 @@ UC27이 그것을 그림으로 보여 줍니다 — 그 그래프의 <strong>마
     <td>실내 측정은 우리 범위 밖입니다</td></tr>
 <tr><td>드릴다운 <strong>더블클릭</strong> 진입</td>
     <td><strong>한 번 클릭이 낫다고 판단합니다.</strong> 파이 조각의 더블클릭은 발견하기 어려운 조작입니다.
-        고칠 것은 <strong>동시 유지</strong> 쪽입니다</td></tr>
+        고칠 것은 <strong>동시 유지</strong> 쪽이라고 적어 뒀는데,
+        <strong>그쪽은 2026-09-03에 닫혔습니다</strong>(§3의 8번). 이 줄의 판정 — 진입은 한 번
+        클릭으로 둔다 — 은 그대로입니다</td></tr>
 </table>
 
 <footer>

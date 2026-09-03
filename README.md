@@ -13,7 +13,7 @@ VDT 장비·소프트웨어 자체는 별도 저장소에서 개발되었으며,
 | 문서 | 내용 |
 |---|---|
 | [`docs/user-guide.md`](docs/user-guide.md) | **사용자 가이드.** 작업별 안내 — 주행 분석, 빌드 비교, 랩 캠페인, 커버리지, 임포트, 색상 스케일, KPI 추가 |
-| [`docs/architecture.md`](docs/architecture.md) | **아키텍처.** 구성 요소, 요청 흐름, 데이터 모델, API 전체, 전체를 지탱하는 설계 규칙 |
+| [`docs/architecture.md`](docs/architecture.md) | **아키텍처.** 구성 요소, 요청 흐름, 데이터 모델, 주요 API, 전체를 지탱하는 설계 규칙 |
 | [`docs/ui-gap-vs-reference.md`](docs/ui-gap-vs-reference.md) | **UI 격차 분석.** 실제 제품 스크린샷 대비 우리 화면을 요소 단위로 대조 |
 | [`docs/briefs/index.html`](docs/briefs/index.html) | **기존 툴 분석 브리프 (HTML).** Nemo Analyze 10.2 사용자 가이드 기반 — 메뉴 설명·유저 시나리오·우리 구현에 어떻게 반영됐는가 |
 | [`docs/use-case-coverage.md`](docs/use-case-coverage.md) | **Use Case 31개 대조표.** 매뉴얼 유즈케이스 전부를 한 표에서 우리 구현과 맞춰 본 것. 브리프의 "남은 일" 표가 *판단*의 기록이라면 이 표는 *현재 상태*의 기록입니다 |
@@ -26,8 +26,8 @@ VDT 장비·소프트웨어 자체는 별도 저장소에서 개발되었으며,
 | [`docs/ui-ux-backlog.md`](docs/ui-ux-backlog.md) | **UI/UX 백로그.** 격차 중 화면에 닿는 것만, 코드 대조로 확인하고 세 사용자 관점의 독립 순위로 순서를 매긴 실행 계획 |
 | [`docs/gap-analysis.md`](docs/gap-analysis.md) | Keysight 매뉴얼 및 경쟁 솔루션(VIAVI 등) 대비 기능 격차와 우선순위 |
 | [`docs/verification.md`](docs/verification.md) | 검증 기록 |
-| [`docs/scenario-verification.md`](docs/scenario-verification.md) | 시나리오 단위 E2E 검증 — 20개 사용자 여정과 검증이 잡아낸 결함들 |
-| [`docs/research-agenda.md`](docs/research-agenda.md) | 다음 리서치 항목 (제품 19건 + 방법론 9건) |
+| [`docs/scenario-verification.md`](docs/scenario-verification.md) | 시나리오 단위 E2E 검증 — 26개 사용자 여정 264단계와 검증이 잡아낸 결함들 |
+| [`docs/research-agenda.md`](docs/research-agenda.md) | 다음 리서치 항목 (제품 A1–A21 + 방법론 B1–B9) |
 | [`docs/ui-testing/README.md`](docs/ui-testing/README.md) | **(별도 주제)** UI 검증 기법 리서치 — 신호별 토큰 비용 실측, 결함 주입 매트릭스, UX-driven development 근거 검토 |
 | [`docs/assets/NOTICE.md`](docs/assets/NOTICE.md) | 저작권 고지 및 구현 시 복제 금지 항목 |
 
@@ -87,7 +87,7 @@ sudo -u postgres createdb -O vdt vdt
 ```bash
 # 세 검사기가 서로 다른 실패 계열을 담당합니다
 node scripts/verify-ui.mjs             # 개별 동작 125개
-node scripts/verify-scenarios.mjs      # 사용자 여정 257단계 / 25 시나리오
+node scripts/verify-scenarios.mjs      # 사용자 여정 264단계 / 26 시나리오
 node tools/uxtest/api-surface.mjs      # 로직은 있는데 뷰가 없는 격차
 (cd backend && mvn test)               # SQL을 조립하는 코드·색 램프·기하 — 89개
 node tools/uxtest/measure-signals.mjs  # (선택) 검증 신호별 비용 측정
@@ -130,11 +130,15 @@ node tools/uxtest/experiment.mjs   # 결함 주입 × 검출기 매트릭스
 | Lab fronthaul replay — O-DU under test | **O-RAN 7.2x 프론트홀로 주입된 랩 실행.** 중간에 타이밍 창 결함이 있으며, 그 구간에서 무선 KPI는 정상인 채 프론트홀 KPI만 악화됩니다 |
 
 대용량 검증용 데이터는 `./scripts/load-test.sh 25`로 생성합니다 (25 × 8시간 = 200 device-hours,
-940만 KPI 행). `./scripts/load-test.sh clean`으로 제거합니다.
+**KPI 정의 18개 기준 약 1,300만 행 · 4 GB**). `./scripts/load-test.sh clean`으로 제거합니다.
+*940만 행이라고 적혀 있던 것은 카탈로그가 13개이던 시점의 같은 명령입니다 — 행 수는 정의
+개수에 비례하므로 명령이 아니라 카탈로그가 바뀌면 함께 바뀝니다.*
 
 ## API
 
-전체 엔드포인트 표는 [`docs/architecture.md`](docs/architecture.md) §5에 있습니다. 계열만 적으면:
+주요 엔드포인트 표는 [`docs/architecture.md`](docs/architecture.md) §5에 있습니다 — 그 절이
+스스로 적듯 **선택된 것들**이고, 전체 목록은 `node tools/uxtest/api-surface.mjs`가 코드에서
+세어 인쇄합니다(현재 69개). 계열만 적으면:
 
 | 계열 | 예 |
 |---|---|
@@ -161,7 +165,10 @@ node tools/uxtest/experiment.mjs   # 결함 주입 × 검출기 매트릭스
 
 **5. 집계는 전부 DB에서 수행합니다.** 분포·통계·열화 구간 모두 SQL로 계산하며, 응답은 서버에서
 데시메이션합니다. 200 device-hours(1,300만 KPI 행, 4 GB)에서 **단일 세션** 분석 엔드포인트가 모두 200 ms 이내이며
-최악은 `track` 193 ms입니다(`architecture-and-scale.md` §3.4). *다중 세션 집계인 `/cohorts`는
+최악은 `track?maxPoints=4000` **129 ms**입니다(`gap-analysis.md`의 13M행 측정표 — 파생 스케일
+포함). *2026-09-03 정정: 이 자리에 "193 ms(`architecture-and-scale.md` §3.4)"라고 적혀 있었는데
+그 숫자는 어느 문서에도 없고, §3.4의 표는 13M행이 아니라 **9.4M행에서 잰 것**이라 `track`이
+90 ms입니다 — 인용한 절과 인용한 숫자가 서로 다른 실행이었습니다.* *다중 세션 집계인 `/cohorts`는
 그 표에 없습니다 — 아직 그 규모에서 재지 않았고, 재기 전에는 이 문장이 그것까지 말하지
 않습니다.*
 

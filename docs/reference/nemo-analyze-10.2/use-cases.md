@@ -54,7 +54,7 @@ UC27은 p403–426입니다.
 | 15 | 150–157 | 8 · MapX/BTS | Performing area binning (+ Distance-based binning) | ● | ✅ |
 | 16 | 158–162 | 8 · MapX/BTS | Comparing two groups of measurements from the same route on map | ● | ✅ |
 | 17 | 162–168 | 8 · MapX/BTS | Displaying base station cell beam range on map | ● | ✕ 미구현 |
-| 18 | 168–171 | 8 · MapX/BTS | Synchronizing base station map overlay with grid rows | ● | ✅ |
+| 18 | 168–171 | 8 · MapX/BTS | Synchronizing base station map overlay with grid rows | ● | ◐ *(2026-09-03 하향 — 셀 행 → 지도 줌이 없습니다)* |
 | 19 | 171–172 | 8 · MapX/BTS | Using BTS reference parameters | ● | ◐ |
 | 20 | 172–174 | 8 · MapX/BTS | Displaying base station connections on map based on pilot pollution | ● | ✅ |
 | 21 | 174–176 | 8 · MapX/BTS | Cell locator analysis | ● | ✕ 미구현 |
@@ -293,6 +293,27 @@ COMBINE → FILTER: rsrp >= -100 → OUTPUT` — 결과가 새 KPI가 되어 이
 남는 차이: 지금 보는 화면에 즉시 걸리지 않고, 폴리곤·셀 ID 같은 **공간 조건은 전역으로 걸 수
 없습니다**.
 
+*2026-09-03 정정 — 이 문단의 첫 문장이 거짓이고, 나머지도 그 위에 서 있었습니다.* 전역 필터는
+P3-2에서 나왔습니다. `GlobalFilter`가 받는 조건은 둘이고 **둘 다 이 UC의 것**입니다 —
+`kpi:NAME:OP:VALUE`가 매뉴얼의 2차 파라미터 임계(본문 예제의 `RSCP >= -100`이 그대로 들어갑니다),
+`cell:PCI`가 위 "셀 단위 전역 필터"의 `Create Global Filter From Cell ID`입니다. 조건은
+`(session_id, seq)` 부분질의 **하나**로 컴파일되어 세션 범위 분석 어디에나 끼워집니다 — 조인이나
+특정 열에 대한 WHERE 조각이 아니라 seq 집합인 이유가 그것이고, 덕분에 "어떤 엔드포인트가 지키는가"를
+**검사할 수 있습니다.** 지금 보는 화면에도 즉시 걸립니다(바꾸면 각 패널이 다시 가져옵니다).
+
+*어디까지 걸리는지는 코드 안의 목록입니다.* `GlobalFilter.coverage()`가 세션 범위 분석을 하나씩
+이름으로 적고 — **14개가 지키고 10개가 사유와 함께 면제**(2026-09-03 현재; 면제에
+`coverage-issues`와 `problem-survey`가 이유와 함께 새로 이름을 얻었습니다) — 화면의 필터 바가 그
+목록을 그대로 읽어 `Reach n of m`으로 적습니다(`GlobalFilterBar.tsx`). 필터 바는 Analysis와
+**Compare 두 모드**에 뜹니다(`App.tsx`) — `/cohorts`가 조건을 지키므로 그 화면에서도 조건을 보고
+지울 수 있어야 하기 때문입니다.
+
+**남는 차이**: 폴리곤 영역과 `Exclude event`는 아직 문법에 없습니다 — 앞은 조건 항이 없고
+([`data-views.md`](data-views.md) §1의 2026-09-03 정정), 뒤는 이벤트가 `ts`로만 매여 있어 표본으로
+먼저 해석해야 하는데 그 해석이 이미 다른 곳에 있어 규칙을 두 곳에 두지 않으려고 미뤘습니다
+(`GlobalFilter` 머리주석). 그리고 조건은 **측정마다 따로** 평가됩니다(`GlobalFilter.PER_MEASUREMENT`)
+— 주행 둘을 든 화면에서 `cell:101`은 각 주행의 PCI 101을 뜻합니다.
+
 ### 8.3 그래프 (p94–p112) — UC6 · UC7 · UC8 · UC9
 
 **그래프 절의 배경 (p94–107).** 그래프 종류는 `line` · `bar` · `scatter` · `pie` · `color grid` ·
@@ -526,12 +547,34 @@ Details`(더블클릭 — Info View에 디코딩). `Export Data To` — MS Excel
 **우리.** ◐ — "조합을 저장한다"는 절반은 워크북이 합니다.
 막히는 것은 **무엇을 조합하는가**입니다 — 레퍼런스의 레이어는 `.TAB` **지도 자산**(그리고 UC15가
 말하듯 분석 결과도 새 레이어가 됩니다)이고, 우리 레이어는 `{kpiName, visible}`
-(`types.ts:436`, `WorkbookService.java:31`)뿐입니다. MapX·`.TAB`·지오셋은 코드에 전무하고
+(`types.ts`, `WorkbookService.java`)뿐입니다. MapX·`.TAB`·지오셋은 코드에 전무하고
 (`grep -i "mapx|geoset|basemap"` → `RouteMap.tsx`의 타일 실패 플래그만), 지도에는 **레이어 목록
 자체가 없습니다**(우측 도크 = Parameters·Color Legends·Numerical Data·Monitored Set·Events,
-`App.tsx:962·997·1011·1029·1035`). 게다가 워크북 MAP 페인의 Layers 도크는 **캡션만 바꾸고 그림을
-바꾸지 않습니다**(`ComposedWorkbook.tsx:202` — `visible[0]`이 라벨에만 쓰이고 오버레이 prop이
+`App.tsx`). 게다가 워크북 MAP 페인의 Layers 도크는 **캡션만 바꾸고 그림을
+바꾸지 않습니다**(`ComposedWorkbook.tsx` — `visible[0]`이 라벨에만 쓰이고 오버레이 prop이
 넘어가지 않음).
+
+*2026-09-03 정정 — 위 문단의 뒤 절반이 세 곳에서 거짓입니다.* (줄번호 세 묶음도 함께 지웠습니다.
+가리키던 줄이 지금은 다른 것을 가리킵니다 — 살아 있는 코드를 가리키는 척하는 죽은 인용이
+이 저장소가 두 번 데인 모양이고, `ui-gap-vs-reference.md`가 같은 이유로 먼저 지웠습니다.)
+
+1. **레이어는 `{kpiName, visible}`이 아닙니다.** `{kpiName, visible, sessionId}`이고
+   (`WorkbookService`의 `record Layer`, `types.ts`의 `WorkbookLayer`), 세션 id가 저장되므로
+   **어느 주행을 그릴지가 배치의 일부**입니다.
+2. **지도에 레이어 목록이 있습니다.** `view/maplayers.ts`가 목록을 **지도에 실제로 건네진
+   값**(`MapContents`)에서 파생합니다 — 스위치가 무엇으로 켜져 있는지가 아니라 그릴 데이터가
+   있는지로 정하므로, 도크가 그려지지 않은 레이어를 자신 있게 부를 수 없습니다. 그리는 것은
+   `MapLayerDock`이고, **2026-09-03부터 지도 탭 셋 전부**입니다 — Overview · Mobility ·
+   Coverage Issues가 `mapContents` 객체 **하나**를 RouteMap과 도크에 함께 먹습니다(`App.tsx`).
+   그 전에는 도크가 Overview에만 뜨면서 공유 상태에 썼기 때문에, 거기서 끈 스위치가 다른
+   탭에서는 말없이 되살아났습니다.
+3. **워크북 MAP 페인도 그림을 바꿉니다.** 페인이 KPI(그리고 세션)별로 자기 트랙을 따로
+   가져오고, 보이는 레이어가 없으면 지도 대신 "No visible layer"를 적습니다
+   (`ComposedWorkbook.tsx`). App의 트랙을 넘겨 쓰던 시절에 도크의 이름과 그림이 갈라졌던
+   것이고, 그때 더 권위 있어 보이는 쪽이 캡션이었습니다.
+
+**남는 것**은 이 UC의 원래 격차 그대로입니다 — `.TAB` 지도 자산 · MapX · 지오셋 저장, 즉
+**레이어가 될 수 있는 것의 종류**입니다.
 
 #### UC14 · p148–149 · BTS 커버리지로 경로 채색 — ●
 
@@ -732,9 +775,26 @@ Contents`에서 셀을 좌클릭해도 표시됩니다.
 **그림.** `uc18-split-vertically-popup_p169`, `uc18-insert-grid_p170`,
 `uc18-grid-synced-with-bts-map_p171`.
 
-**우리.** ✅ — 공유 시간 커서가 지도·그리드·차트·L3를 함께 움직입니다. 레퍼런스의 이 유즈케이스는
+**우리.** ◐ — 공유 시간 커서가 지도·그리드·차트·L3를 함께 움직입니다. 레퍼런스의 이 유즈케이스는
 시간이 아니라 **셀 행 → 지도 줌** 동기화라, 우리의 셀 목록(Monitored set 표)에서 행을 고르면
 지도가 그 셀로 가는 동작이 정확한 대응물입니다.
+
+*2026-09-03 정정 — 이 판정은 **우리에게 유리한 쪽으로** 틀렸습니다.* 마지막 문장은 있는 기능이
+아니라 **만들어야 할 대응물**을 적은 것인데 ✅가 붙어 있었습니다(그래서 ◐로 내립니다). 코드로
+확인한 것:
+
+- **Cells 탭에는 지도가 없습니다.** `App.tsx`의 `WORKBOOKS`에서 `cells` 행은 어떤 지도 도구
+  그룹도 읽지 않고, 화면은 막대차트와 표 둘뿐입니다(`CellBarChart.tsx`의 `CellsPage`).
+- **표의 행에는 클릭 핸들러가 없습니다.** 막대 쪽에 `onPickCell`이 선택 prop으로 있지만
+  `App.tsx`가 넘기지 않으므로, 지금 막대를 눌러도 아무 일도 일어나지 않습니다.
+- **Monitored set 표의 행 클릭은 시간 커서를 옮길 뿐입니다** — `onJump`이 그 구간의 시작 seq로
+  커서를 옮기고(`MonitoredSetPanel.tsx` → `App.tsx`의 `moveCursor`), 그 탭에도 지도가 없습니다.
+- **지도는 셀로 줌하지 않습니다.** 프레임은 주행 전체에 대해 주행당 한 번만 맞춥니다
+  (`RouteMap.tsx`의 `fitOnce`). 셀 하나로 이동하는 경로 자체가 없습니다.
+
+그러므로 이 UC에서 우리가 가진 것은 **시간 커서 동기화**이고, 레퍼런스의 **셀 행 → 지도 줌**은
+남은 격차입니다 — 필요한 것은 세 조각(행 선택 → PCI → 그 셀의 `cell_ref` 좌표로 지도 이동)입니다.
+`../../use-case-coverage.md`의 UC18 줄도 같은 대응물을 ✅로 세고 있으므로 함께 내려야 합니다.
 
 #### UC19 · p171–172 · BTS 참조 파라미터 사용 — ●
 
@@ -1187,6 +1247,17 @@ resulting from missing handover` → `Next` → `Column Aliases` → `Finish` �
 "이웃이 서빙보다 강한" 표본이 0개라는 점입니다([`corrections.md` C1·C2·C9](corrections.md)).
 `SOURCE_EVENT`가 생겨 6단계의 상관 상대는 이제 캔버스에 올릴 수 있습니다.
 
+*2026-09-03 정정 — 위 네 장애물 중 **셋이 사라졌습니다.*** 코드로 확인한 것:
+**(1)** `STATE_MACHINE`은 래칭 사다리이고 상태 k는 k−1을 거쳐야만 진입합니다 —
+"Bad BLER를 거쳐야"가 바로 사다리의 뜻입니다(`KpiGraph.ladder()`). 표본별 `CASE`는
+`CLASSIFIER`로 이름이 갈렸습니다(`V13__classifier_rename.sql`).
+**(2)** 점유를 **진입한 표본**에 찍어 `ts` = `start_time`, 값 = 머문 시간(ms)으로 냅니다 —
+저장 모델은 그대로입니다.
+**(3)** primary 게이팅은 `CORRELATE` 노드에 있습니다. 다만 이름 지어 고르는 방식이고
+(가장 왼쪽 소켓이 아니라 어느 입력인지 지정), 이 컴파일러는 캔버스 좌표를 읽지 않기 때문입니다.
+**(4)만 그대로입니다** — `sample_neighbour`에 active set 개념이 없습니다. 그리고 시드 쪽
+장애물도 그대로입니다(`DriveTestGenerator`는 여전히 매 표본 argmax를 서빙으로 고릅니다).
+
 ---
 
 ## 12장 — Other tasks · 색상셋 (UC28–UC31)
@@ -1480,12 +1551,57 @@ CSV 한 개 = 세션 한 개입니다.
 |---|---|---|---|
 | **BTS 파일** — 기지국 위치·방위·채널의 별도 자산. 지도로 드래그해 경로와 "연결", 날짜 버전은 `_YYYY-MM-DD` 규약, 활성화 필요 | 9 · 14 · 17 · 18 · 19 · 20 · 21 · 22 · 23 | p63, p140–146, p459, `BTS_QUEST`(p499) | `cell_ref` 테이블. 연결·활성화 단계가 없음. 안테나 높이·틸트·빔 범위는 없음 |
 | **색상셋** — 이름 붙은 1급 자산. `numerical` / `gradient` / `string` 세 타입, Groups로 분류, 파라미터 기본값으로 매임(`Change defaults` p59), `.csf`/`.aex`로 이동 | 1 · 10 · 14 · 28–31 | p59, p128, p427–443, p457, p460 | KPI별 임계 사다리 + `AutoScale`. gradient·string 타입과 이름 붙은 재사용은 없음 |
-| **전역 필터** — 값 조건 · 2차 파라미터 · 폴리곤 · 셀 ID · 이벤트 제외. 이후 모든 조작에 적용(Crystal Reports 제외) | 5 · 15 · 16 | p74–82, p94, p467 | 없음. 파생 KPI로 우회. 공간 조건은 전역 불가 |
+| **전역 필터** — 값 조건 · 2차 파라미터 · 폴리곤 · 셀 ID · 이벤트 제외. 이후 모든 조작에 적용(Crystal Reports 제외) | 5 · 15 · 16 | p74–82, p94, p467 | *2026-09-03 정정 — 이 칸은 "없음"이라고 적고 있었습니다.* `GlobalFilter`가 **`kpi:NAME:OP:VALUE`**(2차 파라미터 임계)와 **`cell:PCI`**를 받습니다. `coverage()`가 지키는 엔드포인트 14개와 면제 10개를 사유와 함께 이름으로 들고, 화면은 그 목록을 `Reach n of m`으로 읽습니다. **폴리곤과 이벤트 제외는 아직 문법에 없습니다** |
 | **통계 기준 Time / Distance / Sample** — 비닝·델타·통계에서 매번 고를 수 있음 | 15 · 16 | p151, p161, p457, Appendix 3(p477), `QSR_*`(p495–497) | `AggregationBasis`로 `[Distance]` / `[Sample]` / `[Sample, linear dB]` |
 | **동기화된 워크북** — 같은 세션의 다른 파일(IP trace · 바이너리 로그 · 서버 로그)을 별도 워크북으로 열면 시간으로 자동 동기화 | 2 · 3 · 4 · 18 | p68–74, p94 | 공유 시간 커서 (한 세션 안) |
-| **상태 점유 = 한 행** — State Machine의 출력은 표본별 값이 아니라 구간 행(`start_time` · `end_time` · `time_interval`) | 27 | p370, p426 | 우리 `STATE_MACHINE`은 분류기. 구간 출력은 저장 모델을 건드려야 하는 유일한 항목 |
+| **상태 점유 = 한 행** — State Machine의 출력은 표본별 값이 아니라 구간 행(`start_time` · `end_time` · `time_interval`) | 27 | p370, p426 | *2026-09-03 정정 — "저장 모델을 건드려야 하는 유일한 항목"이 틀렸습니다.* 점유를 **진입한 표본**에 찍으면 `ts` = `start_time`, 값 = `time_interval`이라 보통의 KPI 행에 들어갑니다(`KpiGraph.ladder()`). 표본별 `CASE`는 `CLASSIFIER`로 이름이 갈렸습니다. 남은 차이는 임의 전이표가 아니라 **순서 사다리**(상태 초기 + 3)라는 것 |
 
 ---
+
+## 그림 라벨 정정 (2026-09-02, 원문으로 확정)
+
+2026-09-01에 추출된 그림 16장을 이번 원문과 **픽셀 단위로 대조**했습니다. 넷이 실제 페이지·내용과
+달랐고, 파일명을 바꿨습니다. 같은 날 오전 판의 이 표는 두 파일을 서로 바꿔 적었던 것이라 함께
+고쳤습니다.
+
+| 이전 파일명 | 실제 내용 (원문 위치) | 새 파일명 |
+|---|---|---|
+| `manual10.2_pilot-pollution-connections_p172.png` | **Workspace 패널** — Parameters에 `reference` 검색 → `All BTS reference cells`. **UC19의 그림**(p172 상단) | `manual10.2_uc19-bts-reference-parameters-workspace_p172.png` |
+| `manual10.2_cell-locator-estimated-site_p174.png` | 지도 워크북 + `Properties › BTS` "Select which lines to draw" + `Number of cells [Time]` 범례. **UC20의 마지막 그림**(p174) | `manual10.2_uc20-bts-lines-properties_p174.png` |
+| `manual10.2_cell-beam-range-on-map_p162.png` | 경로를 따라 비닝된 타일(RSCP · Throughput `[Distance]`). **UC16 Delta plotting의 결과**(p162 상단). 빔 범위 그림은 같은 페이지의 다른 그림 | `manual10.2_uc16-delta-plotting-result_p162.png` (+ 새로 `uc17-cell-beam-range-sector_p162`) |
+| `manual10.2_uc27-state-flow_p405.png` | UC27 **시작 캔버스** — 파라미터 3개와 빨간 Output. 상태 흐름도는 p405의 벡터 텍스트라 그림 파일이 없음(위 mermaid로 재현) | `manual10.2_uc27-start-canvas_p405.png` |
+| `manual10.2_state-machine-states_p368.png` | p368의 State Machine `Properties` 그림과 동일 확인(p413에서 재사용) | (유지) |
+
+나머지 11장(`p24` · `p55` · `p66` · `p88` · `p150` · `p216` · `p346` · `p349` · `p408` · `p425` · `p426`)은
+라벨과 내용이 맞습니다(p24 · p55 · p88 · p216 · p346 · p349는 이번 대조 범위 밖이라 미확인).
+
+> 교훈은 `MANIFEST.md`가 이미 적어 둔 것과 같습니다 — **파일명과 치수는 동일성의 근거가
+> 아닙니다.** 그리고 하나 더: 그림 여러 장을 한 번에 열어 보고 기억으로 대조하면 **순서가
+> 뒤바뀝니다.** 이번 확정은 원문 이미지와의 해시 비교로 했습니다.
+
+## 이 판이 이전 문서를 고친 곳
+
+| 문서 | 무엇 |
+|---|---|
+| 대조표 UC20 · 브리프 ⑤ "확인된 것" | "매뉴얼의 UC20에는 하한 조건이 없다 → 우리가 더 낫다"는 판정 철회. 원문 필터에 `RSCP active set best above threshold = -95`가 있음 |
+| 대조표 UC18 | 레퍼런스의 동기화는 시간 커서가 아니라 **그리드 셀 행 → 지도 줌**. 대응물은 셀 목록 행 선택 |
+| 대조표 UC28 | `AutoScale`(사분위 구간)보다 서빙 PCI 채색이 더 가까운 대응물 — 레퍼런스의 `Add Range`는 이산값별 색 |
+| 브리프 ② · ③ 캡션, `MANIFEST.md` | 그림 라벨 4건 |
+
+## 2026-09-03 — 이 문서 안의 "우리" 판정을 고친 곳
+
+전사(매뉴얼이 무엇을 하라고 하는가)는 한 글자도 건드리지 않았습니다. 고친 것은 **우리 코드에
+대한 서술**뿐이고, 다섯 곳 전부 코드를 직접 열어 확인했습니다. 지운 문장은 없고 각 자리에
+날짜 붙은 정정을 나란히 두었습니다 — 어느 판정이 언제 왜 뒤집혔는지가 다음 사람에게 필요한
+정보이기 때문입니다.
+
+| 자리 | 무엇이 틀렸나 | 근거 |
+|---|---|---|
+| UC5 | "전역 필터라는 개념이 없습니다" — P3-2에서 나왔습니다 | `GlobalFilter`(조건 둘, `coverage()` 14 + 10) · `GlobalFilterBar.tsx` |
+| UC13 | "지도에는 레이어 목록 자체가 없습니다" · MAP 페인 도크가 "캡션만 바꾼다" · 레이어가 `{kpiName, visible}` | `view/maplayers.ts` · `MapLayerDock` · `App.tsx`의 `mapContents` · `ComposedWorkbook.tsx` · `WorkbookService.Layer` |
+| UC18 | ✅였지만 **셀 행 → 지도 줌은 없습니다.** 우리에게 유리한 쪽으로 틀린 유일한 항목이라 내렸습니다 | `CellBarChart.tsx`(`onPickCell`이 연결되지 않음) · `MonitoredSetPanel.tsx`(`onJump`은 커서) · `RouteMap.tsx`의 `fitOnce` |
+| UC27 | 네 장애물 중 (1)(2)(3)이 사라졌습니다 | `KpiGraph.ladder()` · `V13__classifier_rename.sql` · `KpiGraph.correlate()` |
+| 가로지르는 개념 — 전역 필터 · 상태 점유 | 각각 "없음" · "저장 모델을 건드려야 하는 유일한 항목" | 위와 같음 |
 
 ## 원문 확보 상태
 

@@ -36,15 +36,36 @@ const srcFiles = walk(SRC).filter((f) => /\.tsx?$/.test(f))
 const javaFiles = walk(CONTROLLERS).filter((f) => f.endsWith('.java'))
 
 // ---------------------------------------------------------------- 1. endpoints
+//
+// Two forms, and then a count of what the two forms missed.
+//
+// The count is the point. A regex that reads most annotations reports a smaller surface
+// and calls it complete - "67 endpoints, no gaps" while two endpoints were never looked
+// at. It missed `@GetMapping(value = "…", produces = …)` because it only understood
+// `path =`, and `@PostMapping` followed by `@Transactional` because it demanded `public`
+// on the next line. Neither is exotic; the next unread form will not be either. So the
+// extraction is now measured against a count that cannot miss anything - the annotations
+// themselves - and the run fails when they disagree. §1.5.14: a list that audits things
+// has to have its own completeness measured some other way.
 const mappings = []
+const unread = []
 for (const f of javaFiles) {
   const text = read(f)
   const base = (text.match(/@RequestMapping\("([^"]+)"\)/) ?? [])[1] ?? ''
-  for (const m of text.matchAll(/@(Get|Post|Put|Delete)Mapping\((?:path\s*=\s*)?"([^"]*)"/g)) {
+  const before = mappings.length
+  for (const m of text.matchAll(
+    /@(Get|Post|Put|Delete|Patch)Mapping\(\s*(?:(?:path|value)\s*=\s*)?"([^"]*)"/g)) {
     mappings.push({ method: m[1].toUpperCase(), path: (base + m[2]).replace(/\/+$/, '') || base })
   }
-  for (const m of text.matchAll(/@(Get|Post|Put|Delete)Mapping\s*\n?\s*(?=public)/g)) {
+  // The path-less form: the method lives at the controller's own base path. Any number of
+  // further annotations may sit between it and the signature.
+  for (const m of text.matchAll(
+    /@(Get|Post|Put|Delete|Patch)Mapping\s*(?:\n\s*@\w+[^\n]*)*\s*\n\s*(?:public|protected)/g)) {
     mappings.push({ method: m[1].toUpperCase(), path: base })
+  }
+  const declared = [...text.matchAll(/@(?:Get|Post|Put|Delete|Patch)Mapping/g)].length
+  if (mappings.length - before !== declared) {
+    unread.push(`${f.split('/').pop()}: ${declared} annotations, ${mappings.length - before} read`)
   }
 }
 
@@ -181,7 +202,7 @@ try {
 // ---------------------------------------------------------------- report
 const problems =
   unreachedEndpoints.length + unusedClientMethods.length + kpiGaps.length
-  + (probeFailed ? 1 : 0)
+  + (probeFailed ? 1 : 0) + unread.length
 
 console.log('API surface coverage')
 console.log(`  endpoints declared:      ${mappings.length}`)
@@ -202,6 +223,11 @@ if (kpiGaps.length) {
 if (NOT_CALLED_BY_THE_APP.length) {
   console.log('\n  not called by the app, on purpose:')
   for (const e of NOT_CALLED_BY_THE_APP) console.log(`    ${e.method} ${e.path} - ${e.why}`)
+}
+if (unread.length) {
+  console.log('\n  mapping annotations this script could not read'
+              + ' - the endpoint surface below is incomplete:')
+  for (const u of unread) console.log(`    ${u}`)
 }
 if (probeFailed) console.log('\n  the KPI reachability probe did not run: 2 of 3 checks ran')
 console.log(`\n${problems === 0 ? 'no gaps' : `${problems} gap(s)`}`)

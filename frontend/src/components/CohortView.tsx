@@ -19,11 +19,21 @@ import { seriesColor } from '../view/paint'
  * The scope is the measurement list's own narrowing, passed straight through, so "the
  * drives on screen" means the same thing on both tabs.
  */
-export function CohortView({ defs, kpi, groupBy, holdConstant, onDimension, onKpi }: {
+export function CohortView({
+  defs, kpi, groupBy, holdConstant, filterSpec, onDimension, onKpi,
+}: {
   defs: KpiDefinition[]
   kpi: string
   groupBy: string
   holdConstant: string | null
+  /**
+   * The global filter, taken as a prop for the one reason it must be: it belongs in the
+   * dependency array. `/cohorts` honours the condition and the client attaches it, so a
+   * fetch made under a filter is correctly narrowed - but a filter applied while this
+   * screen is open changed nothing until something else happened to re-fetch, and the
+   * table went on showing pooled statistics from before it.
+   */
+  filterSpec?: string | null
   /** Writes the axis and the held dimension back into the address bar. */
   onDimension: (by: string, hold: string | null) => void
   /** The KPI is shared view state that App owns, so a cohort link carries it like any other. */
@@ -96,7 +106,7 @@ export function CohortView({ defs, kpi, groupBy, holdConstant, onDimension, onKp
         .finally(() => { if (live) setBusy(false) })
     }, 200)
     return () => { live = false; clearTimeout(timer) }
-  }, [kpi, groupBy, holdConstant, weightedBy, domain,
+  }, [kpi, groupBy, holdConstant, weightedBy, domain, filterSpec,
       narrowing.q, narrowing.device, narrowing.operator, narrowing.technology,
       narrowing.from, narrowing.to])
 

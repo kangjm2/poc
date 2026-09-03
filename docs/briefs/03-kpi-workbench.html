@@ -82,9 +82,12 @@
 <table>
 <tr><th style="width:170px">분류</th><th>담긴 요소</th><th style="width:110px">우리</th></tr>
 <tr><td><strong>Parameters</strong></td><td>측정 파라미터 소스</td><td><span class="tag t-same">SOURCE</span></td></tr>
-<tr><td><strong>Correlations</strong></td><td>Previous / Current / Next Value, All Values Within Time Range</td><td><span class="tag t-none">없음</span></td></tr>
+<tr><td><strong>Correlations</strong></td><td>Previous / Current / Next Value, All Values Within Time Range</td><td><span class="tag t-same">✅ CORRELATE</span> <s>없음</s> — 다섯 종.
+    <code>All Values Within Time Range</code>는 <code>COMBINE</code>이 하는 일</td></tr>
 <tr><td><strong>Joins</strong></td><td>Inner / Left Outer / Union / Cartesian</td><td><span class="tag t-diff">COMBINE 하나</span></td></tr>
-<tr><td><strong>Operations</strong></td><td>Case, Moving Average, Conversion, <strong>State Machine</strong>, Group By</td><td><span class="tag t-diff">STATE_MACHINE만</span></td></tr>
+<tr><td><strong>Operations</strong></td><td>Case, Moving Average, Conversion, <strong>State Machine</strong>, Group By</td><td><span class="tag t-diff">CLASSIFIER + STATE_MACHINE</span>
+    <s>STATE_MACHINE만</s> — Case에 해당하던 것이 <code>CLASSIFIER</code>로 갈라져 나오고
+    <code>STATE_MACHINE</code>은 §4의 사다리가 됐습니다. Moving Average · Conversion · Group By는 없음</td></tr>
 <tr><td><strong>Aggregates</strong></td><td>Min · Max · Average · Std dev · Variance · Sum · Count · Mode · Median · Percentile · First · Last</td><td><span class="tag t-none">없음</span></td></tr>
 <tr><td>Sorting</td><td>Sort</td><td><span class="tag t-out">불필요</span></td></tr>
 <tr><td><strong>Filters</strong></td><td>Filter, Top-N/Bottom-N, Nth Best/Worst, Discard Worst</td><td><span class="tag t-diff">FILTER만</span></td></tr>
@@ -212,9 +215,12 @@ dataset." <span class="src">p354</span>
 우회할 수 있고(NULL 비교가 행을 떨굽니다), <strong>primary 게이팅만 표현할 수 없습니다.</strong>
 </p>
 <p>
-우리 쪽이 정보를 덜 버립니다. 하지만 <strong>레퍼런스 사용자가 기대하는 게이팅이 없습니다</strong> —
-"통화 중일 때만 보고 싶다"를 노드로 말할 방법이 없다는 뜻입니다.
-이건 버그가 아니라 <strong>다른 선택</strong>이고, primary 개념을 도입할지는 결정 사항입니다.
+우리 쪽이 정보를 덜 버립니다. <strong>정정 (2026-09-02)</strong>: 이 문단은
+<em>"레퍼런스 사용자가 기대하는 게이팅이 없다 — '통화 중일 때만 보고 싶다'를 노드로 말할 방법이
+없다"</em>로 끝나면서 primary 도입을 <em>결정 사항</em>으로 남겨 뒀습니다.
+<strong>결정은 내려졌고 만들어졌습니다.</strong> <code>COMBINE</code>은 위에 적힌 대로 그대로이고,
+primary 게이팅은 <code>COMBINE</code>을 고치는 대신 <strong>별도 노드</strong>
+(<code>CORRELATE</code>)로 갔습니다 — 그쪽에서는 게이트가 시점을 정하는 규칙 자체이기 때문입니다.
 </p>
 <p class="src">
 참고: 우리가 처음 만든 FULL JOIN 체인은 입력이 3개 이상일 때 행을 잃었고
@@ -224,22 +230,33 @@ dataset." <span class="src">p354</span>
 </div>
 
 <div class="warn">
-<h5>Previous / Current / Next는 우리에게 아예 없습니다</h5>
+<h5><s>Previous / Current / Next는 우리에게 아예 없습니다</s> — P4-2에서 생겼습니다</h5>
 <p>
-"이 드롭 <strong>직전</strong>에 무슨 일이 있었나"가 근본 원인 분석의 핵심 질문인데,
-우리는 그것을 노드로 표현할 수 없습니다. <strong>워크벤치의 실제 가치 중 절반이 여기</strong>
-있습니다(나머지 절반은 State Machine).
+<strong>정정 (2026-09-02).</strong> 이 상자는 <em>"이 드롭 직전에 무슨 일이 있었나"를 노드로
+표현할 수 없다</em>고 적혀 있었고, 그것이 <strong>워크벤치의 실제 가치 중 절반</strong>이라고
+했습니다. 그 절반이 채워졌습니다 — <code>CORRELATE</code> 노드가
+<code>PREVIOUS · CURRENT · NEXT · PREVIOUS_OR_CURRENT · NEXT_OR_CURRENT</code>를 냅니다.
 </p>
+<p>
+정확성을 지고 있는 것은 둘입니다. 창은 두 입력의 <strong>합집합</strong> 위에서 돌고,
+primary 게이트는 <strong>맨 마지막</strong>에 걸립니다 — primary가 이벤트 소스일 때 "직전 값"은
+primary에 행이 없는 표본까지 봐야 하는데, 게이트를 먼저 걸면 그것이 조용히
+<em>직전 이벤트의 값</em>으로 바뀝니다. 그리고 Postgres에 <code>IGNORE NULLS</code>가 없으므로
+캐리는 양방향 러닝 카운트 둘이고, <code>previous</code>·<code>next</code>는 그 캐리의
+lag/lead라 서로 어긋날 수 없습니다.
+</p>
+<p>나머지 절반(State Machine)은 §4의 정정을 보십시오.</p>
 </div>
 
 <h3>3.3 연산 <span class="src">p362–p378</span></h3>
 
 <table>
 <tr><th style="width:190px">요소</th><th>동작</th><th style="width:150px">우리</th></tr>
-<tr><td><strong>Case</strong></td><td>조건별 분기</td><td><span class="tag t-diff">STATE_MACHINE이 겸함</span></td></tr>
+<tr><td><strong>Case</strong></td><td>조건별 분기</td><td><span class="tag t-same">CLASSIFIER</span> <s>STATE_MACHINE이 겸함</s> — 이름이 갈렸습니다</td></tr>
 <tr><td><strong>Moving Average</strong></td><td>앞선 N개의 이동평균. <em>"removes anomalies … making it more stable"</em></td><td><span class="tag t-none">없음</span></td></tr>
 <tr><td>Conversion</td><td>값 변환</td><td><span class="tag t-none">없음</span></td></tr>
-<tr><td><strong>State Machine</strong></td><td>§4</td><td><span class="tag t-diff">이름만 같음</span></td></tr>
+<tr><td><strong>State Machine</strong></td><td>§4</td><td><span class="tag t-diff">◐ 사다리 (P4-1)</span> <s>이름만 같음</s> —
+    구간 출력과 <code>time_interval</code>은 같고, 전이는 <strong>순서 있는 사다리</strong>로 제한</td></tr>
 <tr><td><strong>Group By / Binning</strong></td><td>여러 파라미터로 그룹핑 + 집계를 동시에</td><td><span class="tag t-none">없음</span></td></tr>
 </table>
 
@@ -414,6 +431,38 @@ milliseconds"</em>.
 정직한 이름은 <strong>Classifier</strong>이고, <strong>진짜 State Machine은 별도로 만들어야
 합니다.</strong>
 </p>
+<div class="ours" style="margin-top:14px">
+<h5>✅ 그대로 했습니다 — P4-1 (2026-09-02)</h5>
+<p>
+위 표의 "우리" 열은 <strong>지금 <code>CLASSIFIER</code>라는 이름으로 그대로 남아 있고</strong>,
+<code>STATE_MACHINE</code>이라는 이름은 <strong>머문 시간을 재는 사다리</strong>로 옮겨 갔습니다.
+그 이름이 뜻을 바꿨으므로 예전에 저장된 그래프는 열리지 않고, <em>이름이 바뀌었으니 다시
+저장하라</em>는 문장으로 거절됩니다(<code>KpiGraph.LADDER_VERSION</code>).
+</p>
+<p>
+<strong>출력 모양은 두 번째 결과 모양을 만들지 않고 해결됐습니다.</strong> 레퍼런스의 한 행은
+<code>start_time · end_time · time_interval</code>인데 <code>end_time</code>이
+<code>start_time + time_interval</code>이므로 자유도는 둘이고, <code>sample_kpi</code>는 이미
+<code>ts</code>와 <code>value</code> 둘을 갖고 있습니다. 그래서 머문 시간을 <strong>상태에 들어간
+표본</strong>에 찍으면 <code>ts</code>가 문자 그대로 레퍼런스의 <code>start_time</code>이 되고,
+점유 하나가 평범한 KPI 행 하나에 손실 없이 들어갑니다 — 그 결과 구간이 기존의 모든 화면에서
+색칠·비닝·필터·내보내기·리포트를 그대로 탑니다. <strong><a href="05-findings.html">⑤ C9</a>가
+"구간 행은 다른 모양이라 표본당 한 행에 담을 곳이 없다"고 적은 것은 틀렸습니다</strong> —
+담을 곳이 있었고, 두 번째 결과 모양도 두 번째 실체화 경로도 필요하지 않았습니다.
+</p>
+<p>
+<strong>남은 차이 둘.</strong> 전이는 <em>일반 전이 그래프</em>가 아니라 <strong>순서 있는
+사다리</strong>입니다 — 상태 k는 k−1에서만 들어갈 수 있고 초기 상태의 조건이 유일한 복귀로입니다.
+일반 전이표는 순차 폴드라 Postgres에서는 <code>WITH RECURSIVE</code>를 매 행·매 주행·매 임포트마다
+돌리는 일이 되고, 그래서 만들지 않았습니다. 이 한계는 인스펙터에 <strong>항상 떠 있습니다</strong>
+(툴팁이 아니라) — 없는 값을 버그로 읽게 두지 않기 위해서. <code>Time trigger</code>도 없습니다.
+</p>
+<p>
+대신 우리 쪽에만 있는 규칙이 하나 붙었습니다: <strong>측정하지 않은 시간은 재지 않습니다.</strong>
+점유는 시작과 끝의 "끊긴 걸음" 누적 카운트가 같을 때만 발행되므로, GPS가 끊긴 26표본을 가로지르는
+구간이 그럴듯한 27초를 보고하지 않습니다.
+</p>
+</div>
 </div>
 
 <h2>5. 정렬 노드를 넣지 않은 판단 — 근거까지 맞았습니다</h2>
@@ -500,20 +549,30 @@ Ec/N0 차이가 음수여도 <strong>BLER이 먼저 나빠진 상태를 거쳐�
 </ol>
 
 <div class="warn">
-<h5>우리 도구로 이 KPI를 만들 수 있는가 — 아니오</h5>
-<p>세 가지가 막습니다.</p>
+<h5>우리 도구로 이 KPI를 만들 수 있는가 — <s>아니오</s> 셋 중 둘이 없어졌습니다 (2026-09-02)</h5>
+<p>세 가지가 막는다고 적었습니다. <strong>지금 남은 것은 셋째 하나입니다.</strong></p>
 <ol class="steps">
-<li><strong>순서를 표현할 수 없습니다.</strong> 우리 State Machine이 상태를 기억하지 않으므로
-    "Bad BLER를 거쳐야 Missing handover"라는 제약이 사라집니다. 우리로 만들면
-    <code>BLER&gt;=20 AND diff&lt;0</code>인 <em>모든</em> 표본이 걸립니다 — 다른 KPI입니다.</li>
-<li><strong>드롭콜 이벤트와 상태 구간을 상관시킬 수 없습니다.</strong>
-    Previous/Current 계열이 없습니다.</li>
+<li><s><strong>순서를 표현할 수 없습니다.</strong> 우리 State Machine이 상태를 기억하지 않으므로
+    "Bad BLER를 거쳐야 Missing handover"라는 제약이 사라집니다.</s>
+    <strong>✅ P4-1.</strong> 사다리가 바로 그 제약입니다 — 상태 k는 k−1을 거쳐야 들어갑니다.
+    UC27의 전이표가 <code>OK → Missing handover</code>를 <em>일부러 비워 둔</em> 그 순서가
+    사다리의 뜻 그 자체입니다. 다만 UC27은 <code>Missing handover → Bad BLER</code>로 되돌아가는
+    전이도 갖고 있는데, 사다리에는 뒤로 가는 전이가 없고 <strong>초기 상태로의 복귀</strong>만
+    있습니다 — 그래서 이 KPI는 재현이 되지만 <em>같은 그림</em>은 아닙니다.</li>
+<li><s><strong>드롭콜 이벤트와 상태 구간을 상관시킬 수 없습니다.</strong>
+    Previous/Current 계열이 없습니다.</s>
+    <strong>✅ ⑥의 <code>SOURCE_EVENT</code>와 P4-2의 <code>CORRELATE</code>.</strong>
+    UC27의 <em>마지막</em> 노드가 바로 이것이었고, 이제 캔버스에 올릴 이벤트와 그것을 기준으로
+    시점을 잡는 노드가 둘 다 있습니다.</li>
 <li><strong>active set 개념이 없습니다.</strong> 우리 <code>sample_neighbour</code>는
-    서빙 셀 하나 + 이웃 목록이고, "active set"(soft handover 중인 셀 집합)이 없습니다.</li>
+    서빙 셀 하나 + 이웃 목록이고, "active set"(soft handover 중인 셀 집합)이 없습니다.
+    <strong>이것은 그대로 남았고, 데이터 모델에서 시작합니다.</strong></li>
 </ol>
 <p>
-<strong>이 셋이 "노드 그래프를 만들었다"와 "레퍼런스의 대표 KPI를 재현할 수 있다" 사이의 실제
-거리입니다.</strong>
+<strong>"노드 그래프를 만들었다"와 "레퍼런스의 대표 KPI를 재현할 수 있다" 사이의 거리는 이제
+셋이 아니라 하나입니다</strong> — 그리고 그 하나는 노드가 아니라 스키마에 있습니다.
+(아래 시드 생성기 문단이 말하는 <em>네 번째</em> 조건은 여전히 유효합니다: 노드가 다 있어도
+우리 데이터에는 이웃이 서빙보다 강한 표본이 0개입니다.)
 </p>
 </div>
 
@@ -561,7 +620,8 @@ Ec/N0 차이가 음수여도 <strong>BLER이 먼저 나빠진 상태를 거쳐�
 
 <h2>8. 이 문서에서 남은 일로 확인된 것</h2>
 
-<p class="note">이 표가 쓰인 뒤 백로그 ①–⑧이 진행되어 <strong>번호가 붙은 6개 중 1개(6번)가 닫혔습니다</strong>(아래 "하지 않음" 3줄은 원래 판정 그대로).
+<p class="note">이 표가 쓰인 뒤 백로그 ①–⑧과 P4가 진행되어 <strong>번호가 붙은 6개 중 3개(2·3·6번)가 닫혔습니다</strong>
+(2026-09-02 재집계 — 그 전에는 6번 하나였습니다. 아래 "하지 않음" 3줄은 원래 판정 그대로).
 그리고 이 표에 <em>없던</em> 두 가지가 ⑥에서 생겼습니다 — 캔버스에서 <strong>표본까지 내려가기</strong>와,
 발행하지 않고 <strong>노드만 미리 보기</strong>. 둘 다 "이 숫자가 어디서 왔나"라는 같은 질문에 답합니다.
 전체 대조는 <a href="../use-case-coverage.md">Use Case 31개 대조표</a>.</p>
@@ -569,8 +629,14 @@ Ec/N0 차이가 음수여도 <strong>BLER이 먼저 나빠진 상태를 거쳐�
 <table>
 <tr><th style="width:70px">순위</th><th style="width:250px">항목</th><th style="width:60px">규모</th><th>근거 · 지금</th></tr>
 <tr><td>1</td><td>생성기에 <strong>핸드오버 지연</strong> 도입</td><td>중</td><td>레퍼런스 대표 KPI를 재현 가능하게 만드는 <strong>전제</strong>. 여전히 남음</td></tr>
-<tr><td>2</td><td><strong>진짜 State Machine</strong> — 전이 그래프 + 구간 출력 + <code>time_interval</code></td><td>큼</td><td>워크벤치의 실제 가치가 여기 있음. 여전히 남음</td></tr>
-<tr><td>3</td><td><strong>Previous / Current / Next</strong> 상관 노드</td><td>중</td><td>근본 원인 분석의 핵심 조작. 여전히 남음</td></tr>
+<tr><td>2</td><td><s><strong>진짜 State Machine</strong> — 전이 그래프 + 구간 출력 + <code>time_interval</code></s></td><td>큼</td><td>워크벤치의 실제 가치가 여기 있음 —
+    <strong>✅ P4-1에서 완료</strong>(§4의 정정). 구간 출력과 <code>time_interval</code>은 그대로 왔고,
+    저장 모델은 건드리지 않았습니다 — 머문 시간을 <em>상태에 들어간 표본</em>에 찍으면
+    <code>ts</code>가 레퍼런스의 <code>start_time</code>이 되고 점유가 KPI 행 하나에 들어갑니다.
+    <strong>전이는 일반 그래프가 아니라 순서 있는 사다리</strong>이고, 그 한계는 인스펙터에 늘 떠 있습니다</td></tr>
+<tr><td>3</td><td><s><strong>Previous / Current / Next</strong> 상관 노드</s></td><td>중</td><td>근본 원인 분석의 핵심 조작 —
+    <strong>✅ P4-2에서 완료.</strong> 다섯 종에 <code>Primary input</code> 드롭다운.
+    창은 두 입력의 합집합 위에서 돌고 게이트는 맨 마지막에 걸립니다</td></tr>
 <tr><td>4</td><td><strong>Top-N with Group by</strong></td><td>작음</td><td>"셀별 최강 2개" 같은 질의. 여전히 남음</td></tr>
 <tr><td>5</td><td><strong>Moving Average</strong>, Round/Root</td><td>작음</td><td>노이즈 제거는 실무에서 자주 필요. 여전히 남음</td></tr>
 <tr><td>6</td><td><s>거리 가중 통계 — 통계·분포·CDF·리포트</s></td><td>중</td><td>1 Hz 균일이 없애 주지 <strong>못하는</strong> 유일한 편향 —

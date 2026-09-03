@@ -197,9 +197,12 @@ KPI</strong>(예: 임계가 정확히 −100인데 −100이 다량 존재)에�
 <tr><td>Spreadsheet grid (셀 서식·필터·<strong>수식</strong>)</td><td class="src">p180–189</td><td><span class="tag t-none">없음</span></td></tr>
 <tr><td>Indoor / IBWC maps</td><td class="src">p192–199</td><td><span class="tag t-out">실내 범위 외</span></td></tr>
 <tr><td>Numerical data views</td><td class="src">p200</td><td><span class="tag t-same">우측 Numerical Data</span></td></tr>
-<tr><td>Timeline view (+ Highlight Parameter, <strong>Range selection</strong>)</td><td class="src">p203–208</td><td><span class="tag t-diff">진행 바 + 재생 트랜스포트(③)</span>
-    스크럽·재생·역방향·속도는 생겼고, <code>Range selection</code>과
-    <code>Highlight Parameter</code>는 여전히 없습니다</td></tr>
+<tr><td>Timeline view (+ Highlight Parameter, <strong>Range selection</strong>)</td><td class="src">p203–208</td><td><span class="tag t-diff">진행 바 + 재생 트랜스포트 + 구간 자르기(③)</span>
+    스크럽·재생·역방향·속도가 생겼고, <s><code>Range selection</code>과</s>
+    <strong><code>Range selection</code>도 있습니다</strong> — 진행 바 옆의
+    <em>From here</em>/<em>To here</em>(키로는 <code>[</code> <code>]</code>, 해제는
+    <code>\</code>)가 커서 기준으로 <code>seq</code> 구간을 자르고, 걸려 있는 구간은 툴바에
+    칩으로 나옵니다. <code>Highlight Parameter</code>는 여전히 없습니다</td></tr>
 <tr><td><strong>Activity</strong> — 업로드·변환 큐 진행 + <strong>Cancel All</strong></td><td class="src">p213</td><td><span class="tag t-same">✅ ⑧ — 진행 + 취소</span> <s>Import history(이력만)</s>.
     진행 중인 잡이 읽은 행 수와 함께 보이고 멈출 수 있습니다.
     멈춘 임포트는 실패와 <strong>같은 롤백</strong>을 타므로 절반 남은 세션이 생기지 않습니다</td></tr>
@@ -210,8 +213,17 @@ KPI</strong>(예: 임계가 정확히 −100인데 −100이 다량 존재)에�
 <div class="ours">
 <h5>우리 구현 — 두 가지가 눈에 띕니다</h5>
 <p>
-<strong>(1) Activity의 절반만 있습니다.</strong> 우리 Import history는 <em>끝난 것</em>의 이력이고,
-<strong>진행 중인 큐와 취소가 없습니다.</strong> 대용량 임포트 중에 사용자가 할 수 있는 일이 없습니다.
+<s><strong>(1) Activity의 절반만 있습니다.</strong> 우리 Import history는 <em>끝난 것</em>의 이력이고,
+<strong>진행 중인 큐와 취소가 없습니다.</strong> 대용량 임포트 중에 사용자가 할 수 있는 일이
+없습니다.</s> <strong>(1) ✅ ⑧에서 나머지 절반이 붙었습니다</strong>(위 표의 Activity 줄) —
+진행 중인 잡이 읽은 행 수와 함께 보이고, <code>POST /api/import/jobs/{id}/cancel</code>이
+<em>요청</em>을 남기면 적재 루프가 다음 배치에서 그것을 봅니다. 멈춘 임포트는 실패와
+<strong>같은 롤백</strong>을 타므로 절반 남은 세션이 생기지 않습니다.
+<strong>2026-09-03 추가</strong>: 그 취소가 실제로 답하는 코드는 그날에야 맞았습니다 —
+<code>ImportService.ImportStopped</code>는 <em>"so the API can answer 409, not 400"</em>이라고
+쓰인 채로 <strong>핸들러가 없어</strong> 진짜로 멈춘 임포트가 500을 냈고, 그 경로를 아무것도
+밟아 보지 않아 아무도 몰랐습니다. 지금은 409입니다
+(<code>ApiExceptionHandler.stopped</code>).
 </p>
 <p>
 <strong>(2) Log window의 SQL 표시에는 우리 쪽 대응물이 있습니다.</strong> 우리는 사용자가 SQL을
@@ -224,7 +236,8 @@ KPI</strong>(예: 임계가 정확히 −100인데 −100이 다량 존재)에�
 
 <figure>
   <img src="../poc-screenshots/12-import.png" alt="임포트 화면">
-  <figcaption>우리 Import 화면 — 이력은 있으나 진행 중 큐·취소가 없습니다</figcaption>
+  <figcaption>우리 Import 화면. <strong>이 그림은 ⑧ 이전입니다</strong> — 지금은 진행 중인 잡이
+    읽은 행 수와 함께 보이고 멈출 수 있습니다</figcaption>
 </figure>
 
 <h2>4. 유저 시나리오</h2>
@@ -256,17 +269,28 @@ operations</strong>."
 </p>
 
 <div class="ours">
-<h5>우리 구현에는 어떻게 반영됐나</h5>
+<h5>우리 구현에는 어떻게 반영됐나 <span class="src">2026-09-03 갱신</span></h5>
 <p>
-<strong>전역 필터라는 개념 자체가 없습니다.</strong> 우리 필터는 화면 단위입니다 —
-Statistics 탭의 범위 필터, 지도의 임계 색상. 화면을 옮기면 초기화됩니다.
+<s><strong>전역 필터라는 개념 자체가 없습니다.</strong> 우리 필터는 화면 단위입니다 —
+Statistics 탭의 범위 필터, 지도의 임계 색상. 화면을 옮기면 초기화됩니다.</s>
+<strong>P3에서 생겼고, 이 UC의 조건이 그대로 문법이 됐습니다</strong> —
+<code>kpi:RSCP:&gt;=:-100</code>이 매뉴얼의 예 그 자체입니다
+(<code>GlobalFilter.scope</code>). 화면을 옮겨도 남고, 상단 바가 서버가 만든 문장으로
+무엇이 걸려 있는지 늘 보여 줍니다.
 </p>
 <p>
-다만 <strong>2차 파라미터 게이팅은 KPI Workbench로 표현할 수 있습니다</strong> —
+어려운 부분은 조건이 아니라 <strong><em>모든</em> 조작</strong> 쪽이었습니다.
+그래서 지키는 화면과 면제된 화면이 <strong>코드 안의 한 목록</strong>에 이유와 함께 있고
+(<code>GlobalFilter.coverage()</code> — 지키는 14 + 면제 10),
+검사가 그 목록을 읽어 지키는 엔드포인트마다 필터를 걸고/빼고 두 번 호출합니다.
+아홉이 지키고 넷이 조용히 무시하는 필터는 없는 것보다 나쁘다는 판단이 그 설계의 이유입니다.
+</p>
+<p>
+그리고 <strong>2차 파라미터 게이팅은 KPI Workbench로도 표현할 수 있습니다</strong> —
 <code>SOURCE_KPI(RSRP)</code> + <code>SOURCE_KPI(대상)</code> → <code>COMBINE</code> →
 <code>FILTER: rsrp &gt;= -100</code> → <code>OUTPUT</code>. 결과가 새 KPI가 되므로 이후 모든 화면에서
-쓸 수 있습니다. <strong>레퍼런스는 모드 설정으로, 우리는 파생 KPI로</strong> 같은 목적에 도달하는
-셈인데, 우리 쪽은 "지금 보고 있는 화면에 즉시" 적용되지 않는다는 차이가 남습니다.
+쓸 수 있습니다. <strong>레퍼런스는 모드 설정으로, 우리는 필터 바 아니면 파생 KPI로</strong>
+같은 목적에 도달합니다 — 그리고 "지금 보고 있는 화면에 즉시"는 이제 필터 바 쪽이 답합니다.
 </p>
 </div>
 

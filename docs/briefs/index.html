@@ -131,9 +131,14 @@ Nemo Analyze 10.2 사용자 가이드 505페이지를 1차 자료로 삼아 <em>
   <td><span class="tag t-diff">기능</span> <code>.TAB</code> 자산과 달리 범위 안</td>
 </tr>
 <tr>
-  <td><strong>우선순위</strong></td>
-  <td>State Machine과 상관 노드는 <strong>같은 제약 하나</strong>에 걸림 — 그래프가 <em>표본당 한 행 × 열 하나</em>로 고정</td>
-  <td><span class="tag t-diff">결정 먼저</span> 그 제약을 풀지 정하는 것이 두 항목에 앞섬</td>
+  <td><strong>우선순위 순서</strong></td>
+  <td>① 생성기 → ② State Machine → ③ 상관 노드</td>
+  <td><span class="tag t-diff">재배열</span> ②③이 <strong>같은 제약 하나</strong>에 걸립니다 —
+      그래프가 <em>표본당 한 행 × 열 하나</em>로 고정. <strong>0번(결정)</strong>이 앞에 옵니다.
+      <br><strong>정정 (2026-09-03)</strong>: ③은 그 제약에 걸린 것이 맞았지만
+      <strong>②는 아니었습니다.</strong> 구간 하나는 <code>ts</code>를 <code>start_time</code>으로
+      쓰면 평범한 KPI 행 하나에 그대로 들어가고, 저장 모델도 두 번째 결과 모양도 필요하지
+      않았습니다(<a href="05-findings.html">⑤ C9</a>의 추가). 셋 다 이후 만들어졌습니다</td>
 </tr>
 </table>
 
