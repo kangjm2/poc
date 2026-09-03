@@ -151,13 +151,27 @@ LEFT JOIN합니다. 이것은 정확히 <strong>outer join 모드</strong>입니
 <tr><td>outer join</td><td><span class="tag t-same">동등</span> <code>COMBINE</code>의 기본이자 유일한 동작</td></tr>
 <tr><td>inner join</td><td><span class="tag t-diff">우회 가능</span> 하류 <code>FILTER</code>로.
     SQL에서 NULL과의 비교는 참이 아니므로 조건을 건 열이 비어 있는 행은 자동으로 떨어집니다</td></tr>
-<tr><td>left outer join<br>(primary 게이팅)</td><td><span class="tag t-none">표현 불가</span>
-    "어느 입력이 primary인가"라는 개념이 우리 그래프에 없습니다</td></tr>
+<tr><td>left outer join<br>(primary 게이팅)</td>
+    <td><span class="tag t-same">✅ 같음 (2026-09-02)</span> <s>표현 불가 — "어느 입력이
+    primary인가"라는 개념이 우리 그래프에 없습니다</s>. <code>CORRELATE</code> 노드가 생기면서
+    primary가 <strong>고르는 컨트롤</strong>이 됐습니다(<code>KpiWorkbench.tsx</code>의
+    <code>Primary input</code>). 레퍼런스의 규칙은 "가장 왼쪽 입력이 primary"인데 <em>가장 왼쪽</em>은
+    x좌표이고 우리 컴파일러는 좌표를 읽지 않습니다 — 입력을 노드 id로 정렬해 같은 그림이 항상 같은
+    SQL로 컴파일되게 했기 때문입니다. 그래서 배치 규약 대신 <strong>select</strong>입니다</td></tr>
 </table>
 <p>
-그리고 <strong>previous / current / next</strong>는 우리에게 아예 없습니다. 매뉴얼이 든 대표 용도가
-바로 <em>"드롭 직전의 값"</em>인데, 이것이 근본 원인 분석의 핵심 질문입니다.
-<strong>"이 순간의 값"은 우리도 되고, "이 직전의 값"은 안 됩니다.</strong>
+<strong>정정 (2026-09-02)</strong>: 이 자리에 <em>"previous / current / next는 우리에게 아예
+없습니다"</em>라고 적혀 있었습니다. <strong>지금은 있습니다.</strong>
+<code>KpiGraph.Correlation</code>이 <code>PREVIOUS · CURRENT · NEXT · PREVIOUS_OR_CURRENT ·
+NEXT_OR_CURRENT</code> 다섯을 냅니다 — 여섯 번째인 <code>All Values Within Time Range</code>는
+<code>COMBINE</code>이 이미 하는 일입니다. 창(window)은 두 입력의 <strong>합집합</strong> 위에서
+돌고 primary 게이트는 <strong>맨 마지막</strong>에 걸립니다. 순서가 반대면 "직전 값"이
+<em>직전 이벤트의 값</em>이 되는데, 그것은 다른 질문이면서 그럴듯한 답을 내놓습니다.
+</p>
+<p>
+우리가 더한 것 하나는 <code>Within (ms)</code>입니다 — 레퍼런스에는 한계가 없어서 "직전"이
+20분 전까지 거슬러 올라갈 수 있습니다. 기본값은 꺼짐이라 <em>끄면 정확히 레퍼런스</em>이고,
+켜면 멀리 있는 값은 가까운 척하지 않고 버려집니다. 인스펙터가 이것이 누구 생각인지 밝힙니다.
 </p>
 </div>
 
@@ -268,13 +282,25 @@ another."
 </p>
 <table>
 <tr><th style="width:170px">항목</th><th>레퍼런스</th><th>우리</th></tr>
-<tr><td>포함 기준</td><td><strong>3강 안에 든 적이 있는</strong> 모든 셀</td><td><strong>서빙이었던</strong> 셀</td></tr>
-<tr><td>표시</td><td>셀마다 <strong>별도 페이지</strong>, 탭으로 이동</td><td>지도에 <strong>전부 겹쳐서</strong>, 토글 하나</td></tr>
+<tr><td>포함 기준</td><td><strong>3강 안에 든 적이 있는</strong> 모든 셀</td>
+    <td><span class="tag t-same">✅ 둘 다 (2026-09-03)</span> <s>서빙이었던 셀</s>.
+    <code>SERVING</code>과 <code>TOP3</code>를 툴바에서 고릅니다
+    (<code>GeoAnalysisService.BY_SERVING</code> / <code>BY_TOP3</code>)</td></tr>
+<tr><td>표시</td><td>셀마다 <strong>별도 페이지</strong>, 탭으로 이동</td><td>지도에 <strong>전부 겹쳐서</strong>, 토글 하나 + 셀 필터</td></tr>
 </table>
 <p>
-포함 기준 쪽은 이제 <strong>바꿀 수 있습니다</strong> — V7의 <code>sample_neighbour</code>가 순위별
-이웃을 갖고 있으므로 "3강 안에 든 적 있는 셀"을 그대로 질의할 수 있습니다.
-푸트프린트가 서빙 기준일 때보다 <strong>넓어지고</strong>, 그것이 오버슛 판단의 실제 근거입니다.
+<strong>포함 기준은 2026-09-03에 골라지게 됐습니다.</strong> V7의 <code>sample_neighbour</code>에
+순위 열이 없으므로 <code>row_number() OVER (PARTITION BY seq ORDER BY rsrp DESC)</code>로 매 표본의
+순위를 매기고 <code>rank &lt;= 3</code>을 씁니다. 기본값은 여전히 <code>SERVING</code>입니다 —
+이미 화면과 리포트에 나가 있는 모양을 아무도 부탁하지 않았는데 넓히면, 전달된 도형이 주장하는
+내용이 조용히 달라지기 때문입니다. 서빙은 그 셀이 <em>이긴</em> 곳을, 3강은 <em>쓸 만했던</em> 곳을
+보여주고, 오버스필은 뒤쪽에서만 보입니다 — 바깥에서는 다른 셀이 이기고 있으니까요.
+</p>
+<p>
+같은 날 <strong>셀 필터</strong>도 붙었습니다 — <code>3,10-30,42,100-</code>, 레퍼런스 자신의 문법
+(UC1 p67)이고 <em>"…-"</em>는 "그 위 전부"입니다. 지도와 캡션이 어긋날 수 없도록 파싱은
+<code>view/pciFilter.ts</code> 한 자리이고, 해석되지 않는 항은 조용히 무시하는 대신 헤더에서
+거절합니다.
 </p>
 <p>
 표시 쪽은 우리 방식이 낫다고 봅니다 — 겹쳐 보여야 <strong>중첩</strong>이 보이고, 중첩이 곧
@@ -383,8 +409,17 @@ Cell locator는 <strong>우리에게 없습니다.</strong> 그런데 이 기능
 <tr><td>UC18 — BTS 오버레이와 그리드 행 <strong>동기화</strong></td><td class="src">p168</td><td><span class="tag t-same">커서 동기화로 대응</span></td></tr>
 <tr><td>UC22 — 5G 빔 시각화</td><td class="src">p177</td><td><span class="tag t-none">없음</span></td></tr>
 <tr><td>UC23 — Google Earth로 서빙 셀 선 내보내기</td><td class="src">p177</td><td><span class="tag t-diff">GeoJSON 내보내기</span></td></tr>
-<tr><td>UC13 — 맵 레이어 추가·저장</td><td class="src">p150</td><td><span class="tag t-diff">Layers 도크는 <strong>차트 페인만</strong></span>
-    지도에는 레이어 목록이 없고, MAP 페인의 도크는 캡션만 바꿉니다 (<code>ComposedWorkbook.tsx:202</code>)</td></tr>
+<tr><td>UC13 — 맵 레이어 추가·저장</td><td class="src">p150</td><td><span class="tag t-diff">◐ 지도에도 목록이 생김 (2026-09-03)</span>
+    <s>Layers 도크는 <strong>차트 페인만</strong> — 지도에는 레이어 목록이 없고, MAP 페인의 도크는
+    캡션만 바꿉니다 (<code>ComposedWorkbook.tsx:202</code>)</s>.
+    <strong>둘 다 바뀌었고, 그 인용은 이제 다른 줄을 가리킵니다</strong>(그 자리는 지금
+    <code>api.series(...)</code>입니다 — 이 브리프가 스스로 경계하는 <em>죽은 인용</em>).
+    내장 지도 셋(Overview · Mobility · Coverage Issues)은 화면마다 <code>mapContents</code> 객체
+    하나를 만들어 그것을 <em>RouteMap과 도크에 함께</em> 넘기므로, 목록은 지도의 내용을 읽은 것이지
+    지도에 무엇이 있어야 하는지에 대한 두 번째 의견이 아닙니다(<code>view/maplayers.ts</code>의
+    <code>describeLayers</code>). 조립 워크북의 MAP 페인은 이제 체크한 레이어의 트랙을 실제로
+    그립니다. <strong>남은 차이</strong>: MAP 페인은 <em>한 번에 한 레이어</em>이고
+    (<code>visible[0]</code>), 저장되는 레이어는 경로가 아니라 <strong>KPI</strong>입니다</td></tr>
 </table>
 
 <figure>
@@ -397,20 +432,29 @@ Cell locator는 <strong>우리에게 없습니다.</strong> 그런데 이 기능
 
 <h2>4. 이 문서에서 남은 일로 확인된 것</h2>
 
-<p class="note">이 표가 쓰인 뒤 백로그 ①–⑧이 진행되어 <strong>6개 중 1개가 닫혔습니다.</strong>
+<p class="note">이 표가 쓰인 뒤 백로그 ①–⑧과 P4·감사 작업이 진행되어 <strong>6개 중 4개가 닫혔습니다</strong>
+(2026-09-03 재집계 — 그 전에는 1개였습니다).
 지운 것이 아니라 <strong>무엇이 됐는지</strong>를 남깁니다.
 전체 대조는 <a href="../use-case-coverage.md">Use Case 31개 대조표</a>.</p>
 
 <table>
 <tr><th style="width:230px">항목</th><th style="width:70px">규모</th><th>왜 · 지금</th></tr>
-<tr><td><strong>드릴다운 다중 탭</strong> (조각 색 유지)</td><td>중간</td><td>스타일이 아니라 여러 원인 동시 비교. 재분류됨.
-    <strong>여전히 남음</strong> — 다만 조각 색을 <em>유지</em>하는 쪽 절반은 ④에서 정해졌습니다.
-    정체성 색은 <code>view/paint.ts</code> 한 자리에서 나오므로, 탭이 생기면 색은 저절로 같습니다</td></tr>
-<tr><td><strong>Previous / Current / Next</strong> 상관</td><td>중간</td><td>"드롭 직전의 값" — 근본 원인 분석의 핵심 질문.
-    <strong>여전히 남음</strong> (③의 재생 트랜스포트로 <em>사람이 눈으로</em> 되짚는 것은 가능해졌지만,
-    질의로 묻는 것은 아직입니다)</td></tr>
-<tr><td>푸트프린트 포함 기준을 <strong>3강 안</strong>으로</td><td>작음</td><td>V7 데이터로 바로 가능. 오버슛 판단의 실제 근거.
-    <strong>여전히 남음</strong></td></tr>
+<tr><td><s>드릴다운 다중 탭</s> (조각 색 유지)</td><td>중간</td><td>스타일이 아니라 여러 원인 동시 비교. 재분류됨 —
+    <strong>✅ 2026-09-03에 완료</strong> (§1). 여는 순서대로 탭이 쌓이고
+    (<code>ProblemSurveyPanel.tsx</code>의 <code>cause-tabs</code>, <code>role="tablist"</code>),
+    탭 색은 파이 조각에서 그대로 가져옵니다. 조각 색을 <em>유지</em>하는 쪽 절반은 ④에서 이미
+    정해져 있었습니다 — 정체성 색이 <code>view/paint.ts</code> 한 자리에서 나오므로 탭이 생기자
+    색은 저절로 같았습니다</td></tr>
+<tr><td><s>Previous / Current / Next 상관</s></td><td>중간</td><td>"드롭 직전의 값" — 근본 원인 분석의 핵심 질문.
+    <strong>✅ P4-2에서 완료</strong> — <code>CORRELATE</code> 노드가 다섯 종
+    (<code>PREVIOUS · CURRENT · NEXT · PREVIOUS_OR_CURRENT · NEXT_OR_CURRENT</code>)을 내고,
+    <em>어느 입력이 순간을 정하는가</em>는 <code>Primary input</code> 드롭다운입니다.
+    ③의 재생 트랜스포트가 <em>사람이 눈으로</em> 되짚게 해 준 것을 이제 <strong>질의로</strong>
+    물을 수 있습니다</td></tr>
+<tr><td><s>푸트프린트 포함 기준을 <strong>3강 안</strong>으로</s></td><td>작음</td><td>V7 데이터로 바로 가능. 오버슛 판단의 실제 근거 —
+    <strong>✅ 2026-09-03에 완료</strong> (§3.3). <code>SERVING</code>과 <code>TOP3</code>를 툴바에서
+    고르고, 순위는 <code>sample_neighbour</code> 위에서 표본마다 매깁니다. 기본값은 <code>SERVING</code>
+    그대로입니다 — 이미 나가 있는 도형을 말없이 넓히지 않기 위해서</td></tr>
 <tr><td>거리 빈에 <strong>40λ 옵션</strong></td><td>작음</td><td>이름값을 하려면. 변환 함수는 이미 있음.
     <strong>여전히 남음</strong></td></tr>
 <tr><td><strong>Cell locator</strong></td><td>중간</td><td>우리는 정답을 알고 있어 <strong>검증 가능한</strong> 형태로 만들 수 있음.

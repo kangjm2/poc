@@ -43,6 +43,15 @@ UC27이 그 화면을 만드는 절차를 그대로 기술하고 있고, 노드 
 State Machine은 우리가 만든 것과 출력 모양 자체가 다르고, Combine은 게이팅 규칙이
 반대입니다. `corrections.md`에 정리했습니다.
 
+> **2026-09-03 정정 — 위 문단의 State Machine 절은 지난 이야기입니다.** 그때의 우리 것은
+> 표본별 `CASE`였고 지금은 그것이 `CLASSIFIER`라는 다른 이름을 갖고 있습니다.
+> `STATE_MACHINE`은 **래칭 사다리**이며 상태마다 머문 시간을 ms로 냅니다
+> (`KpiGraph.ladder()`, 저장된 문서는 `V13__classifier_rename.sql`이 옮겼습니다).
+> 게이팅도 `CORRELATE` 노드의 primary로 들어왔습니다. **Combine의 게이팅이 반대라는 것은
+> 그대로 사실입니다**(`COMBINE`은 여전히 합집합 키 스파인입니다).
+> 어느 줄이 아직 열려 있는지는 `corrections.md`의 우선순위표 **상태 열**에서 봅니다 —
+> 이 README는 세지 않습니다.
+
 ## 근본적인 차이 하나 — 시간 기반 대 샘플 기반
 
 매뉴얼이 여러 곳에서 반복하는 문장입니다 (p353, p375, p378):
@@ -59,7 +68,9 @@ Count should be weighted by time in order to obtain accurate results"*).
 - 우리의 **가중 없는 평균이 맞습니다.** 같은 계산을 Nemo에서 하면 틀립니다.
 - 반대로 **시간 가중(`Weight by time`)은 우리에게 필요 없습니다.** 없는 것이 격차가 아닙니다.
   단 **거리 가중은 다릅니다** — 정차 편향은 균일 샘플링이 없애 주지 않고, 오히려 1 Hz에서
-  가장 심합니다. `corrections.md` C7을 보십시오.
+  가장 심합니다. `corrections.md` C7을 보십시오. *(2026-09-03: 그 거리 가중은 나왔습니다 —
+  `WeightedStats`·`AggregationBasis`. C7의 "우리 상태" 줄에 걸린 화면과 남은 거절 둘이
+  적혀 있습니다.)*
 - 그들의 `All Values Within Time Range`가 하는 시간 정렬 결합은,
   **`sample_kpi`·`sample_neighbour` 안에서라면** 우리에겐 `(session_id, seq)` 동등 조인입니다.
   **그러나 `network_event`와 `signaling_message`에는 `seq`가 없습니다** — `ts`뿐입니다.
