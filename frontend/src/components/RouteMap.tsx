@@ -38,6 +38,18 @@ interface Props {
    */
   footprintNote?: string | null
   /**
+   * Apply a global filter naming one cell, from the map.
+   *
+   * UC14 p149: right-click a base station and the popup offers `Create Global Filter From
+   * Cell ID`. The condition itself and the `cell:PCI` grammar have existed since P3-2 -
+   * what was missing was this entry point, so narrowing to a cell meant reading its PCI
+   * off a tooltip and typing it into the bar by hand. The two other items in the
+   * reference's popup (highlight same-channel sectors, highlight neighbours) are not
+   * offered: neither has a counterpart here, and a menu that lists what it cannot do is
+   * worse than a short one.
+   */
+  onFilterCell?: (pci: number) => void
+  /**
    * Events the network reported, each already placed on a sample by the server. Drawn as
    * per-type symbols on the route: "were all six link failures on the same street" is a
    * question about geography, and until now the only way to ask it was to click six table
@@ -92,6 +104,7 @@ interface Props {
  */
 export function RouteMap({
   track, cells, cursorSeq, onCursorChange, kpiName, bins, showServingLine = true,
+  onFilterCell,
   monitored = null, footprints = null, footprintNote = null, events = [], eventTypes,
   frameKey = '', refitToken = 0, colorBy = 'kpi', isolate = null,
   drawingArea = false, onAreaDrawn, diffBins = null,
@@ -151,6 +164,17 @@ export function RouteMap({
     tiles.on('tileerror', () => setBasemapFailed(true))
     tiles.addTo(map)
     map.setView([65.012, 25.465], 13)
+    // Cell sites get a pane of their own, above the route.
+    //
+    // Everything else shares Leaflet's default overlay pane, where stacking is DOM order
+    // and therefore "whichever effect ran last". That was harmless while a site marker
+    // was only a tooltip - it is not now that right-clicking one opens the filter menu,
+    // because the route redraws on every KPI, colour and isolate change and lands on top,
+    // so the click that should reach a site hits a route segment instead. A pane fixes
+    // the order once rather than each effect racing to call bringToFront.
+    map.createPane('cellSites')
+    const sitePane = map.getPane('cellSites')
+    if (sitePane) sitePane.style.zIndex = '450'
     routeLayer.current = L.layerGroup().addTo(map)
     binLayer.current = L.layerGroup().addTo(map)
     cellLayer.current = L.layerGroup().addTo(map)
@@ -456,11 +480,32 @@ export function RouteMap({
     layer.clearLayers()
     for (const c of cells) {
       if (c.latitude == null || c.longitude == null) continue
-      L.circleMarker([c.latitude, c.longitude], {
+      const marker = L.circleMarker([c.latitude, c.longitude], {
         radius: 6, color: '#1f2528', weight: 2, fillColor: '#30578d', fillOpacity: 0.9,
+        pane: 'cellSites',
       })
         .bindTooltip(`PCI ${c.pci} / ${c.band ?? ''} / az ${c.azimuthDeg ?? '-'}°`)
         .addTo(layer)
+      if (onFilterCell) {
+        // A popup with one button rather than acting on the right-click itself: the
+        // filter re-scopes every screen in the application, and a gesture that does that
+        // without asking is one a reader fires by accident on a crowded map.
+        const menu = document.createElement('div')
+        menu.className = 'cell-menu'
+        const btn = document.createElement('button')
+        btn.type = 'button'
+        btn.setAttribute('aria-label', `Filter to cell ${c.pci}`)
+        btn.textContent = `Filter to PCI ${c.pci}`
+        btn.onclick = () => { marker.closePopup(); onFilterCell(c.pci) }
+        menu.appendChild(btn)
+        marker.bindPopup(menu, { closeButton: false, offset: [0, -4] })
+        marker.on('contextmenu', (e) => {
+          // Leaflet's own contextmenu fires on the browser one; stopping it keeps the
+          // page menu from opening over ours.
+          L.DomEvent.preventDefault(e as unknown as Event)
+          marker.openPopup()
+        })
+      }
       // Short spoke showing sector azimuth, so orientation is visible on the map.
       if (c.azimuthDeg != null) {
         const rad = (c.azimuthDeg * Math.PI) / 180
@@ -469,11 +514,17 @@ export function RouteMap({
             [c.latitude, c.longitude],
             [c.latitude + 0.0032 * Math.cos(rad), c.longitude + 0.0075 * Math.sin(rad)],
           ],
-          { color: '#30578d', weight: 3, opacity: 0.85 },
+          // Decoration, so it takes no pointer events: it starts at the site's centre and
+          // was swallowing the hover that shows the PCI tooltip and the right-click that
+          // opens the filter menu - the marker was unreachable at its own middle.
+          {
+            color: '#30578d', weight: 3, opacity: 0.85, pane: 'cellSites',
+            interactive: false,
+          },
         ).addTo(layer)
       }
     }
-  }, [cells])
+  }, [cells, onFilterCell])
 
   // Cell footprints, on their own effect so toggling them does not redraw the route.
   //

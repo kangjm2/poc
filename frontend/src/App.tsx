@@ -288,6 +288,32 @@ export function App() {
     setFilterSpec(spec)
   }, [])
 
+  /**
+   * The map's entry point into the global filter (UC14 p149).
+   *
+   * Goes through `applyFilter` like the bar does, so the condition, the address bar and
+   * the reach list are the same ones - a second path that set the filter its own way is
+   * how two screens end up disagreeing about what is in force.
+   */
+  const filterToCell = useCallback((pci: number) => {
+    applyFilter(`cell:${pci}`)
+  }, [applyFilter])
+
+  /**
+   * Drop one event type from the statistics (`Exclude Events`, p94).
+   *
+   * ADDED to whatever is already in force rather than replacing it: excluding two kinds
+   * of measurement failure is the ordinary case, and a second click that silently undid
+   * the first would be a control that cannot express the thing it exists for. Already
+   * excluded, and it is a no-op rather than a duplicate clause.
+   */
+  const excludeEventType = useCallback((eventType: string) => {
+    const term = `notevent:${eventType}`
+    const parts = (filterSpec ?? '').split(';').map((p) => p.trim()).filter(Boolean)
+    if (parts.includes(term)) return
+    applyFilter([...parts, term].join(';'))
+  }, [applyFilter, filterSpec])
+
   // A spec off a link is a claim like any other and gets the same treatment: checked
   // against the server, and reported rather than silently kept if it does not parse.
   // Left in force while the check is in flight would mean every panel answering 400.
@@ -822,6 +848,7 @@ export function App() {
     return s ? (
       <TimeSeriesChart key={name} series={s} cursorSeq={cursorSeq}
                        onCursorChange={moveCursor} filled={filled}
+                       thresholds={defs.find((d) => d.name === name)?.thresholds ?? []}
                        events={events} eventTypes={eventTypes} />
     ) : null
   }
@@ -829,6 +856,7 @@ export function App() {
   const chartOf = (s: Series, filled = false) => (
     <TimeSeriesChart key={s.kpi} series={s} cursorSeq={cursorSeq}
                      onCursorChange={moveCursor} filled={filled}
+                     thresholds={defs.find((d) => d.name === s.kpi)?.thresholds ?? []}
                      events={events} eventTypes={eventTypes} />
   )
 
@@ -869,6 +897,7 @@ export function App() {
             <RouteMap {...mapContents!} footprintNote={footprintNote} cursorSeq={cursorSeq}
                       frameKey={String(sessionId)} refitToken={refitToken}
                       onCursorChange={moveCursor} kpiName={activeDef?.displayName ?? kpi}
+                      onFilterCell={filterToCell}
                       colorBy={colorBy} isolate={isolate}
                       drawingArea={drawingArea} onAreaDrawn={askAboutArea}
                       eventTypes={eventTypes} />
@@ -923,6 +952,7 @@ export function App() {
             <RouteMap {...mapContents!} footprintNote={footprintNote} cursorSeq={cursorSeq}
                       frameKey={String(sessionId)} refitToken={refitToken}
                       onCursorChange={moveCursor} kpiName={activeDef?.displayName ?? kpi}
+                      onFilterCell={filterToCell}
                       colorBy={colorBy} isolate={isolate}
                       eventTypes={eventTypes} />
             <div className="panel">
@@ -956,7 +986,8 @@ export function App() {
               <header><span className="title">Events</span>
                 <span className="meta">{events.length}</span></header>
               <div style={{ maxHeight: 260, overflow: 'auto' }}>
-                <EventList events={events} types={eventTypes} onPick={jumpToSeq} />
+                <EventList events={events} types={eventTypes} onPick={jumpToSeq}
+                           onExclude={excludeEventType} />
               </div>
             </div>
           </>
@@ -980,6 +1011,8 @@ export function App() {
         return <FieldToLabPanel sessionId={sessionId} />
       case 'problems':
         return <ProblemSurveyPanel sessionId={sessionId} onPick={moveCursor}
+                                rsrpThresholds={
+                                  defs.find((d) => d.name === 'RSRP')?.thresholds ?? []}
                                 events={events} eventTypes={eventTypes} />
       case 'neighbours':
         return <MonitoredSetPage sessionId={sessionId} set={monitored}
@@ -1001,6 +1034,7 @@ export function App() {
             <RouteMap {...mapContents!} footprintNote={footprintNote} cursorSeq={cursorSeq}
                       frameKey={String(sessionId)} refitToken={refitToken}
                       onCursorChange={moveCursor} kpiName={activeDef?.displayName ?? kpi}
+                      onFilterCell={filterToCell}
                       colorBy={colorBy} isolate={isolate}
                       eventTypes={eventTypes} />
             <div className="panel">
@@ -1432,7 +1466,8 @@ export function App() {
                           return next
                         })} />
                     )
-                    : <EventList events={events} types={eventTypes} onPick={jumpToSeq} />}
+                    : <EventList events={events} types={eventTypes} onPick={jumpToSeq}
+                           onExclude={excludeEventType} />}
                 </div>
               </div>
             </div>

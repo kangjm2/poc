@@ -273,22 +273,20 @@ public class AnalysisService {
     /**
      * A session's events, each placed on the sample grid.
      *
-     * The nearest-sample resolution lives here rather than in each caller: network_event
-     * has a ts and no seq, and the browser used to work the seq out by scanning the
-     * DECIMATED track, so on a long drive an event landed on whichever sample survived
-     * thinning rather than on its own. Same rule as ProblemSurvey uses, in one place.
+     * The nearest-sample resolution is `EventOnSample.NEAREST_SEQ`, not spelled out here:
+     * network_event has a ts and no seq, and the browser used to work the seq out by
+     * scanning the DECIMATED track, so on a long drive an event landed on whichever sample
+     * survived thinning rather than on its own. The global filter's event exclusion binds
+     * the same fragment, which is why it is a constant and no longer a query in this file.
      */
     public List<EventDto> events(long sessionId) {
         return jdbc.query("""
                 SELECT e.id, e.ts, e.event_type, e.severity, e.detail,
-                       e.latitude, e.longitude,
-                       (SELECT s.seq FROM sample s
-                         WHERE s.session_id = e.session_id
-                         ORDER BY abs(extract(epoch FROM (s.ts - e.ts))) LIMIT 1) AS seq
+                       e.latitude, e.longitude, %s AS seq
                 FROM network_event e
                 WHERE e.session_id = ?
                 ORDER BY e.ts
-                """,
+                """.formatted(EventOnSample.NEAREST_SEQ),
                 (rs, i) -> {
                     Integer seq = (Integer) rs.getObject("seq");
                     return new EventDto(rs.getLong("id"), rs.getTimestamp("ts").toInstant(),

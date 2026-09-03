@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { api } from '../api/client'
 import type {
   EventType, NetworkEvent, ProblemInstance, ProblemSurvey, Series,
+  Threshold,
 } from '../api/types'
 import { TimeSeriesChart } from './TimeSeriesChart'
 import { PRIORITY, useDismissable } from '../view/dismiss'
@@ -44,11 +45,22 @@ function slicePath(from: number, to: number) {
 /** Samples either side of a case that the context view shows. 1 Hz, so 30 s each way. */
 const CONTEXT_PAD = 30
 
-export function ProblemSurveyPanel({ sessionId, onPick, events = [], eventTypes }: {
+export function ProblemSurveyPanel({
+  sessionId, onPick, events = [], eventTypes, rsrpThresholds = [],
+}: {
   sessionId: number | null
   onPick: (seq: number) => void
   events?: NetworkEvent[]
   eventTypes?: Map<string, EventType>
+  /**
+   * RSRP's threshold ladder, for the context chart's reference lines.
+   *
+   * Named for the KPI rather than passed as a generic `thresholds`, because the context
+   * chart is not generic: it plots RSRP and nothing else (see the fetch below), so a prop
+   * that said "thresholds" would invite a caller to pass another KPI's ladder and draw
+   * rules that belong to a different scale.
+   */
+  rsrpThresholds?: Threshold[]
 }) {
   const [data, setData] = useState<ProblemSurvey | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -277,6 +289,7 @@ export function ProblemSurveyPanel({ sessionId, onPick, events = [], eventTypes 
               eventTypes={eventTypes}
               fromSeq={Math.max(0, selected.startSeq - CONTEXT_PAD)}
               toSeq={selected.endSeq + CONTEXT_PAD}
+              thresholds={rsrpThresholds}
               height={130}
             />
           ) : (
