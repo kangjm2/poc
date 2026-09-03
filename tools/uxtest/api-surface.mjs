@@ -15,6 +15,7 @@
  * enough to run on every change.
  */
 import { readFileSync, readdirSync, statSync } from 'node:fs'
+import { chromiumPath } from './browser.mjs'
 import { join } from 'node:path'
 
 const API = process.env.API ?? 'http://127.0.0.1:8080/api'
@@ -69,12 +70,77 @@ const pathShape = (path) => new RegExp(
       .filter(Boolean)
       .map((seg) => (seg.startsWith('{') ? '[^/`\'"\\s]+' : seg.replace(/[.*+?^$()|[\]\\]/g, '\\$&')))
       .map((seg) => '/' + seg)
-      .join(''))
+      .join('')
+  // End-anchored, or `/sessions/{id}` matches inside `/sessions/{id}/track`.
+  //
+  // Two wrong versions before this one. `(?!/)` does nothing: the preceding
+  // `[^/`'"\s]+` gives back a character and the guard passes. Rejecting every non-path
+  // character is too strong the other way, because a client path is usually followed by
+  // `${...}` interpolation or a `?query` - so the lookahead rejects exactly what could
+  // CONTINUE a segment, and nothing else.
+  + '(?![A-Za-z0-9_.\\-])')
 
-const unreachedEndpoints = mappings.filter(({ path }) => {
+/**
+ * Which HTTP methods the client actually uses at a given path shape.
+ *
+ * The check used to discard the verb entirely, so `GET /sessions/{id}` counted as reached
+ * because `DELETE /sessions/{id}` is called - two different operations sharing a path
+ * covering for each other, which is the same defect the path shape above was written to
+ * fix, one level down.
+ *
+ * Only two call forms exist in the client and both are read here: `get<T>(`...`)`, which is
+ * a GET, and `fetch(`${BASE}...`, { method: 'X' })`, where the verb follows the path.
+ */
+const methodsAtPath = (path) => {
+  const re = new RegExp(pathShape(path).source, 'g')
+  const found = new Set()
+  for (const m of clientText.matchAll(re)) {
+    // The CALL SITE decides, and the window is bounded to the client method the path is
+    // written inside. Both halves were wrong before: reading `method:` FORWARDS first ran
+    // past the end of the current method and borrowed the next one's verb, and reading
+    // backwards without a bound let one method's `get<` vouch for the next method's path.
+    // A 200-character window is not a scope; the property declaration is.
+    const raw = clientText.slice(Math.max(0, m.index - 400), m.index)
+    const boundary = [...raw.matchAll(/\n {2}\w+:/g)].pop()
+    const before = boundary ? raw.slice(boundary.index) : raw
+    const iGet = before.lastIndexOf('get<')
+    const iFetch = before.lastIndexOf('fetch(')
+    if (iFetch > iGet) {
+      // Its verb is in the options object after the path; a fetch with no method is a GET.
+      const verb = clientText.slice(m.index, m.index + 260)
+        .match(/method:\s*'(GET|POST|PUT|DELETE|PATCH)'/)
+      found.add(verb ? verb[1] : 'GET')
+    } else if (iGet >= 0) {
+      found.add('GET')
+    } else if (before.includes('${BASE}')) {
+      // A URL builder: the path is handed to an <a href>, and the browser GETs it when the
+      // reader clicks. `exportUrl` and `reportUrl` are the two, and they were reported as
+      // uncalled because the checker only knew two shapes of call and this is a third.
+      found.add('GET')
+    }
+  }
+  return found
+}
+
+/**
+ * Endpoints no client method calls ON PURPOSE, named with the reason.
+ *
+ * Kept as a list rather than as silence, for the reason `GlobalFilter.coverage()` gives
+ * about its own exemptions: an unexplained absence is indistinguishable from a screen - or
+ * here a client - that simply forgot. An entry that stops being true is then a line someone
+ * can read, not a check that quietly passes.
+ */
+const NOT_CALLED_BY_THE_APP = [
+  { method: 'GET', path: '/api/sessions/{id}',
+    why: 'the app reads the whole list (api.sessions) and never one drive by id;'
+       + ' verify-scenarios uses it to read sampleCount independently of any screen' },
+]
+
+const unreachedEndpoints = mappings.filter(({ method, path }) => {
   const segs = path.replace(/^\/api/, '').split('/').filter(Boolean)
   if (segs.length === 0) return false
-  return !pathShape(path).test(clientText)
+  if (NOT_CALLED_BY_THE_APP.some((e) => e.method === method && e.path === path)) return false
+  return !methodsAtPath(path).has(method)
 })
 
 // -------------------------------------------------------- 2. client methods
@@ -85,11 +151,12 @@ const unusedClientMethods = clientMethods.filter((name) => !componentText.includ
 // ------------------------------------------------------------------ 3. KPIs
 let kpiGaps = []
 let renderedNote = ''
+let probeFailed = false
 try {
   const defs = await (await fetch(`${API}/kpi-definitions`)).json()
   const { chromium } = await import('playwright')
   const browser = await chromium.launch({
-    executablePath: '/opt/pw-browsers/chromium-1194/chrome-linux/chrome',
+    executablePath: chromiumPath(),
     proxy: process.env.HTTPS_PROXY
       ? { server: process.env.HTTPS_PROXY, bypass: 'localhost,127.0.0.1,::1' } : undefined,
   })
@@ -103,12 +170,18 @@ try {
     .map((d) => `${d.name} (${d.displayName}, category ${d.category})`)
   renderedNote = `${defs.length} defined, ${defs.length - kpiGaps.length} reachable in the tree`
 } catch (e) {
+  // A probe that could not run is a gap, not a pass. This used to leave `kpiGaps` empty,
+  // so the script printed "no gaps" and exited 0 having run two of its three checks - the
+  // failure mode being that the one check needing a browser is exactly the one that stops
+  // working first.
+  probeFailed = true
   renderedNote = `could not probe the running UI: ${e.message}`
 }
 
 // ---------------------------------------------------------------- report
 const problems =
   unreachedEndpoints.length + unusedClientMethods.length + kpiGaps.length
+  + (probeFailed ? 1 : 0)
 
 console.log('API surface coverage')
 console.log(`  endpoints declared:      ${mappings.length}`)
@@ -126,5 +199,10 @@ if (kpiGaps.length) {
   console.log('\n  KPIs defined server-side but not reachable in the UI:')
   for (const k of kpiGaps) console.log(`    ${k}`)
 }
+if (NOT_CALLED_BY_THE_APP.length) {
+  console.log('\n  not called by the app, on purpose:')
+  for (const e of NOT_CALLED_BY_THE_APP) console.log(`    ${e.method} ${e.path} - ${e.why}`)
+}
+if (probeFailed) console.log('\n  the KPI reachability probe did not run: 2 of 3 checks ran')
 console.log(`\n${problems === 0 ? 'no gaps' : `${problems} gap(s)`}`)
 process.exit(problems === 0 ? 0 : 1)

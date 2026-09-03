@@ -5,6 +5,7 @@
  * detection and session comparison.
  */
 import { chromium } from 'playwright'
+import { chromiumPath } from '../tools/uxtest/browser.mjs'
 import { mkdirSync } from 'node:fs'
 
 const BASE = process.env.BASE ?? 'http://127.0.0.1:4173'
@@ -24,7 +25,7 @@ const PROXY = process.env.HTTPS_PROXY ?? process.env.https_proxy
   ?? (process.env.CLOUDSDK_PROXY_PORT ? `http://127.0.0.1:${process.env.CLOUDSDK_PROXY_PORT}` : undefined)
 
 const browser = await chromium.launch({
-  executablePath: '/opt/pw-browsers/chromium-1194/chrome-linux/chrome',
+  executablePath: chromiumPath(),
   ...(PROXY ? { proxy: { server: PROXY, bypass: 'localhost,127.0.0.1,::1' } } : {}),
   args: ['--ignore-certificate-errors'],
 })
@@ -663,12 +664,17 @@ if (fh) {
     (degText.match(/\d+s/) ?? ['?'])[0] + ' fault window')
   await page.screenshot({ path: `${OUT}/15-fronthaul-fault.png` })
 
-  // the radio side stays healthy through the same window - the whole point
+  // The radio side stays healthy through the same window - which is the whole point of
+  // this scenario, and which the check did not test. `/RSRP/.test(grid)` matched the ROW
+  // LABEL, present at every cursor position on every drive, so the assertion was true
+  // independently of the radio being healthy, of the fault window, and of the drive.
   await page.locator('.panel table.grid tbody tr').first().click()
   await page.waitForTimeout(1200)
   const grid = await page.locator('.dock.right table.grid').first().innerText()
-  const radioOk = /RSRP/.test(grid)
-  check('결함 구간에서 무선 KPI 조회 가능', radioOk)
+  const radioRsrp = Number(grid.match(/RSRP[^\n]*?(-?\d+(?:\.\d+)?)/)?.[1] ?? NaN)
+  check('프론트홀 결함 구간에서도 무선은 멀쩡함',
+    Number.isFinite(radioRsrp) && radioRsrp > -100,
+    `RSRP ${Number.isFinite(radioRsrp) ? radioRsrp : 'not found'} dBm`)
 }
 
 // 26. L3 message log follows the cursor and expands
@@ -901,8 +907,12 @@ check('서빙 셀이 정확히 하나, 맨 위',
 const numData = await page.locator('.dock.right table.grid').first().innerText()
 const servingRsrpCell = (await msDock.locator('tbody tr').first()
   .locator('td').nth(2).innerText()).trim()
+// The needle has to look like a measurement first. `''.includes` is true of everything, so
+// an empty dock cell - or one rendering '-' - made this assert agreement between a panel and
+// nothing. Numeric shape rather than mere non-emptiness, for the same reason.
 check('도크 서빙 RSRP가 수치 패널과 일치',
-  numData.includes(servingRsrpCell), `dock ${servingRsrpCell}`)
+  /-?\d/.test(servingRsrpCell) && numData.includes(servingRsrpCell),
+  `dock "${servingRsrpCell}"`)
 
 await page.locator('.workbook-tabs button', { hasText: 'Monitored Set' }).click()
 await page.waitForTimeout(2000)
@@ -1271,7 +1281,13 @@ check('워크북 삭제는 확인을 받고, 취소하면 남음',
 // Cleaned up so a second run starts where the first did.
 const books = await (await page.request.get(`${API_BASE}/api/workbooks`)).json()
 for (const b of books) await page.request.delete(`${API_BASE}/api/workbooks/${b.id}`)
-check('체크가 만든 워크북을 정리', books.length >= 1, `removed ${books.length}`)
+// Read back. The assertion was `books.length >= 1` - that there had been something to
+// delete - which is a fact about the state BEFORE the loop and stays true whether or not a
+// single DELETE succeeded. A cleanup check that cannot notice a failed cleanup leaves the
+// next run starting somewhere else.
+const booksLeft = await (await page.request.get(`${API_BASE}/api/workbooks`)).json()
+check('체크가 만든 워크북을 정리', books.length >= 1 && booksLeft.length === 0,
+  `removed ${books.length}, ${booksLeft.length} left`)
 
 // Filtered HERE, not where it used to be - 533 lines earlier, just after the compare
 // screenshot. `errors.filter(...)` copies the array at the call site, so every console

@@ -21,6 +21,7 @@
  * Scale beyond the seed is covered separately by scripts/load-test.sh.
  */
 import { chromium } from 'playwright'
+import { chromiumPath } from '../tools/uxtest/browser.mjs'
 
 const BASE = process.env.BASE ?? 'http://127.0.0.1:4173'
 const API = process.env.API ?? 'http://127.0.0.1:8080'
@@ -42,7 +43,7 @@ const step = (name, ok, detail = '') => {
 
 const PROXY = process.env.HTTPS_PROXY ?? process.env.https_proxy
 const browser = await chromium.launch({
-  executablePath: '/opt/pw-browsers/chromium-1194/chrome-linux/chrome',
+  executablePath: chromiumPath(),
   ...(PROXY ? { proxy: { server: PROXY, bypass: 'localhost,127.0.0.1,::1' } } : {}),
   args: ['--ignore-certificate-errors'],
 })
@@ -1003,8 +1004,11 @@ scenario('S14 · Cause to the moment, with context')
 
   const ctxMarks = await page.locator('.case-context g.chart-event').count()
   const ctxTrace = await page.locator('.case-context svg path').count()
+  // `ctxMarks >= 0` is a tautology on a Playwright count, so the step named two things and
+  // asserted one. The window is chosen to bracket a problem case, and every seeded case has
+  // at least one event in it, so the honest assertion is that both are there.
   step('the context view carries the trace and the events in that window',
-    ctxTrace > 0 && ctxMarks >= 0, `${ctxTrace} traces, ${ctxMarks} event marks`)
+    ctxTrace > 0 && ctxMarks > 0, `${ctxTrace} traces, ${ctxMarks} event marks`)
 
   await page.locator('.case-context button', { hasText: 'Close' }).click()
   await page.waitForTimeout(300)
@@ -1296,7 +1300,10 @@ scenario('S16 · A complaint about a place, not a time')
   const diff = await apiGet(`/api/sessions/${sessA}/spatial-diff?other=${otherId}&kpi=DL_BLER&sizeMeters=150`)
   const improved = diff.bins.filter((b) => b.deltaValue != null && b.deltaValue < -1)
   step('a lower-is-better KPI improving is coloured as better',
-    diff.direction === 'LOWER_IS_BETTER'
+    // `improved.length > 0 &&` first: `every` is true of an empty array, so without it a
+    // change that stopped producing improved tiles at all would read as a pass. The same
+    // guard sits fourteen lines above on `oneSided`; this one was missed.
+    diff.direction === 'LOWER_IS_BETTER' && improved.length > 0
     && improved.every((b) => /better/.test(b.label)),
     `${improved.length} tiles improved, labels ${[...new Set(improved.map((b) => b.label))].join(',') || 'none'}`)
 
@@ -2315,7 +2322,7 @@ scenario('S22 · What was happening just before this')
   const orCurr = await build('S22_OR_CURR', 'PREVIOUS_OR_CURRENT', 1, 500)
   const vOr = await valuesOf('S22_OR_CURR')
   step('previous-or-current uses the current value only when there is no previous one',
-    orCurr.valuesComputed === curr.valuesComputed
+    orCurr.valuesComputed === curr.valuesComputed && handovers.length > 0
     && handovers.every((q) => near(vOr[q], vCurr[q])),
     `${orCurr.valuesComputed} values, all equal to the current one`)
 

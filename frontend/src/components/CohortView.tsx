@@ -71,20 +71,31 @@ export function CohortView({ defs, kpi, groupBy, holdConstant, onDimension, onKp
   const [domain, setDomain] = useState('AS_RECORDED')
 
   useEffect(() => {
-    setBusy(true); setError(null)
-    // holdConstant null is "the server's choice", not "hold nothing" - the explicit
-    // no-hold is the literal 'NONE', which is what the picker writes. A link that omits
-    // it therefore arrives with the guard the server thinks that axis needs.
-    api.cohorts({ kpi, groupBy, holdConstant: holdConstant ?? undefined,
-                  weightedBy, domain, ...narrowing })
-      .then((d) => { setData(d); setError(null) })
-      // The refusals this endpoint raises are the interesting part of it - "9 values are
-      // in scope and at most 8 can be compared", "holding Scenario constant leaves no
-      // value common to every group". Showing them verbatim rather than "failed to load"
-      // is the difference between a screen that tells you how to ask a better question
-      // and one that tells you it is broken.
-      .catch((e) => { setError(String(e).replace(/^Error: \d+: /, '')); setData(null) })
-      .finally(() => setBusy(false))
+    // Debounced and guarded, exactly as the measurement picker's identical six-field
+    // narrowing already is. Without it every keystroke in the search box fired the app's
+    // most expensive endpoint - two SQL statements per member drive - and a slow early
+    // response could land after a fast later one and paint a stale answer.
+    let live = true
+    const timer = setTimeout(() => {
+      setBusy(true); setError(null)
+      // holdConstant null is "the server's choice", not "hold nothing" - the explicit
+      // no-hold is the literal 'NONE', which is what the picker writes. A link that omits
+      // it therefore arrives with the guard the server thinks that axis needs.
+      api.cohorts({ kpi, groupBy, holdConstant: holdConstant ?? undefined,
+                    weightedBy, domain, ...narrowing })
+        .then((d) => { if (!live) return; setData(d); setError(null) })
+        // The refusals this endpoint raises are the interesting part of it - "9 values are
+        // in scope and at most 8 can be compared", "holding Scenario constant leaves no
+        // value common to every group". Showing them verbatim rather than "failed to load"
+        // is the difference between a screen that tells you how to ask a better question
+        // and one that tells you it is broken.
+        .catch((e) => {
+          if (!live) return
+          setError(String(e).replace(/^Error: \d+: /, '')); setData(null)
+        })
+        .finally(() => { if (live) setBusy(false) })
+    }, 200)
+    return () => { live = false; clearTimeout(timer) }
   }, [kpi, groupBy, holdConstant, weightedBy, domain,
       narrowing.q, narrowing.device, narrowing.operator, narrowing.technology,
       narrowing.from, narrowing.to])

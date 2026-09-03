@@ -1,0 +1,14 @@
+{
+  "name": "vdt-analyzer-checks",
+  "private": true,
+  "description": "Dependencies for the repository's own checkers. The application itself lives in frontend/ and backend/; this manifest exists only so `scripts/verify-*.mjs` and `tools/uxtest/*` can be run from a clean clone.",
+  "type": "module",
+  "scripts": {
+    "check:ui": "node scripts/verify-ui.mjs",
+    "check:scenarios": "node scripts/verify-scenarios.mjs",
+    "check:api": "node tools/uxtest/api-surface.mjs"
+  },
+  "devDependencies": {
+    "playwright": "1.62.1"
+  }
+}

@@ -92,6 +92,12 @@ node tools/uxtest/api-surface.mjs      # 로직은 있는데 뷰가 없는 격�
 (cd backend && mvn test)               # SQL을 조립하는 코드·색 램프·기하 — 89개
 node tools/uxtest/measure-signals.mjs  # (선택) 검증 신호별 비용 측정
 ```
+> **깨끗한 클론에서 처음 돌릴 때**: 위 셋 중 앞의 둘과 `api-surface`는 실제 브라우저를 띄웁니다.
+> `npm install`(루트)로 Playwright를 받고 `npx playwright install chromium`을 한 번 실행하십시오.
+> 이미 브라우저가 있는 환경이라면 `CHROMIUM_PATH=/경로/chrome`으로 그것을 쓰게 할 수 있습니다.
+> *(2026-09-03까지 이 경로는 컨테이너의 것으로 **하드코딩**돼 있었고 루트 `package.json`도
+> 없어서, 검사기 넷 중 셋이 깨끗한 클론에서 실행되지 않았습니다.)*
+
 
 ### 부하 · 결함 주입 — 호스트 실행 방식 전용
 
