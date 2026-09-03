@@ -112,6 +112,27 @@ export const api = {
       `/sessions/${id}/series?kpis=${kpis.join(',')}&maxPoints=${maxPoints}`, false),
   snapshot: (id: number, seq?: number) =>
     get<Snapshot>(`/sessions/${id}/snapshot${seq === undefined ? '' : `?seq=${seq}`}`),
+  /**
+   * Define a MEASURED parameter before its column arrives.
+   *
+   * The sibling of `createDerivedKpi`, and a different thing: that one computes a value
+   * from other KPIs, this one declares what a column in a log FILE means. Without it the
+   * only way a non-seeded measured parameter can be born is the import's
+   * define-unknown-columns path, which has nothing to go on and so stamps every one of
+   * them category "Imported", technology "Unknown" and direction NEUTRAL - and NEUTRAL is
+   * not cosmetic: the colour ramp has no bad end and the comparison verdict is withheld,
+   * for the life of the parameter, with no endpoint anywhere to correct it afterwards.
+   */
+  createKpi: async (body: Record<string, unknown>) => {
+    const res = await fetch(`${BASE}/kpi-definitions`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    })
+    const json = await res.json()
+    if (!res.ok) throw new Error(json.message ?? `${res.status}`)
+    return json as KpiDefinition
+  },
   createDerivedKpi: async (body: Record<string, unknown>) => {
     const res = await fetch(`${BASE}/kpi-definitions/derived`, {
       method: 'POST',

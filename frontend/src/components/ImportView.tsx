@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { api } from '../api/client'
 import type { EventType, ImportResult, KpiDefinition } from '../api/types'
 import { DerivedKpiPanel } from './DerivedKpiPanel'
+import { MeasuredKpiPanel } from './MeasuredKpiPanel'
 import { KpiWorkbench } from './KpiWorkbench'
 
 /**
@@ -30,6 +31,16 @@ export function ImportView({ onImported, eventTypes = [], sessionId = null }: {
   const [buildLabel, setBuildLabel] = useState('')
   const [scenario, setScenario] = useState('')
   const [locationName, setLocationName] = useState('')
+  /**
+   * How columns are separated.
+   *
+   * The server has always accepted this and the screen never sent it, so a semicolon or
+   * tab-separated export - which is what many European locales and several vendor tools
+   * produce, and the reason this form accepts `.txt` at all - could not be loaded through
+   * the product at any setting. It failed as "could not find latitude and longitude
+   * columns", which is true and useless: the columns are there, the file was cut wrong.
+   */
+  const [delimiter, setDelimiter] = useState(',')
   const [busy, setBusy] = useState(false)
   const [result, setResult] = useState<ImportResult | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -84,6 +95,7 @@ export function ImportView({ onImported, eventTypes = [], sessionId = null }: {
       if (buildLabel) form.append('buildLabel', buildLabel)
       if (scenario) form.append('scenario', scenario)
       if (locationName) form.append('locationName', locationName)
+      if (delimiter !== ',') form.append('delimiter', delimiter)
       if (createUnknown) form.append('createUnknownColumns', 'true')
       try {
         setResult(await api.importCsv(form))
@@ -106,8 +118,18 @@ export function ImportView({ onImported, eventTypes = [], sessionId = null }: {
           {/* multiple, because a drive produces a folder. The four fields below are
               filled once and reused for all of them - typing them twelve times is what
               made a folder's worth of measurements a chore rather than a task. */}
-          <label>Files<br />
-            <input ref={fileRef} type="file" multiple accept=".csv,.txt,text/csv" /></label>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end' }}>
+            <label style={{ flex: 1 }}>Files<br />
+              <input ref={fileRef} type="file" multiple accept=".csv,.txt,text/csv" /></label>
+            <label style={{ width: 150 }}>Separator<br />
+              <select value={delimiter} aria-label="Column separator" style={{ width: '100%' }}
+                      onChange={(e) => setDelimiter(e.target.value)}>
+                <option value=",">Comma ,</option>
+                <option value=";">Semicolon ;</option>
+                <option value={'\t'}>Tab</option>
+                <option value="|">Pipe |</option>
+              </select></label>
+          </div>
           <label style={{ display: 'flex', gap: 6, alignItems: 'flex-start' }}>
             <input type="checkbox" checked={createUnknown} style={{ marginTop: 2 }}
                    onChange={(e) => setCreateUnknown(e.target.checked)} />
@@ -208,6 +230,9 @@ export function ImportView({ onImported, eventTypes = [], sessionId = null }: {
           </p>
         </div>
       </div>
+
+      <MeasuredKpiPanel defs={defs}
+                        onChanged={() => api.kpiDefinitions().then(setDefs).catch(() => {})} />
 
       <DerivedKpiPanel defs={defs}
                        onChanged={() => {

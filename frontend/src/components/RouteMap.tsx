@@ -509,12 +509,21 @@ export function RouteMap({
     }
     p ??= track[0]
     if (!p) return
+    // "Was the car actually moving here?" - the question that separates a real bad stretch
+    // from hundreds of samples taken at one traffic light. The speed is already on every
+    // track point and was rendering nowhere; this is the sample under the cursor, so the
+    // reading is that sample's, not a run's.
+    const cursorLabel = `seq ${p.seq}`
+      + (p.speedKmh == null ? '' : ` \u00b7 ${p.speedKmh} km/h`)
     if (!cursorMarker.current) {
       cursorMarker.current = L.circleMarker([p.latitude, p.longitude], {
         radius: 7, color: '#da0000', weight: 3, fillColor: '#ffffff', fillOpacity: 1,
+        className: 'cursor-marker',
       }).addTo(map)
+      cursorMarker.current.bindTooltip(cursorLabel, { className: 'cursor-tip' })
     } else {
       cursorMarker.current.setLatLng([p.latitude, p.longitude])
+      cursorMarker.current.setTooltipContent(cursorLabel)
     }
 
     // Lines from the terminal to the cells it can see. The serving cell is drawn solid

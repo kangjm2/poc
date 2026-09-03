@@ -206,6 +206,16 @@ export function MonitoredSetPage({ sessionId, set, onJump }: {
               <tr>
                 <th className="num">Ch</th><th className="num">PCI</th><th>Band</th>
                 <th className="num">Detected</th><th className="num">Seen</th>
+                {/* Between "detected" and "served" because that is where it sits in
+                    meaning: a cell 25 dB down is detected exactly as much as one 1 dB
+                    down, and neither p95 nor mean can separate them because both are
+                    absolute levels with the sample's own fading in them. A cell that
+                    CONTENDED on 1900 samples and served 40 is a missing neighbour
+                    relation, a bad handover threshold or an overshooter - the SQL has
+                    counted it all along and the table dropped it. */}
+                <th className="num"
+                    title={`samples within ${data.strongWithinDb} dB of the strongest cell`}>
+                  Contended</th>
                 <th className="num">Served</th>
                 <th className="num" title="95th percentile - the peak is pinned to the
                      -55 dBm measurement ceiling wherever the route passes a site">
@@ -221,6 +231,7 @@ export function MonitoredSetPage({ sessionId, set, onJump }: {
                   <td>{b.band ?? '-'}</td>
                   <td className="num">{b.samplesSeen}</td>
                   <td className="num">{b.seenPct}%</td>
+                  <td className="num">{b.samplesStrong}</td>
                   <td className="num">{b.samplesServing}</td>
                   <td className="num">{b.p95Rsrp}</td>
                   <td className="num">{b.meanRsrp}</td>

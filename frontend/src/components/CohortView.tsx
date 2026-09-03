@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { api } from '../api/client'
-import type { CohortSet, KpiDefinition } from '../api/types'
+import type { CohortDimension, CohortSet, KpiDefinition } from '../api/types'
 import { CdfOverlay } from './CdfOverlay'
 import { CohortStrip } from './CohortStrip'
 import { seriesColor } from '../view/paint'
@@ -59,6 +59,16 @@ export function CohortView({ defs, kpi, groupBy, holdConstant, onDimension, onKp
    * refuses it here for that reason, so offering the choice would be offering an error.
    */
   const weightedBy = 'SAMPLE'
+  /**
+   * Arithmetic on the dB readings, or on the powers behind them.
+   *
+   * Offered here, unlike the weighting above, because nothing about pooling several drives
+   * makes it unsafe: it is a per-value conversion, not a per-drive weight, so it means the
+   * same thing over eight drives as over one. Withholding it was the accident - the server
+   * accepted `domain` on this endpoint from the first commit and the screen never sent it,
+   * so a cohort mean silently disagreed with a Statistics panel set to linear power.
+   */
+  const [domain, setDomain] = useState('AS_RECORDED')
 
   useEffect(() => {
     setBusy(true); setError(null)
@@ -66,7 +76,7 @@ export function CohortView({ defs, kpi, groupBy, holdConstant, onDimension, onKp
     // no-hold is the literal 'NONE', which is what the picker writes. A link that omits
     // it therefore arrives with the guard the server thinks that axis needs.
     api.cohorts({ kpi, groupBy, holdConstant: holdConstant ?? undefined,
-                  weightedBy, ...narrowing })
+                  weightedBy, domain, ...narrowing })
       .then((d) => { setData(d); setError(null) })
       // The refusals this endpoint raises are the interesting part of it - "9 values are
       // in scope and at most 8 can be compared", "holding Scenario constant leaves no
@@ -75,7 +85,7 @@ export function CohortView({ defs, kpi, groupBy, holdConstant, onDimension, onKp
       // and one that tells you it is broken.
       .catch((e) => { setError(String(e).replace(/^Error: \d+: /, '')); setData(null) })
       .finally(() => setBusy(false))
-  }, [kpi, groupBy, holdConstant, weightedBy,
+  }, [kpi, groupBy, holdConstant, weightedBy, domain,
       narrowing.q, narrowing.device, narrowing.operator, narrowing.technology,
       narrowing.from, narrowing.to])
 
@@ -83,6 +93,14 @@ export function CohortView({ defs, kpi, groupBy, holdConstant, onDimension, onKp
   // What the server actually held, which is the honest thing to show selected: an absent
   // `hold` in the URL means "your choice", and the picker should say which choice that was.
   const resolvedHold = data?.holdConstant ?? (holdConstant ?? 'NONE')
+  // One typed list for both pickers. Before the first response the fallbacks carry a zero
+  // count, which renders as no count at all rather than as "(0)" - an axis with no values
+  // and an axis not yet counted are different claims.
+  const options: CohortDimension[] = dims.length > 0
+    ? dims
+    : FALLBACK_DIMS.map((d) => ({ ...d, valueCount: 0, hasUnset: false }))
+  const countOf = (d: CohortDimension) =>
+    d.valueCount > 0 ? ` (${d.valueCount}${d.hasUnset ? ', incl. unset' : ''})` : ''
   const shown = data?.cohorts ?? []
   const pickedCohort = shown.find((c) => c.value === picked) ?? null
 
@@ -104,11 +122,21 @@ export function CohortView({ defs, kpi, groupBy, holdConstant, onDimension, onKp
             <select value={groupBy} aria-label="Group by"
                     onChange={(e) => onDimension(e.target.value,
                       e.target.value === resolvedHold ? 'NONE' : resolvedHold)}>
-              {(dims.length > 0 ? dims : FALLBACK_DIMS).map((d) => (
-                <option key={d.key} value={d.key}>
-                  {d.label}{'valueCount' in d ? ` (${d.valueCount})` : ''}
-                </option>
+              {/* "(3)" is not the same claim as "(3, one of them unfilled)". The server is
+                  the only place that knows - `dimensions` is the sole per-dimension summary
+                  this screen receives - so a picker that printed the bare count let a reader
+                  choose an axis whose third group is a junk drawer. */}
+              {options.map((d) => (
+                <option key={d.key} value={d.key}>{d.label}{countOf(d)}</option>
               ))}
+            </select>
+          </label>
+          <label>Mean in&nbsp;
+            <select value={domain} aria-label="Cohort mean in"
+                    title="dB values averaged as recorded, or converted to power first - the mean is the only statistic this moves"
+                    onChange={(e) => setDomain(e.target.value)}>
+              <option value="AS_RECORDED">dB as recorded</option>
+              <option value="LINEAR">linear power</option>
             </select>
           </label>
           <label>Hold constant&nbsp;
@@ -116,9 +144,12 @@ export function CohortView({ defs, kpi, groupBy, holdConstant, onDimension, onKp
                     title="Without this there is a delta but no verdict: the groups may differ by more than the axis"
                     onChange={(e) => onDimension(groupBy, e.target.value)}>
               <option value="NONE">nothing (no verdict)</option>
-              {(dims.length > 0 ? dims : FALLBACK_DIMS)
-                .filter((d) => d.key !== groupBy)
-                .map((d) => <option key={d.key} value={d.key}>{d.label}</option>)}
+              {/* The hold picker printed no count at all, which is worse: holding a
+                  dimension that is `(unset)` on half the drives silently throws those
+                  drives out, and the exclusion list is the only place it showed. */}
+              {options.filter((d) => d.key !== groupBy).map((d) => (
+                <option key={d.key} value={d.key}>{d.label}{countOf(d)}</option>
+              ))}
             </select>
           </label>
         </div>
@@ -187,6 +218,13 @@ export function CohortView({ defs, kpi, groupBy, holdConstant, onDimension, onKp
                 <th className="num">Drives</th><th className="num">Samples</th>
                 <th className="num">Mean</th><th className="num">p05</th>
                 <th className="num">p50</th><th className="num">p95</th>
+                {/* The confound the guard cannot hold. `holdConstant` can pin scenario,
+                    device, operator, technology or location, but not TIME - builds are
+                    sequential by definition, so a build cohort's drives never share a time
+                    value with another build's. Two campaigns months apart is a reason for a
+                    delta that no held dimension will remove, and this is the only place the
+                    screen can say so. */}
+                <th title="when this group's drives were measured">Tested</th>
                 <th className="num">Δ vs previous</th><th>Verdict</th>
               </tr>
             </thead>
@@ -202,6 +240,9 @@ export function CohortView({ defs, kpi, groupBy, holdConstant, onDimension, onKp
                   <td className="num">{c.stats.p05 ?? '—'}</td>
                   <td className="num">{c.stats.p50 ?? '—'}</td>
                   <td className="num">{c.stats.p95 ?? '—'}</td>
+                  <td>{c.firstStartedAt.slice(0, 10) === c.lastStartedAt.slice(0, 10)
+                    ? c.firstStartedAt.slice(0, 10)
+                    : `${c.firstStartedAt.slice(0, 10)} → ${c.lastStartedAt.slice(0, 10)}`}</td>
                   <td className="num">{c.deltaVsPrevious ?? '—'}</td>
                   {/* Blank rather than "SAME" when nothing is held: an absent verdict and
                       a verdict of no-difference are different answers. */}
