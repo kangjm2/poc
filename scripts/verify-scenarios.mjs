@@ -3095,6 +3095,73 @@ scenario('S25 · Four things the manual asks for before it draws')
   await page.waitForTimeout(2500)
 }
 
+// ─── S26 · A control is offered only where something answers it ──────────────
+//
+// The negative check §1.5.17 asks for. Every other step in this file drives a control on a
+// screen that consumes it, which is exactly how five toolbar groups came to be live on
+// fourteen tabs while three tabs read them: each check drove the one tab where its control
+// worked, and all of them passed.
+//
+// Cheaper than driving fourteen tabs, and it goes red the moment the WORKBOOKS table and
+// the toolbar disagree - which is the failure this is really guarding.
+scenario('S26 · A control is offered only where something answers it')
+{
+  const GROUPS = [
+    ['Colour by', 'colour'],
+    ['Area bins', 'areaBins'],
+    ['Distance bins', 'distanceBins'],
+    ['Footprint basis', 'footprints'],
+  ]
+  const shown = async () => {
+    const out = []
+    for (const [label] of GROUPS) {
+      out.push(await page.locator(`.toolbar [aria-label="${label}"]`).count() > 0)
+    }
+    return out
+  }
+  const areaShown = () => page.locator('.toolbar button', { hasText: /Ask an area|Drawing/ })
+    .count()
+
+  await selectSession(CITY_A)
+  await openWorkbook('Overview')
+  await page.waitForTimeout(1400)
+  // Footprints has to be ON for its basis select to exist, so the group is read through a
+  // control that is present whenever the group is.
+  await page.locator('.toolbar .group:has(label:text("Footprints")) button').click()
+  await page.waitForTimeout(1200)
+  const onOverview = await shown()
+  step('Overview offers all four of the groups its own row claims',
+    onOverview.every(Boolean) && await areaShown() === 1,
+    `${GROUPS.map(([l], i) => `${l}:${onOverview[i] ? 'yes' : 'no'}`).join(' ')}`
+    + ` · area:${await areaShown()}`)
+
+  // Statistics has a table and no map. Nothing here can answer any of them.
+  await openWorkbook('Statistics')
+  await page.waitForTimeout(1400)
+  const onStats = await shown()
+  step('a screen with no map offers none of them, rather than latching a dead button',
+    onStats.every((v) => v === false) && await areaShown() === 0,
+    `${GROUPS.map(([l], i) => `${l}:${onStats[i] ? 'yes' : 'no'}`).join(' ')}`
+    + ` · area:${await areaShown()}`)
+
+  // Mobility is the interesting row: it paints the toolbar's colour scale and draws
+  // footprints, and deliberately does NOT take area bins - tiles replace the route the
+  // monitored-set fan is anchored to. A blanket "map tabs get everything" would pass the
+  // two steps above and fail this one.
+  await openWorkbook('Mobility')
+  await page.waitForTimeout(1600)
+  const onMobility = await shown()
+  step('and a map screen offers exactly its own row, not every group a map could take',
+    onMobility[0] === true && onMobility[3] === true
+    && onMobility[1] === false && onMobility[2] === false
+    && await areaShown() === 0,
+    `${GROUPS.map(([l], i) => `${l}:${onMobility[i] ? 'yes' : 'no'}`).join(' ')}`
+    + ` · area:${await areaShown()}`)
+
+  await page.goto(BASE, { waitUntil: 'domcontentloaded' })
+  await page.waitForTimeout(2500)
+}
+
 // ─── wrap-up ─────────────────────────────────────────────────────────────────
 const appErrors = errors.filter((e) =>
   !/tile\.openstreetmap\.org|ERR_CONNECTION|Failed to load resource|ERR_TIMED_OUT/.test(e))

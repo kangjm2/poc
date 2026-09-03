@@ -11,7 +11,7 @@ committing UI-affecting work; a change is not "verified" until all pass.
 | Checker | Catches | Cost |
 |---|---|---|
 | `node scripts/verify-ui.mjs` | Individual behaviour regressions (125 checks) | ~60s |
-| `node scripts/verify-scenarios.mjs` | Broken user journeys — steps carry state (257 steps, 25 scenarios) | ~90s |
+| `node scripts/verify-scenarios.mjs` | Broken user journeys — steps carry state (264 steps, 26 scenarios) | ~90s |
 | `node tools/uxtest/api-surface.mjs` | Logic-without-view: endpoints or client methods nothing renders | ~5s |
 
 ## Service lifecycle (required before browser checks)
@@ -68,8 +68,10 @@ These came out of defect-injection experiments measured on this repo
 - Never wait on `networkidle` — blocked tile requests keep the network busy and
   a 202ms render once measured as "32s". Use `domcontentloaded` + explicit waits.
 - Chromium launch needs the agent proxy with localhost bypass:
-  `proxy: { server: HTTPS_PROXY, bypass: 'localhost,127.0.0.1,::1' }`, executable
-  `/opt/pw-browsers/chromium-1194/chrome-linux/chrome`.
+  `proxy: { server: HTTPS_PROXY, bypass: 'localhost,127.0.0.1,::1' }`. Take the
+  executable from `chromiumPath()` in `tools/uxtest/browser.mjs` rather than writing
+  a path — the three checkers share that one resolver, and it returns `undefined`
+  where Playwright's own default works. Set `CHROMIUM_PATH` to override.
 - Playwright probe scripts must live under the repo root (or `scripts/`) so the
   `playwright` package resolves — `/tmp` scratch locations cannot import it.
 - Defect-injection experiments snapshot file bytes in memory and restore them —
