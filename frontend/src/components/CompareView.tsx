@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { api } from '../api/client'
-import type { Comparison, ComparisonRow, SessionSummary } from '../api/types'
+import type { Comparison, SessionSummary } from '../api/types'
+import { CdfOverlay } from './CdfOverlay'
 
 const COMPARE_KPIS = [
   'RSRP', 'RSRQ', 'SINR', 'MAC_DL_THROUGHPUT', 'MAC_UL_THROUGHPUT',
@@ -125,75 +126,18 @@ export function CompareView({ sessions }: { sessions: SessionSummary[] }) {
       )}
 
       {data && selectedRow && (
-        <CdfOverlay row={selectedRow}
-                    labelA={data.sessionA.buildLabel ?? 'A'}
-                    labelB={data.sessionB.buildLabel ?? 'B'} />
+        /* The colours are named here rather than taken from SERIES_PALETTE because this
+           screen has exactly two sides and A/B is not an ordered list: blue and purple
+           are what the table, the deltas and this chart have always meant by A and B. */
+        <CdfOverlay title={selectedRow.displayName}
+                    meta="click a row above to change KPI"
+                    series={[
+                      { label: `A (${data.sessionA.buildLabel ?? 'A'})`,
+                        cdf: selectedRow.a.cdf, p50: selectedRow.a.p50, color: '#30578d' },
+                      { label: `B (${data.sessionB.buildLabel ?? 'B'})`,
+                        cdf: selectedRow.b.cdf, p50: selectedRow.b.p50, color: 'var(--trace)' },
+                    ]} />
       )}
-    </div>
-  )
-}
-
-/**
- * Both sessions' CDFs on one axis. Two curves make a shift visible along the whole
- * distribution - a build that helps the median but hurts the tail shows as curves
- * that cross, which no pair of means can express.
- */
-function CdfOverlay({ row, labelA, labelB }: {
-  row: ComparisonRow; labelA: string; labelB: string
-}) {
-  const W = 1000
-  const H = 220
-  const PAD = { top: 10, right: 12, bottom: 22, left: 52 }
-  const values = [...row.a.cdf, ...row.b.cdf].map((p) => p.value)
-  const lo = Math.min(...values)
-  const hi = Math.max(...values)
-  const span = hi - lo || 1
-  const x = (v: number) => PAD.left + ((v - lo) / span) * (W - PAD.left - PAD.right)
-  const y = (pct: number) => PAD.top + (1 - pct / 100) * (H - PAD.top - PAD.bottom)
-  const path = (cdf: typeof row.a.cdf) => cdf
-    .map((p, i) => `${i === 0 ? 'M' : 'L'} ${x(p.value).toFixed(1)} ${y(p.percentile).toFixed(1)}`)
-    .join(' ')
-
-  return (
-    <div className="panel">
-      <header>
-        <span className="title">CDF overlay &mdash; {row.displayName}</span>
-        <span className="meta">
-          <span style={{ color: '#30578d' }}>— A ({labelA})</span>
-          {'  '}
-          <span style={{ color: 'var(--trace)' }}>— B ({labelB})</span>
-          {'  ·  click a row above to change KPI'}
-        </span>
-      </header>
-      <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none"
-           style={{ width: '100%', height: H, display: 'block' }}>
-        <rect x={PAD.left} y={PAD.top} width={W - PAD.left - PAD.right}
-              height={H - PAD.top - PAD.bottom} fill="#fff" stroke="#d4d4dc" />
-        {[0, 25, 50, 75, 100].map((p) => (
-          <g key={p}>
-            <line x1={PAD.left} x2={W - PAD.right} y1={y(p)} y2={y(p)}
-                  stroke="#eeeef2" strokeDasharray="2 2" />
-            <text x={PAD.left - 5} y={y(p) + 3} textAnchor="end" fontSize="9" fill="#666">{p}%</text>
-          </g>
-        ))}
-        {row.a.p50 != null && (
-          <line x1={x(row.a.p50)} x2={x(row.a.p50)} y1={PAD.top} y2={H - PAD.bottom}
-                stroke="#30578d" strokeDasharray="3 3" opacity={0.5} />
-        )}
-        {row.b.p50 != null && (
-          <line x1={x(row.b.p50)} x2={x(row.b.p50)} y1={PAD.top} y2={H - PAD.bottom}
-                stroke="var(--trace)" strokeDasharray="3 3" opacity={0.5} />
-        )}
-        <path d={path(row.a.cdf)} fill="none" stroke="#30578d" strokeWidth={1.5}
-              vectorEffect="non-scaling-stroke" />
-        <path d={path(row.b.cdf)} fill="none" stroke="var(--trace)" strokeWidth={1.5}
-              vectorEffect="non-scaling-stroke" />
-        {[lo, lo + span / 2, hi].map((v, i) => (
-          <text key={i} x={x(v)} y={H - 6} textAnchor="middle" fontSize="9" fill="#666">
-            {v.toFixed(1)}
-          </text>
-        ))}
-      </svg>
     </div>
   )
 }

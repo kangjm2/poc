@@ -130,6 +130,41 @@ public final class Dtos {
     public record Comparison(SessionSummary sessionA, SessionSummary sessionB,
                              List<ComparisonRow> rows) {}
 
+    // ------------------------------------------------------------------ cohorts
+
+    /**
+     * One value of a dimension, and the pooled statistics of every drive that carries it.
+     *
+     * `stats` is the SAME Statistics record every single-drive panel uses, whole - cdf,
+     * basis label and all - so a cohort's number cannot drift in format or in basis from
+     * the panel beside it.
+     *
+     * `members` is not decoration. A cohort's mean is a number no single drive measured,
+     * and three drives at -6, -6 and -14 dB have a mean the reader would otherwise take
+     * for a typical value. The members are what make that visible by construction.
+     */
+    public record Cohort(String value, int driveCount, long sampleCount,
+                         Instant firstStartedAt, Instant lastStartedAt,
+                         Statistics stats, Double deltaVsPrevious, String verdict,
+                         List<CohortMember> members) {}
+
+    public record CohortMember(long sessionId, String name, Instant startedAt,
+                               String heldValue, Double mean, long sampleCount,
+                               double sharePct) {}
+
+    /** A measurement the hold-constant guard removed, and why - by name, never a count. */
+    public record CohortExcluded(long sessionId, String name, String why) {}
+
+    /** A dimension the picker may offer, with enough to say why it cannot be useful. */
+    public record CohortDimension(String key, String label, int valueCount, boolean hasUnset) {}
+
+    public record CohortSet(String kpi, String displayName, String unit, int decimals,
+                            String groupBy, String holdConstant,
+                            String weightedBy, String domain, String basisLabel,
+                            List<Cohort> cohorts, List<CohortExcluded> excluded,
+                            List<CohortDimension> dimensions,
+                            String scopeNote, String verdictNote) {}
+
     public record ThresholdDto(int ordinal, Double lowerBound, Double upperBound,
                                String color, String label, String severity) {}
 

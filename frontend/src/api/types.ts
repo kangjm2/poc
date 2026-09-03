@@ -91,6 +91,43 @@ export interface Comparison {
   sessionA: SessionSummary; sessionB: SessionSummary; rows: ComparisonRow[]
 }
 
+/** One drive inside a cohort. `mean` is that drive alone, never the cohort's. */
+export interface CohortMember {
+  sessionId: number; name: string; startedAt: string
+  heldValue: string | null; mean: number | null; sampleCount: number; sharePct: number
+}
+
+export interface Cohort {
+  value: string; driveCount: number; sampleCount: number
+  firstStartedAt: string; lastStartedAt: string
+  stats: Statistics
+  /** Against the cohort before it in this list, which is the older one. */
+  deltaVsPrevious: number | null
+  /** BETTER | WORSE | SAME | NO VERDICT | NO DATA - see Verdict.java. */
+  verdict: string
+  members: CohortMember[]
+}
+
+/** A drive the hold-constant guard removed, named rather than counted. */
+export interface CohortExcluded { sessionId: number; name: string; why: string }
+
+export interface CohortDimension {
+  key: string; label: string; valueCount: number; hasUnset: boolean
+}
+
+export interface CohortSet {
+  kpi: string; displayName: string; unit: string; decimals: number
+  groupBy: string; holdConstant: string | null
+  weightedBy: string; domain: string; basisLabel: string
+  cohorts: Cohort[]
+  excluded: CohortExcluded[]
+  dimensions: CohortDimension[]
+  /** What set of drives this answered over, in words. */
+  scopeNote: string
+  /** Why a verdict is or is not offered. */
+  verdictNote: string
+}
+
 export interface NetworkEvent {
   id: number; ts: string; eventType: string; severity: string
   detail: string | null; latitude: number | null; longitude: number | null

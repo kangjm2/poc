@@ -21,9 +21,9 @@
 |---|---|---|
 | Database engine | ✅ | PostgreSQL. **Nemo Analyze도 PostgreSQL을 씁니다**(flyer `5992-2047` 확인) |
 | Organizing measurement data into subsets | ◐ | 세션 단위만. 명명된 collection/폴더는 여전히 없습니다. **2026-09-01(⑧)**: 대신 **찾기**가 생겼습니다 — 이름·기간·장비·사업자·기술로 좁히고, 선택지는 데이터에서 옵니다(아무것도 맞지 않는 값을 고를 수 없음). 폴더는 "정리"이고 찾기는 "도달"인데, 세션이 늘 때 먼저 막히는 쪽은 도달이었습니다 |
-| Joining separate measurement files into a joined measurement | ⛔ | 여러 세션 병합 미지원 |
+| Joining separate measurement files into a joined measurement | ⛔ | 여러 세션을 **하나의 측정으로 합치지는** 않습니다. **2026-09-03(P4-3)**: 이 기능의 분석적 목적 — 여러 파일에 걸친 통계 — 은 합치지 않고 답합니다. 코호트는 주행 속성으로 묶어 **풀링된** 통계 하나를 내며(가중 CDF까지), 각 주행은 자기 자신으로 남습니다. 합쳐 놓으면 되돌릴 수 없고 "어느 주행이 이것을 끌어내렸나"를 물을 수 없습니다 |
 | Database filtering (technology, time, operator) | ◐ | **2026-09-01(⑧) 해소 — 측정 선택 범위 안에서.** 이 세 축 그대로(+장비·이름) 서버가 필터링합니다 — 새 엔드포인트가 아니라 **기존 `GET /api/sessions`에 붙은 선택 파라미터**라, 아무것도 넘기지 않으면 예전 그대로의 목록입니다. 선택지는 `GET /api/sessions/facets`가 데이터에서 만들어 줍니다. 남은 차이는 **적용 범위**입니다 — 레퍼런스는 DB 전체에 걸리는 필터이고 우리 것은 측정 파일을 고르는 자리에만 걸립니다. 전역 필터는 §3.1과 백로그의 미해결 항목으로 남습니다 |
-| Advanced data filtering and global filters | ⛔ | **미구현** — 경쟁사 공통 기능이기도 함 |
+| Advanced data filtering and global filters | ✅ | **2026-09-02(P3-2) 해소.** `kpi:NAME:OP:VALUE`와 `cell:PCI`를 창 맨 위 한 줄에 걸면 **13개 분석 엔드포인트**가 그 조건으로 답합니다. 지키지 못하는 8개는 `GET /api/global-filter/coverage`에 **이유와 함께** 실려 화면(Reach 13 of 21)에서 읽힙니다 — 조용히 무시하는 화면이 없다는 것이 이 항목의 요구입니다. **2026-09-03(P4-3)**: 조건의 키가 `(session_id, seq)` 쌍이라 여러 주행에도 걸립니다 |
 | Custom SQL queries | ◐ | REST API만. 사용자 SQL 창구 없음 |
 | ODBC connectivity to third-party databases | ⛔ | |
 | Log file manager (원본 로그 검색·회수) | ⛔ | 원본 파일 보관 안 함 |
@@ -52,19 +52,19 @@
 | Cell footprint / service area 시각화 | ◐ | **해소(측정 기반).** 셀이 실제로 서빙한 표본의 **볼록 껍질**을 지도에 표시. 설계상 커버리지가 아니며 볼록이라 오목한 실제 범위는 과대 포함합니다 — 화면에 그렇게 적혀 있습니다. **2026-09-01 정정**: 막고 있는 것은 "빔폭·반경 미기록"이 아니라 **안테나 높이·틸트 미기록**입니다 — 레퍼런스는 그 둘로 커버리지를 추정하고(p459 *"use estimation from antenna height and tilt"*), 기본 빔 길이·각도를 함께 설정합니다. `cell_ref`에 nullable 두 열이면 열립니다 |
 | Playback of individual log files | ✅ | **2026-09-01(③) 해소.** 재생·정지·한 걸음·역방향·속도(1·4·16·64/s)·Home/End·진행 바 스크럽. 속도는 배속이 아니라 **초당 표본 수**이고 걸음은 항상 한 표본이라, 어느 속도에서도 표본을 건너뛰지 않습니다(전에는 주행 길이와 무관하게 240스텝이라 긴 주행에서 표본을 건너뛰었습니다) |
 | 3D Visualizer (빔 3D) | ⬛ | 범위 외 |
-| Dashboards | ⛔ | |
+| Dashboards | ⛔ | **근거 재평가 (2026-09-03).** 505쪽 사용자 가이드에 이 말이 **없습니다**. 출처는 `5992-2047` 플라이어이고 거기서도 *"Dashboards (optional)"* — 옵션 항목이며 Qlik Sense를 가리킵니다. 우리가 오래 "세션 간 집계 모델에 막혀 있다"고 적어 온 것은 틀렸습니다: 그 모델은 P4-3에서 생겼고 이것은 열리지 않았습니다 |
 
 ### 1.3 분석
 
 | 매뉴얼 기재 기능 | 상태 | 비고 |
 |---|---|---|
 | Parameter statistics and benchmarking | ✅ | min/max/avg/p05/p50/p95 + CDF |
-| 세션 간 벤치마킹 비교 | ✅ | 판정(BETTER/WORSE) 포함 |
+| 세션 간 벤치마킹 비교 | ✅ | 판정(BETTER/WORSE) 포함. **2026-09-03(P4-3)**: 주행 **둘**만이 아니라 빌드·시나리오·단말 같은 속성으로 묶은 **그룹**끼리도 비교합니다(Compare 탭의 Cohorts). 그룹 통계는 풀링이라 가중 CDF까지 실물이고, 두 번째 차원을 고정하지 않으면 델타만 내고 **판정을 보류합니다** |
 | **KPI Workbench (SQL 없이 커스텀 KPI 생성)** | ✅ | **해소.** 노드 그래프 편집기 구현(`Import` 화면). 노드: KPI 소스 · **이웃 셀 소스**(N번째 강한 셀) · Combine · Expression · Filter · State machine · Output. 각 노드는 CTE 하나로 컴파일되며 결과는 `sample_kpi`에 실체화되어 다른 KPI와 완전히 동일하게 취급됩니다. **정렬 노드는 의도적으로 없음** — 우리 행 집합은 `seq` 키라 항상 정렬돼 있고, 아무 일도 하지 않는 컨트롤은 없느니만 못합니다. 매뉴얼이 **이 판단은 근거까지 확인**해 줬습니다 — 정렬이 필요한 이유가 Union이 순서를 파괴하기 때문이고(p359) 우리는 Union이 없습니다. 반면 **State machine과 Combine은 레퍼런스와 의미가 다릅니다**: [briefs ③](briefs/03-kpi-workbench.html) |
 | Automated problem survey with drill-down | ✅ | **원인 분류 7종 → 파이 → 사례 그리드 → 시각 이동** 3단 연쇄 구현. 원인은 전부 기존 검출기에서 유도하며 근거 없는 원인은 만들지 않음 |
 | Automated detection of common GSM/UMTS/LTE/5G NR problems | ◐ | weak coverage / interference / overshoot 3종 |
 | 5G Advanced Analytics (pilot pollution, overspilling, weak coverage, bad quality, NSA neighbor list) | ◐ | weak coverage + bad quality + **pilot pollution**(경합 셀 구간 검출) + **overspilling 단서**(검출률 대비 서빙률이 낮은 셀). NSA neighbor list는 아직. **단 '설정된 이웃 목록이 없어 원천 불가'라는 기존 설명은 틀렸습니다** — 레퍼런스도 측정값만으로 판정합니다(UC27, p404). [`ui-gap-vs-reference.md` §6(a)](ui-gap-vs-reference.md) 참조 |
-| Trend analysis | ⛔ | 세션 간 추세 없음 |
+| Trend analysis | ⛔ | **근거 재평가 (2026-09-03).** 위 Dashboards와 같습니다 — 사용자 가이드가 아니라 플라이어의 말입니다. **2026-09-03(P4-3)**: 세션 간 **집계**는 생겼으나(코호트) 그것은 추세가 아닙니다. 코호트의 세로축은 **순서일 뿐 시간이 아니고**, 차트가 그렇게 적습니다 — 시간축 위의 추세선을 그리려면 그 사실이 바뀌어야 하는데, 지금 데이터로는 빌드당 주행이 한둘이라 선이 아니라 점입니다 |
 | Advanced cell reference info (drift from antenna main lobe) | ⛔ | |
 | Root cause analysis | ◐ | 원인 라벨과 검출 근거(`Detected by`)를 함께 제시. L3 메시지까지 자동 연결하는 단계는 아직 |
 
@@ -76,7 +76,8 @@
 | Statistical reporting with Microsoft Excel | ◐ 인쇄 가능한 HTML 리포트(`/report.html`) — 세션 메타 · 원인 요약 · KPI 통계 · 구간 분포. Excel 바이너리는 아님 |
 | Report templates (Excel / PowerPoint / Word) | ⛔ 템플릿 디자이너 없음. 고정 레이아웃 리포트 1종만 |
 | Benchmarking reports (CDR E2E voice/data) | ⛔ |
-| NPS (Network Performance Score) 리포트 | ⛔ |
+| NPS (Network Performance Score) 리포트 | ⛔ **근거 재평가 (2026-09-03).** 505쪽 사용자 가이드가 아니라 `5992-2047` 플라이어의 말입니다. 그리고 NPS를 막고 있는 것은 집계 모델이 아니라 **점수 정의**입니다 — 어떤 KPI에 어떤 가중을 줄지가 사업자마다 다르고, 우리가 고르면 그것은 우리 의견이지 측정이 아닙니다 |
+| Benchmarking reports (CDR E2E voice/data) — 재평가 | ⛔ 위와 같습니다. 덧붙여 **CDR을 수집하지 않습니다** — 집계 모델이 아니라 데이터의 문제입니다 |
 
 ### 1.5 지원 범위
 

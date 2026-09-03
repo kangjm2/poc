@@ -586,3 +586,39 @@ kbd {
   border-bottom: 1px solid var(--border);
 }
 .filter-results { max-height: 340px; overflow: auto; }
+
+/* ---------------------------------------------------------------- cohorts */
+/* Two scopes for one question, so the switch reads as a pair rather than as two
+   unrelated buttons - the reader is choosing how wide to ask, not where to go. */
+.scope-switch { display: flex; gap: 0; margin: 0 0 8px; }
+.scope-switch button {
+  font-size: 12px; padding: 3px 12px; border: 1px solid var(--border);
+  background: var(--panel-header); cursor: pointer;
+}
+.scope-switch button:first-child { border-radius: 3px 0 0 3px; }
+.scope-switch button:last-child { border-radius: 0 3px 3px 0; border-left: none; }
+.scope-switch button.active { background: var(--accent, #30578d); color: #fff; }
+
+.cohort-controls, .cohort-scope {
+  display: flex; flex-wrap: wrap; gap: 12px; align-items: center;
+  padding: 8px 10px;
+}
+.cohort-scope {
+  border-top: 1px solid var(--border);
+  font-size: 11px; color: var(--text-dim);
+}
+.cohort-scope input, .cohort-scope select { font-size: 11px; }
+.cohort-scope input[type="date"] { width: 118px; }
+
+.cohort-strip { background: #fff; }
+.cohort-strip .cohort-row:hover rect { fill: #f4f6fa; }
+.cohort-strip .cohort-figure { font-variant-numeric: tabular-nums; }
+.cohort-strip .cohort-delta { font-variant-numeric: tabular-nums; }
+.cohort-footer {
+  padding: 4px 10px 8px;
+  font-size: 11px; color: var(--text-dim);
+}
+.cohort-table td, .cohort-members td, .cohort-excluded td { white-space: nowrap; }
+.cohort-excluded td:last-child { white-space: normal; color: var(--text-dim); }
+/* A state, not a failure: styled like a note rather than like an error. */
+.empty-note { padding: 10px; font-size: 12px; color: var(--text-dim); }

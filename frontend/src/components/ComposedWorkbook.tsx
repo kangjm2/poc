@@ -1,6 +1,7 @@
 import { Fragment, useEffect, useState } from 'react'
 import { api } from '../api/client'
 import { RouteMap } from './RouteMap'
+import { SERIES_PALETTE } from '../view/paint'
 import type {
   CellRef, KpiDefinition, Series, SeriesPoint, SessionSummary, TrackPoint, Workbook,
   WorkbookLimits, WorkbookPane,
@@ -22,9 +23,14 @@ import type {
  * not a re-add.
  */
 
-/** Trace colours, distinct at a glance and stable per layer position. */
-const TRACE = ['#30578d', '#c0392b', '#1f7a1f', '#8a2be2', '#d4783c', '#0080c0',
-               '#7a6000', '#b5179e']
+/**
+ * Trace colours, distinct at a glance and stable per layer position.
+ *
+ * Read from `view/paint` rather than declared here since the cohort strip and the CDF
+ * overlay paint ordered series too: three copies of one list would have drifted the first
+ * time somebody added a ninth colour to whichever one they were looking at.
+ */
+const TRACE = SERIES_PALETTE
 
 function LayersDock({ pane, defs, sessions, maxLayers, onChange, onRemove }: {
   pane: WorkbookPane

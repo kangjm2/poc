@@ -2246,6 +2246,221 @@ scenario('S22 · What was happening just before this')
   await page.waitForTimeout(2500)
 }
 
+// ─── S23 · Is this build better, over every drive we have ────────────────────
+//
+// The question `/compare` cannot answer. Two drives differ for a hundred reasons that are
+// not the build, so "is 1.5.0 better" has to pool every drive of each build - and the
+// moment it pools, three claims start being made that the screen has to earn:
+//
+//   the pooled number really is pooled (not an average of averages, and not a percentile
+//   borrowed from one member); the groups really are comparable (the confound guard, and
+//   what it removed, by name); and the picture really says what the vertical axis is.
+//
+// Every step below is written so that removing the thing it names changes the number it
+// reads - see docs/ui-testing/README.md §1.5. Each was run against a deliberately broken
+// build before being kept.
+scenario('S23 · Is this build better, over every drive we have')
+{
+  const cohorts = (qs) => apiGet(`/api/cohorts?kpi=RSRP&${qs}`)
+  const raw = (qs) => page.request.get(`${API}/api/cohorts?kpi=RSRP&${qs}`)
+  const round2 = (v) => Math.round(v * 100) / 100
+
+  // ── C1. The pooled mean is POOLED, witnessed against the members it was pooled from.
+  //
+  // Two numbers computed here in the checker from the member list the same response
+  // carries: the count-weighted combination, which the server must equal, and the naive
+  // average of the members' means, which it must NOT - that second one is what a pooling
+  // bug produces, and it is a plausible number sitting a few tenths away.
+  const open = await cohorts('holdConstant=NONE')
+  const big = open.cohorts.find((c) => c.driveCount > 1)
+  step('a cohort spanning several drives exists to test against',
+    Boolean(big) && big.members.length === big.driveCount,
+    big ? `${big.value}: ${big.driveCount} drives` : 'no multi-drive cohort')
+  const n = big.members.reduce((a, m) => a + m.sampleCount, 0)
+  const weighted = round2(
+    big.members.reduce((a, m) => a + m.mean * m.sampleCount, 0) / n)
+  const naive = round2(
+    big.members.reduce((a, m) => a + m.mean, 0) / big.members.length)
+  step('the group mean is the samples pooled, not the members’ means averaged',
+    Math.abs(big.stats.mean - weighted) < 0.02 && Math.abs(big.stats.mean - naive) > 0.05,
+    `pooled ${big.stats.mean}, weighted ${weighted}, average-of-averages ${naive}`)
+
+  // ── C2. The percentiles are pooled too, which is the reason this is one query.
+  //
+  // A group's median is not recoverable from its members' medians under any weighting, so
+  // a client-side implementation would have had to leave it out or invent it. Checked two
+  // ways that a borrowed or interpolated percentile fails: the pooled extremes must be the
+  // members' extremes exactly, and the pooled median must sit inside the members' spread
+  // without being the weighted average of them.
+  const stats = await Promise.all(big.members.map((m) =>
+    apiGet(`/api/sessions/${m.sessionId}/statistics?kpi=RSRP`)))
+  const p50s = stats.map((x) => x.p50)
+  const avgP50 = round2(
+    stats.reduce((a, x, i) => a + x.p50 * big.members[i].sampleCount, 0) / n)
+  step('the group’s min and max are its members’ min and max',
+    big.stats.min === Math.min(...stats.map((x) => x.min))
+    && big.stats.max === Math.max(...stats.map((x) => x.max)),
+    `pooled ${big.stats.min}..${big.stats.max}, members`
+    + ` ${Math.min(...stats.map((x) => x.min))}..${Math.max(...stats.map((x) => x.max))}`)
+  step('and its median is a real pooled median, not one of theirs and not their average',
+    big.stats.p50 > Math.min(...p50s) && big.stats.p50 < Math.max(...p50s)
+    && Math.abs(big.stats.p50 - avgP50) > 0.05,
+    `pooled p50 ${big.stats.p50}, members [${p50s}], weighted average of those ${avgP50}`)
+
+  // ── C3. The sample count is the sum, exactly. The cheapest way to be wrong here is a
+  //    join that multiplies rows, and it shows up nowhere else on the screen.
+  step('the group counts every member’s samples once',
+    big.stats.count === n && n === big.sampleCount,
+    `${big.stats.count} pooled, ${n} summed over ${big.members.length} drives`)
+
+  // ── C4. The confound guard, and the drives it removed - by name, with the value that
+  //    got them removed, checked against what those drives actually are.
+  const held = await cohorts('')
+  const byId = Object.fromEntries(sessions.map((x) => [x.id, x]))
+  step('holding a dimension constant is the default when the axis is the build',
+    held.holdConstant === 'SCENARIO' && held.excluded.length > 0,
+    `holding ${held.holdConstant}, ${held.excluded.length} measurements left out`)
+  const keptScenarios = new Set(held.cohorts.flatMap((c) => c.members.map((m) => m.heldValue)))
+  const wronglyNamed = held.excluded.filter((e) => keptScenarios.has(byId[e.sessionId]?.scenario))
+  step('each excluded measurement is named, and really does have the odd value',
+    wronglyNamed.length === 0
+    && held.excluded.every((e) => e.why.includes(byId[e.sessionId].scenario)),
+    held.excluded.map((e) => `${byId[e.sessionId].name} (${byId[e.sessionId].scenario})`).join('; '))
+
+  // ── C5. Turning the guard OFF has to change the answer, or it was never on.
+  //
+  // The one-number reduction: the same cohort, the same KPI, two guards, and the drive
+  // count and the mean both move. A guard that silently did nothing would pass every
+  // step above and fail this one.
+  const guarded = held.cohorts.find((c) => c.value === big.value)
+  step('with the guard on, the group is a different set of drives and a different number',
+    guarded.driveCount < big.driveCount
+    && Math.abs(guarded.stats.mean - big.stats.mean) > 0.05,
+    `${big.value}: ${big.driveCount} drives ${big.stats.mean} unguarded,`
+    + ` ${guarded.driveCount} drives ${guarded.stats.mean} guarded`)
+
+  // ── C6/C7. What the screen refuses to say. Three silences, all different:
+  //    no dimension held -> a delta and NO verdict; the first group -> nothing to compare
+  //    against, so no verdict either, and NOT "NO DATA", which is a claim about the data.
+  step('without a held dimension there is a delta but no verdict, and the screen says why',
+    open.cohorts.every((c) => c.verdict === null)
+    && open.cohorts.some((c) => c.deltaVsPrevious !== null)
+    && /may differ by more than/.test(open.verdictNote ?? ''),
+    (open.verdictNote ?? 'no note').slice(0, 90))
+  step('with one held, a verdict appears - but never on the first group',
+    held.cohorts[0].verdict === null && held.cohorts[0].deltaVsPrevious === null
+    && held.cohorts.slice(1).every((c) => c.verdict !== null)
+    && held.cohorts.slice(1).some((c) => ['BETTER', 'WORSE'].includes(c.verdict)),
+    held.cohorts.map((c) => `${c.value}=${c.verdict ?? 'none'}`).join(', '))
+
+  // ── C8. The three refusals, each of which has to name what to do instead. A 500, or a
+  //    200 with an empty chart, would each be a screen that looks like an answer.
+  const refusals = await Promise.all([
+    raw('groupBy=SCENARIO&holdConstant=SCENARIO'),
+    raw('weightedBy=DISTANCE'),
+    raw('groupBy=notes'),
+  ])
+  const bodies = await Promise.all(refusals.map((r) => r.text()))
+  step('asking an unanswerable question is a refusal that says what to ask instead',
+    refusals.every((r) => r.status() === 400)
+    && /both the axis and held constant/.test(bodies[0])
+    && /logger gap|unmeasured stretch/.test(bodies[1])
+    && /Build label|BUILD_LABEL/.test(bodies[2]),
+    refusals.map((r) => r.status()).join('/'))
+
+  // ── C9. The global filter reaches this screen too, which the server's own coverage list
+  //    now claims. Checked as a number that moves, on the group AND on every member -
+  //    a filter threaded into the pooled query but not the per-drive one would leave a
+  //    screen whose members no longer add up to their group.
+  const coverage = await apiGet('/api/global-filter/coverage')
+  step('the coverage list claims the cohort screen honours the filter',
+    coverage.some((c) => c.path === '/api/cohorts' && c.honoured),
+    coverage.find((c) => c.path === '/api/cohorts')?.note ?? 'not listed')
+  const narrowed = await cohorts(
+    `holdConstant=NONE&filter=${encodeURIComponent('kpi:RSRP:>=:-100')}`)
+  const nBig = narrowed.cohorts.find((c) => c.value === big.value)
+  const nSum = nBig.members.reduce((a, m) => a + m.sampleCount, 0)
+  step('the condition narrows the group and each of its drives, and they still add up',
+    nBig.stats.count < big.stats.count && nSum === nBig.stats.count
+    && nBig.members.every((m, i) => m.sampleCount < big.members[i].sampleCount)
+    && nBig.stats.mean > big.stats.mean,
+    `${big.stats.count} -> ${nBig.stats.count} samples, mean ${big.stats.mean} ->`
+    + ` ${nBig.stats.mean}`)
+
+  // ── C10. The strip. Every member is drawn, not only the group's mark - a chart of three
+  //    means says "this group is -81.8" and hides that one drive of the three is at -86.6.
+  await page.goto(BASE, { waitUntil: 'domcontentloaded' })
+  await page.waitForTimeout(2500)
+  await openMode('Compare')
+  await page.locator('.scope-switch button', { hasText: 'Cohorts' }).click()
+  await page.waitForTimeout(2200)
+  await page.locator('select[aria-label="Hold constant"]').selectOption('NONE')
+  await page.waitForTimeout(2200)
+
+  const rows = await page.locator('.cohort-strip .cohort-row').count()
+  const marks = await page.locator('.cohort-strip .cohort-member').count()
+  const drivesOnScreen = open.cohorts.reduce((a, c) => a + c.members.length, 0)
+  step('every group is a row and every drive in it is a mark of its own',
+    rows === open.cohorts.length && marks === drivesOnScreen,
+    `${rows} rows for ${open.cohorts.length} groups, ${marks} marks for ${drivesOnScreen} drives`)
+
+  // The axis is published in the DOM rather than left to be measured off pixels: a check
+  // that reads a pixel is checking the renderer. Every mark has to be inside it, or the
+  // strip is drawing values it has clipped.
+  // textContent, not innerText: <desc> is an SVGElement, and innerText is not defined on
+  // one - the same trap S21 hit reading node cards.
+  const desc = await page.locator('.cohort-strip desc')
+    .evaluate((d) => d.textContent ?? '')
+  const axis = Object.fromEntries(desc.split(' ').map((kv) => kv.split('=')))
+  const drawn = await page.locator('.cohort-strip [data-mean]')
+    .evaluateAll((es) => es.map((e) => Number(e.getAttribute('data-mean'))))
+  step('the strip states its own axis, and every mark it drew is inside it',
+    drawn.length > 0 && drawn.every((v) => v >= Number(axis.axisLo) && v <= Number(axis.axisHi)),
+    `${drawn.length} marks within [${axis.axisLo}, ${axis.axisHi}]`)
+
+  // ── C11. The vertical is a sequence, not a timeline - so the connector between two rows
+  //    is never a diagonal. A diagonal claims the KPI moved smoothly between two builds
+  //    that were tested a month apart, which nothing measured.
+  const elbows = await page.locator('.cohort-strip path.cohort-elbow')
+    .evaluateAll((ps) => ps.map((p) => p.getAttribute('d')))
+  const diagonal = elbows.filter((d) => {
+    const pts = d.split(/[ML]\s*/).filter(Boolean).map((q) => q.trim().split(/\s+/).map(Number))
+    return pts.some((p, i) => i > 0 && p[0] !== pts[i - 1][0] && p[1] !== pts[i - 1][1])
+  })
+  step('the connector between two groups is axis-aligned, never a diagonal',
+    elbows.length === open.cohorts.length - 1 && diagonal.length === 0,
+    `${elbows.length} connectors, ${diagonal.length} with a diagonal segment`)
+  const footer = await page.locator('.cohort-footer').innerText()
+  step('and the chart says the spacing is not time',
+    /spacing is not time/.test(footer), footer.replace(/\n/g, ' ').slice(0, 80))
+
+  // ── C12. The link. Which axis and which guard are the question itself, so a cohort view
+  //    handed to somebody else has to arrive as the same question - and `by === hold`,
+  //    which is not a question at all, has to arrive repaired and SAID.
+  await page.locator('select[aria-label="Group by"]').selectOption('SCENARIO')
+  await page.waitForTimeout(1800)
+  const url = new URL(page.url())
+  step('the axis and the guard are in the address bar',
+    url.searchParams.get('by') === 'SCENARIO' && url.searchParams.get('hold') === 'NONE',
+    url.search || 'nothing in the query')
+  await page.goto(`${BASE}${url.search}`, { waitUntil: 'domcontentloaded' })
+  await page.waitForTimeout(3000)
+  step('and the link reopens on the same question rather than on the default one',
+    await page.locator('select[aria-label="Group by"]').inputValue() === 'SCENARIO',
+    await page.locator('select[aria-label="Group by"]').inputValue())
+
+  await page.goto(`${BASE}?mode=compare&by=SCENARIO&hold=SCENARIO`,
+    { waitUntil: 'domcontentloaded' })
+  await page.waitForTimeout(3000)
+  const notice = await page.locator('.view-notice').innerText().catch(() => '')
+  step('a link that holds its own axis constant is repaired, and the repair is stated',
+    /both the axis and the thing held constant/.test(notice),
+    notice.replace(/\n/g, ' / ').slice(0, 120))
+
+  await page.goto(BASE, { waitUntil: 'domcontentloaded' })
+  await page.waitForTimeout(2500)
+}
+
 // ─── wrap-up ─────────────────────────────────────────────────────────────────
 const appErrors = errors.filter((e) =>
   !/tile\.openstreetmap\.org|ERR_CONNECTION|Failed to load resource|ERR_TIMED_OUT/.test(e))

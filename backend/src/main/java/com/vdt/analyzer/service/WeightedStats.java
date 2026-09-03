@@ -58,6 +58,47 @@ public class WeightedStats {
      */
     public Statistics compute(long sessionId, KpiDefinition def, AggregationBasis basis,
                               Integer fromSeq, Integer toSeq, GlobalFilter.Scope scope) {
+        return computeAcross(SessionSet.one(sessionId), def, basis, fromSeq, toSeq, scope);
+    }
+
+    /**
+     * The same statistics over a SET of measurements, pooled.
+     *
+     * The set-taking form is the real implementation and the scalar one delegates to it,
+     * so there is still exactly one mean in this application. That matters more than it
+     * sounds: count, minimum, maximum and a weighted sum can be pooled from per-session
+     * partials, but PERCENTILES CANNOT - a group's median is not recoverable from its
+     * members' medians under any weighting. A design that combined per-session Statistics
+     * objects in Java would therefore ship a correct mean beside an absent or invented
+     * CDF, which is the shape of wrong answer this codebase spends most of its effort
+     * refusing. Pooling in one query gives a real weighted CDF for free, because the
+     * `ordered` CTE below already walks the rows in value order accumulating weight and
+     * does not care how many drives they came from.
+     *
+     * Two refusals rather than silent answers:
+     *
+     * A SEQ RANGE names one drive's samples - `view/state.ts` says why at length - so one
+     * window applied to every member would be a different stretch of road per drive.
+     *
+     * DISTANCE WEIGHTING is refused across drives while `RouteContinuity.travelledMetres`
+     * counts a GAP as road driven. That is right for "how long is this road" and wrong as
+     * a WEIGHT: the sample after a logger dropout carries the whole unmeasured stretch. On
+     * one drive that is a quirk; across two cohorts it is a bias in exactly the headline
+     * number. Refused here and left alone for single drives, because splitting that rule
+     * moves the map, the distance bins, the statistics panel and the report at once.
+     */
+    public Statistics computeAcross(SessionSet set, KpiDefinition def, AggregationBasis basis,
+                                    Integer fromSeq, Integer toSeq, GlobalFilter.Scope scope) {
+        if (!set.isSingle() && (fromSeq != null || toSeq != null)) {
+            throw new IllegalArgumentException(
+                    "A sample range names one drive's samples; it cannot narrow a group");
+        }
+        if (!set.isSingle() && AggregationBasis.BY_DISTANCE.equals(basis.weightedBy())) {
+            throw new IllegalArgumentException(
+                    "Distance weighting is not available across measurements: the sample"
+                  + " after a logger gap carries the whole unmeasured stretch's weight,"
+                  + " which biases one drive against another. Use sample weighting.");
+        }
         boolean byDistance = AggregationBasis.BY_DISTANCE.equals(basis.weightedBy());
         boolean linear = AggregationBasis.LINEAR.equals(basis.domain());
 
@@ -68,22 +109,28 @@ public class WeightedStats {
         // the step into the first sample of a range is the distance from the sample before
         // it, which is outside the range. Filtering first would drop that step and shorten
         // the road by one sample's worth at every range boundary.
+        // The join carries session_id as well as seq, and that one predicate is the whole
+        // correctness of the set-taking form: seq restarts at 0 in every drive, so
+        // `ON g.seq = k.seq` alone would match drive A's sample 500 to drive B's, multiply
+        // every count by the size of the set and drift the mean - a 200 with a wrong
+        // number, forever. (session_id, seq) is UNIQUE on `sample`, so the fixed join fans
+        // out exactly one to one.
         String weighted = """
                 WITH geo AS (
-                    SELECT seq,
+                    SELECT session_id, seq,
                            %1$s AS step_m,
                            %2$s AS dt_s
-                    FROM sample WHERE session_id = ?
+                    FROM sample WHERE %6$s
                 ),
                 stepped AS (
-                    SELECT seq, step_m, %3$s AS brk FROM geo
+                    SELECT session_id, seq, step_m, %3$s AS brk FROM geo
                 ),
                 w AS (
                     SELECT k.value AS v,
                            %4$s AS wt
                     FROM sample_kpi k
-                    JOIN stepped g ON g.seq = k.seq
-                    WHERE k.session_id = ? AND k.kpi_name = ?
+                    JOIN stepped g ON g.session_id = k.session_id AND g.seq = k.seq
+                    WHERE %7$s AND k.kpi_name = ?
                       AND k.seq >= ? AND k.seq <= ?
                       AND k.value IS NOT NULL%5$s
                 )
@@ -94,11 +141,17 @@ public class WeightedStats {
                 byDistance
                         ? RouteContinuity.travelledMetres("g.step_m", "g.brk")
                         : "1.0",
-                GlobalFilter.and(scope));
+                GlobalFilter.and(scope),
+                set.inClause(null),
+                set.inClause("k"));
 
         // Both queries below append to the same CTE, so both bind the same prefix.
-        List<Object> pre = new java.util.ArrayList<>(List.of(
-                sessionId, sessionId, def.getName(), lo, hi));
+        List<Object> pre = new java.util.ArrayList<>();
+        pre.addAll(set.params());
+        pre.addAll(set.params());
+        pre.add(def.getName());
+        pre.add(lo);
+        pre.add(hi);
         pre.addAll(GlobalFilter.params(scope));
         Object[] args = pre.toArray();
 

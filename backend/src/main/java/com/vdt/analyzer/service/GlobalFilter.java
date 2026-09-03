@@ -51,10 +51,29 @@ public final class GlobalFilter {
      * knows that and this cannot guess it.
      */
     public static Scope scope(String spec, long sessionId, String alias) {
+        return scope(spec, SessionSet.one(sessionId), alias);
+    }
+
+    /**
+     * The same, over a set of drives.
+     *
+     * The emitted clause becomes a ROW-VALUE membership - `(alias.session_id, alias.seq)
+     * IN (SELECT session_id, seq FROM ...)` - rather than `alias.seq IN (SELECT seq ...)`.
+     * With one drive the two are the same, because the caller's own `session_id = ?`
+     * already pinned it. With several they are not: seq restarts at 0 in every drive, so
+     * the bare form would let drive A's sample 500 be selected by drive B's condition.
+     * That is the same defect the pooled statistics join has, in the same shape, and it is
+     * fixed the same way - the key is the pair, everywhere.
+     *
+     * Both key columns are NOT NULL, so the row constructor's three-valued semantics never
+     * arise, and every honoured caller aliases a real table that carries session_id.
+     */
+    public static Scope scope(String spec, SessionSet set, String alias) {
         if (spec == null || spec.isBlank()) return null;
 
         List<String> clauses = new ArrayList<>();
         List<Object> params = new ArrayList<>();
+        String key = "(" + alias + ".session_id, " + alias + ".seq) IN ";
 
         for (String raw : spec.split(";")) {
             String part = raw.trim();
@@ -62,9 +81,9 @@ public final class GlobalFilter {
 
             if (part.startsWith("cell:")) {
                 int pci = Integer.parseInt(part.substring(5).trim());
-                clauses.add(alias + ".seq IN (SELECT seq FROM sample"
-                        + " WHERE session_id = ? AND serving_pci = ?)");
-                params.add(sessionId);
+                clauses.add(key + "(SELECT session_id, seq FROM sample"
+                        + " WHERE " + set.inClause(null) + " AND serving_pci = ?)");
+                params.addAll(set.params());
                 params.add(pci);
                 continue;
             }
@@ -84,9 +103,10 @@ public final class GlobalFilter {
                 // The operator comes from the allow-list above and is emitted as a constant,
                 // never interpolated from the request - the same rule the expression parser
                 // and the workbench compiler follow.
-                clauses.add(alias + ".seq IN (SELECT seq FROM sample_kpi"
-                        + " WHERE session_id = ? AND kpi_name = ? AND value " + op + " ?)");
-                params.add(sessionId);
+                clauses.add(key + "(SELECT session_id, seq FROM sample_kpi"
+                        + " WHERE " + set.inClause(null) + " AND kpi_name = ?"
+                        + " AND value " + op + " ?)");
+                params.addAll(set.params());
                 params.add(name);
                 params.add(value);
                 continue;
@@ -154,6 +174,9 @@ public final class GlobalFilter {
                         "Route as GeoJSON"),
                 new Coverage("/api/sessions/{id}/report.html", true,
                         "Printable report; also prints the filter"),
+                new Coverage("/api/cohorts", true,
+                        "Cohort comparison across drives; the condition is applied to"
+                        + " every member of every cohort"),
 
                 new Coverage("/api/sessions/{id}/events", false,
                         "Events are keyed by time, not by sample, so a sample filter"
@@ -171,9 +194,11 @@ public final class GlobalFilter {
                 new Coverage("/api/sessions/{id}/neighbour-breakdown", false,
                         "Neighbour rows rather than samples"),
                 new Coverage("/api/sessions/{id}/spatial-diff", false,
-                        "Spans more than one drive; the filter names one drive's samples"),
+                        "Not built: this endpoint takes no filter parameter. `scope()`"
+                        + " can now name a set of drives, so this is an unwired"
+                        + " endpoint and not an impossibility"),
                 new Coverage("/api/compare", false,
-                        "Two drives, for the same reason"));
+                        "Not built, for the same reason: no filter parameter yet"));
     }
 
     /**
@@ -182,8 +207,9 @@ public final class GlobalFilter {
      * It is evaluated against EACH drive's own samples: `RSRQ >= -12` on two drives
      * selects two different sample sets, and `cell:101` names whatever PCI 101 was in
      * each. That is the answer a user means by "the condition, everywhere", and it is
-     * also the only one this filter can give - `scope()` resolves a spec against one
-     * session id, because the sub-select it emits is a session's seq set.
+     * also the only one this filter can give - the sub-select `scope()` emits is a
+     * `(session_id, seq)` key set, so widening it to several drives adds each drive's
+     * own selection rather than pooling them into one.
      *
      * Stated because a composed workbook can pin a map layer to another measurement,
      * which makes one filter produce two sample sets on one screen with nothing to say

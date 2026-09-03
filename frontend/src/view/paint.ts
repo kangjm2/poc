@@ -38,6 +38,30 @@ export const IDENTITY_PALETTE = [
   '#f0e442', // yellow
 ]
 
+/**
+ * The palette for a SERIES - one line, one bar row, one curve on an overlay.
+ *
+ * A third palette beside the identity one and the event one, and deliberately so. Identity
+ * colours answer "which cell, in this drive"; event colours answer "which failure". A
+ * series colour answers neither: it is a handle for a thing the user themselves put on
+ * the screen in a particular order, and its whole job is to stay attached to position 1
+ * whatever position 1 happens to be today. Reusing IDENTITY_PALETTE would have made a
+ * workbook layer and a serving cell the same blue on one screen.
+ *
+ * Position-stable, so a chart legend, a CDF overlay and a cohort strip showing the same
+ * ordered list agree without passing colours between them. Eight entries because that is
+ * where a legend stops being readable, which is also `CohortService.MAX_COHORTS`.
+ */
+export const SERIES_PALETTE = [
+  '#30578d', '#c0392b', '#1f7a1f', '#8a2be2',
+  '#d4783c', '#0080c0', '#7a6000', '#b5179e',
+]
+
+/** The colour of series `i`, wrapping rather than failing - a chart is not a cell map. */
+export function seriesColor(i: number): string {
+  return SERIES_PALETTE[i % SERIES_PALETTE.length]
+}
+
 export const UNIDENTIFIED = '#9a9aa2'
 /** What a sample is painted when another bin is isolated. */
 export const MUTED = '#c9c9d0'

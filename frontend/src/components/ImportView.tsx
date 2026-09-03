@@ -25,6 +25,11 @@ export function ImportView({ onImported, eventTypes = [], sessionId = null }: {
   const [operator, setOperator] = useState('')
   const [technology, setTechnology] = useState('5G NR SA')
   const [description, setDescription] = useState('')
+  // The three cohort axes. Separate fields rather than words in the description,
+  // because a free-text note cannot be grouped by.
+  const [buildLabel, setBuildLabel] = useState('')
+  const [scenario, setScenario] = useState('')
+  const [locationName, setLocationName] = useState('')
   const [busy, setBusy] = useState(false)
   const [result, setResult] = useState<ImportResult | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -76,6 +81,9 @@ export function ImportView({ onImported, eventTypes = [], sessionId = null }: {
       if (operator) form.append('operator', operator)
       if (technology) form.append('technology', technology)
       if (description) form.append('description', description)
+      if (buildLabel) form.append('buildLabel', buildLabel)
+      if (scenario) form.append('scenario', scenario)
+      if (locationName) form.append('locationName', locationName)
       if (createUnknown) form.append('createUnknownColumns', 'true')
       try {
         setResult(await api.importCsv(form))
@@ -125,6 +133,24 @@ export function ImportView({ onImported, eventTypes = [], sessionId = null }: {
             <label style={{ flex: 1 }}>Technology<br />
               <input value={technology} aria-label="Technology" onChange={(e) => setTechnology(e.target.value)}
                      style={{ width: '100%' }} /></label>
+          </div>
+          {/* What the cohort screen groups by. Filled once for a folder's worth of
+              files, which is exactly the case where every drive shares a build and a
+              route - and the case where typing it into each description would produce
+              twelve spellings of one value. */}
+          <div style={{ display: 'flex', gap: 8 }}>
+            <label style={{ flex: 1 }}>Build<br />
+              <input value={buildLabel} aria-label="Build" onChange={(e) => setBuildLabel(e.target.value)}
+                     placeholder="e.g. 1.5.0" style={{ width: '100%' }} /></label>
+            <label style={{ flex: 1 }}>Scenario<br />
+              <input value={scenario} aria-label="Scenario" onChange={(e) => setScenario(e.target.value)}
+                     placeholder="e.g. Highway DL" style={{ width: '100%' }} /></label>
+            <label style={{ flex: 1 }}>Location<br />
+              <input value={locationName} aria-label="Location" onChange={(e) => setLocationName(e.target.value)}
+                     placeholder="e.g. Gangnam" style={{ width: '100%' }} /></label>
+          </div>
+          <div style={{ color: '#666', fontSize: 12, marginTop: -4 }}>
+            Left blank these group as <b>(unset)</b> on the Cohorts tab.
           </div>
           {/* Two weeks on, the file name is all that distinguishes four drives in the
               picker. This is the only place a session can say what it was. */}

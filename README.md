@@ -87,9 +87,9 @@ sudo -u postgres createdb -O vdt vdt
 ```bash
 # 세 검사기가 서로 다른 실패 계열을 담당합니다
 node scripts/verify-ui.mjs             # 개별 동작 125개
-node scripts/verify-scenarios.mjs      # 사용자 여정 206단계 / 22 시나리오
+node scripts/verify-scenarios.mjs      # 사용자 여정 226단계 / 23 시나리오
 node tools/uxtest/api-surface.mjs      # 로직은 있는데 뷰가 없는 격차
-(cd backend && mvn test)               # SQL을 조립하는 코드·색 램프·기하 — 75개
+(cd backend && mvn test)               # SQL을 조립하는 코드·색 램프·기하 — 89개
 node tools/uxtest/measure-signals.mjs  # (선택) 검증 신호별 비용 측정
 ```
 

@@ -8,7 +8,7 @@ import type {
   GraphNodePreview,
   GraphRequest, GraphValidation, StoredGraph,
   DistanceBin, CellFootprint, Workbook, WorkbookLimits, WorkbookRequest, EventType,
-  FilterCoverage,
+  FilterCoverage, CohortSet,
 } from './types'
 
 const BASE = '/api'
@@ -44,6 +44,7 @@ const FILTERED_PATHS = [
   '/track', '/series', '/distribution', '/statistics', '/cell-breakdown',
   '/degradations', '/area-statistics', '/bins', '/cell-footprints',
   '/export.csv', '/export.geojson', '/report.html',
+  '/cohorts',
 ]
 
 /** Appends `filter=` to the paths that honour it, and to nothing else. */
@@ -201,6 +202,24 @@ export const api = {
             weightedBy = 'SAMPLE', domain = 'AS_RECORDED') =>
     get<Comparison>(`/compare?a=${a}&b=${b}&kpis=${kpis.join(',')}`
       + `&weightedBy=${weightedBy}&domain=${domain}`),
+
+  /**
+   * One KPI over every drive that matches, cut into cohorts.
+   *
+   * The narrowing arguments are the measurement list's, deliberately: the set the reader
+   * chose on Sessions is the set this answers over, so the two screens cannot disagree.
+   * The global filter is appended by `filtered()` like every other honoured path.
+   */
+  cohorts: (p: {
+    kpi: string; groupBy?: string; holdConstant?: string
+    weightedBy?: string; domain?: string
+    q?: string; device?: string; operator?: string; technology?: string
+    from?: string; to?: string
+  }) => {
+    const qs = new URLSearchParams()
+    for (const [k, v] of Object.entries(p)) if (v) qs.set(k, String(v))
+    return get<CohortSet>(`/cohorts?${qs.toString()}`)
+  },
 
   bins: (id: number, kpi: string, sizeMeters: number, statistic = 'AVERAGE') =>
     get<AreaBin[]>(`/sessions/${id}/bins?kpi=${kpi}&sizeMeters=${sizeMeters}`

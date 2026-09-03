@@ -47,7 +47,11 @@ class GlobalFilterTest {
     @Test
     void aKpiThresholdBindsItsValueAndEmitsItsOperator() {
         GlobalFilter.Scope s = scope("kpi:RSRP:>=:-100");
-        assertTrue(s.sql().contains("k.seq IN (SELECT seq FROM sample_kpi"), s.sql());
+        // The key is the PAIR, not the seq: seq restarts at 0 in every drive, so a bare
+        // seq membership would let one drive's condition select another drive's sample the
+        // moment the scope covers more than one.
+        assertTrue(s.sql().contains(
+                "(k.session_id, k.seq) IN (SELECT session_id, seq FROM sample_kpi"), s.sql());
         assertTrue(s.sql().contains("value >= ?"), s.sql());
         assertEquals(List.of(7L, "RSRP", -100.0), s.params());
     }
@@ -55,6 +59,8 @@ class GlobalFilterTest {
     @Test
     void aCellClauseSelectsOnTheServingCell() {
         GlobalFilter.Scope s = scope("cell:101");
+        assertTrue(s.sql().contains(
+                "(k.session_id, k.seq) IN (SELECT session_id, seq FROM sample"), s.sql());
         assertTrue(s.sql().contains("serving_pci = ?"), s.sql());
         assertEquals(List.of(7L, 101), s.params());
     }
@@ -64,7 +70,10 @@ class GlobalFilterTest {
         GlobalFilter.Scope s = scope("cell:101;kpi:RSRQ:<:-12");
         // Counted on the JOINER, not on " AND ": each sub-select contains one of its own,
         // and a test that counted those would pass on clauses that were never joined.
-        assertEquals(1, countOf(s.sql(), ") AND "), s.sql());
+        // On the joiner, and only the joiner: each sub-select now carries an `IN` of its
+        // own, so " AND " and even ") AND " appear inside them too. The clauses are joined
+        // by the one that closes a sub-select AND opens a row constructor.
+        assertEquals(1, countOf(s.sql(), ") AND (k."), s.sql());
         assertEquals(List.of(7L, 101, 7L, "RSRQ", -12.0), s.params());
     }
 
@@ -73,8 +82,10 @@ class GlobalFilterTest {
         // Every analytic names its sample table differently, and a filter that assumed one
         // alias would compose into some queries and not others - which is precisely the
         // "honoured by nine screens, ignored by four" failure.
-        assertTrue(GlobalFilter.scope("cell:1", 1L, "s").sql().startsWith("(s.seq IN"));
-        assertTrue(GlobalFilter.scope("cell:1", 1L, "k").sql().startsWith("(k.seq IN"));
+        assertTrue(GlobalFilter.scope("cell:1", 1L, "s").sql()
+                .startsWith("((s.session_id, s.seq) IN"));
+        assertTrue(GlobalFilter.scope("cell:1", 1L, "k").sql()
+                .startsWith("((k.session_id, k.seq) IN"));
     }
 
     @Test
@@ -107,6 +118,17 @@ class GlobalFilterTest {
         // Including when it is one clause among valid ones: dropping the unreadable half
         // would apply a narrower filter than the one written and say nothing.
         assertThrows(IllegalArgumentException.class, () -> scope("cell:101;nonsense"));
+    }
+
+    @Test
+    void aScopeOverSeveralDrivesNamesEveryOneOfThem() {
+        // One condition over two drives means each drive filtered against its own samples
+        // - GlobalFilter.PER_MEASUREMENT says so on screen - and the emitted clause has to
+        // make that true rather than merely not contradict it.
+        GlobalFilter.Scope s = GlobalFilter.scope("kpi:RSRP:>=:-100",
+                SessionSet.of(List.of(3L, 7L)), "k");
+        assertTrue(s.sql().contains("session_id IN (?, ?)"), s.sql());
+        assertEquals(List.of(3L, 7L, "RSRP", -100.0), s.params());
     }
 
     @Test

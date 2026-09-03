@@ -57,8 +57,18 @@ public class AnalysisService {
      * Every parameter is optional and null means "do not narrow by this" - not "match
      * nothing", which is the reading that turns an empty filter box into an empty screen.
      */
-    public List<SessionSummary> listSessions(String query, String device, String operator,
-                                             String technology, String from, String to) {
+    /** A narrowing of the measurement list: the SQL, and what it binds. */
+    public record Narrowing(String sql, List<Object> args) {}
+
+    /**
+     * The one home for "which measurements a narrowing selects".
+     *
+     * Extracted so the cohort scope and the measurement list cannot disagree about what
+     * `q=depot&from=2026-08-25` means. Two copies of this would be two answers to "which
+     * drives am I looking at" on two screens that a user reads as one.
+     */
+    public Narrowing sessionWhere(String query, String device, String operator,
+                                  String technology, String from, String to) {
         StringBuilder sql = new StringBuilder(
                 "SELECT id FROM measurement_session WHERE 1=1");
         List<Object> args = new ArrayList<>();
@@ -78,9 +88,14 @@ public class AnalysisService {
         // "that day" and an exclusive end would silently return nothing.
         if (notBlank(from)) { sql.append(" AND started_at >= ?::date"); args.add(from.trim()); }
         if (notBlank(to)) { sql.append(" AND started_at < (?::date + 1)"); args.add(to.trim()); }
-        sql.append(" ORDER BY started_at DESC");
+        return new Narrowing(sql.toString(), args);
+    }
 
-        List<Long> ids = jdbc.queryForList(sql.toString(), Long.class, args.toArray());
+    public List<SessionSummary> listSessions(String query, String device, String operator,
+                                             String technology, String from, String to) {
+        Narrowing n = sessionWhere(query, device, operator, technology, from, to);
+        List<Long> ids = jdbc.queryForList(
+                n.sql() + " ORDER BY started_at DESC", Long.class, n.args().toArray());
         return ids.stream()
                 .map(id -> sessions.findById(id).orElse(null))
                 .filter(java.util.Objects::nonNull)
@@ -723,24 +738,11 @@ public class AnalysisService {
             Double delta = (sa.mean() == null || sb.mean() == null)
                     ? null : round(sb.mean() - sa.mean());
             rows.add(new ComparisonRow(name, def.getDisplayName(), def.getUnit(),
-                    sa, sb, delta, verdict(delta, def.getDirection())));
+                    sa, sb, delta, Verdict.of(delta, def.getDirection())));
         }
         return new Comparison(a, b, rows);
     }
 
-    private static String verdict(Double delta, String direction) {
-        // A missing side is not sameness: reporting SAME for a KPI one session never
-        // measured would hide exactly the difference the comparison exists to find.
-        if (delta == null) return "NO DATA";
-        if (Math.abs(delta) < 0.01) return "SAME";
-        // A counter or a load indicator changed; calling that better or worse would
-        // be inventing a preference the measurement does not have.
-        if (!"HIGHER_IS_BETTER".equals(direction) && !"LOWER_IS_BETTER".equals(direction)) {
-            return "NO VERDICT";
-        }
-        boolean improved = "HIGHER_IS_BETTER".equals(direction) ? delta > 0 : delta < 0;
-        return improved ? "BETTER" : "WORSE";
-    }
 
     // ------------------------------------------------------------------ utils
 
