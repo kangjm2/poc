@@ -482,10 +482,13 @@ to browse from footprint to another and immediately see both the footprint and t
 </ol>
 <div class="figs"><figure><a href="../assets/screenshots/manual10.2_uc01-analyses-submenu_p67.png" target="_blank"><img loading="lazy" src="../assets/screenshots/manual10.2_uc01-analyses-submenu_p67.png" alt="uc01-analyses-submenu_p67"></a><figcaption>UC1 — 측정 우클릭 <code>Analyses</code> 하위 메뉴 (Ec/N0 · RSCP · RSRP · RSRQ × mobile/scanner) — Analyses 하위 메뉴 <span class="src">p67</span></figcaption></figure><figure><a href="../assets/screenshots/manual10.2_uc01-footprint-filter-dialog_p67.png" target="_blank"><img loading="lazy" src="../assets/screenshots/manual10.2_uc01-footprint-filter-dialog_p67.png" alt="uc01-footprint-filter-dialog_p67"></a><figcaption>UC1 — 푸트프린트 필터 대화상자 (Scrambling code / Channel number 필터, 범례·전체 경로 옵션, 값 예 <code>3,10-30,42,100-</code>) <span class="src">p67</span></figcaption></figure><figure><a href="../assets/screenshots/manual10.2_uc01-footprint-pages_p68.jpeg" target="_blank"><img loading="lazy" src="../assets/screenshots/manual10.2_uc01-footprint-pages_p68.jpeg" alt="uc01-footprint-pages_p68"></a><figcaption>UC1 — 셀마다 페이지, 하단 탭으로 이동 — 하단 탭이 있는 푸트프린트 페이지 <span class="src">p68</span></figcaption></figure><figure><a href="../assets/screenshots/manual10.2_cell-footprint_p66.png" target="_blank"><img loading="lazy" src="../assets/screenshots/manual10.2_cell-footprint_p66.png" alt="cell-footprint_p66"></a><figcaption>셀 푸트프린트 — <strong>3위 안에 든 적 있는</strong> 셀마다 별도 페이지 — 한 셀의 페이지 — 경로가 RSCP 구간색, Layers에 <code>RSCP 1. best</code>, 범례에
 구간별 건수·비율 <span class="src">p66</span></figcaption></figure></div>
-<p><strong>우리.</strong> <code>GeoAnalysisService.cellFootprints</code> — 셀이 <strong>서빙했던</strong> 표본의 볼록 껍질. 다른 점:
-(1) 포함 기준이 "서빙"이지 "3강 안"이 아님 — <code>sample_neighbour</code>에 순위별 이웃이 있어 바꿀 수
-있습니다. (2) 셀당 한 페이지가 아니라 <strong>전부 겹쳐</strong> 그립니다 — 중첩이 곧 파일럿 오염이라 우리
-방식이 낫다고 봤지만, 셀이 수십 개면 못 읽습니다. 레퍼런스의 SC/채널 필터가 그 문제의 답입니다.</p>
+<p><strong>우리.</strong> <code>GeoAnalysisService.cellFootprints</code> — 셀이 <strong>서빙했던</strong> 표본의 볼록 껍질.
+<strong>2026-09-03 갱신: 아래 두 가지가 다 닫혔습니다.</strong> (1) 포함 기준을 고릅니다 — <code>basis=SERVING</code>
+(서빙한 곳) 또는 <code>basis=TOP3</code>(<strong>3강 안에 들었던 곳</strong>, UC1 원문). 후자가 오버슛이 보이는
+모양입니다. (2) 여전히 <strong>전부 겹쳐</strong> 그리지만 — 중첩이 곧 파일럿 오염이므로 — <strong>좁히는 입력이
+생겼고 문법은 레퍼런스 대화상자의 것 그대로</strong>입니다: <code>3,10-30,42,100-</code>. 열린 범위 <code>100-</code>이
+"어디서 끝나는지 모르는 채로 한 층을 가리키는" 방법입니다. 지도 머리글이 무엇을 뺐는지
+적고(<code>2 of 5 cells</code>), 못 알아들을 항은 말없이 따르지 않고 거절합니다.</p>
 <h4 id="uc2--p6869--업링크-음성-품질-서버-데이터-보기--">UC2 · p68–69 · 업링크 음성 품질 서버 데이터 보기 — ●</h4>
 <p><strong>입력.</strong> <strong>서버 측 UL 음성 품질 로그</strong> + 같은 세션의 단말(DL) 로그 · 두 로그의 <strong>시각 동기</strong>(GPS/NTP, ±3 s) · 서버 전화선 번호 설정</p>
 <p><strong>우리 데이터.</strong> ✕ 서버 로그도 음성 품질 측정도 없음</p>
@@ -920,9 +923,12 @@ segment, not necessarily the mean value."</em></p>
 <li>결과가 지도에 새 레이어로.</li>
 </ol>
 <div class="figs"><figure><a href="../assets/screenshots/manual10.2_uc16-tools-delta-plotting_p158.png" target="_blank"><img loading="lazy" src="../assets/screenshots/manual10.2_uc16-tools-delta-plotting_p158.png" alt="uc16-tools-delta-plotting_p158"></a><figcaption>UC16 — Tools 패널의 Delta plotting 아이콘 <span class="src">p158</span></figcaption></figure><figure><a href="../assets/screenshots/manual10.2_uc16-area-selection_p158.jpeg" target="_blank"><img loading="lazy" src="../assets/screenshots/manual10.2_uc16-area-selection_p158.jpeg" alt="uc16-area-selection_p158"></a><figcaption>UC16 — 점선 영역 선택 <span class="src">p158</span></figcaption></figure><figure><a href="../assets/screenshots/manual10.2_uc16-delta-plotting-dialog_p159.png" target="_blank"><img loading="lazy" src="../assets/screenshots/manual10.2_uc16-delta-plotting-dialog_p159.png" alt="uc16-delta-plotting-dialog_p159"></a><figcaption>UC16 — <code>Delta Plotting</code> 대화상자 (Group 1 / Group 2, Configure) <span class="src">p159</span></figcaption></figure><figure><a href="../assets/screenshots/manual10.2_uc16-delta-plotting-configured_p161.png" target="_blank"><img loading="lazy" src="../assets/screenshots/manual10.2_uc16-delta-plotting-configured_p161.png" alt="uc16-delta-plotting-configured_p161"></a><figcaption>UC16 — 두 그룹 설정 완료 (Ec/N0 best active set / Ec/N0 detected set) <span class="src">p161</span></figcaption></figure><figure><a href="../assets/screenshots/manual10.2_uc16-delta-plotting-result_p162.png" target="_blank"><img loading="lazy" src="../assets/screenshots/manual10.2_uc16-delta-plotting-result_p162.png" alt="uc16-delta-plotting-result_p162"></a><figcaption>p162 상단의 <strong>UC16 Delta plotting 결과</strong>(경로를 따라 비닝된 타일, RSCP · Throughput <code>[Distance]</code> 범례). 빔 범위 그림은 같은 페이지의 다른 그림 → <code>uc17-cell-beam-range-sector_p162</code> — 경로를 따라 비닝된 타일 — RSCP · Throughput <code>[Distance]</code> 범례 <span class="src">p162</span></figcaption></figure></div>
-<p><strong>우리.</strong> ✅ — 공간 차분 지도(<code>SpatialDiffService</code>): 두 주행을 하나의 격자에 담아 타일별 차이.
-한쪽만 지나간 타일은 0이 아니라 null. 레퍼런스와 같은 "빈별 평균 → 빼기"이고, 가중 기준 선택도
-같습니다. 없는 것: 그룹당 여러 측정의 그룹 평균(우리는 주행 1 대 1).</p>
+<p><strong>우리.</strong> ✅ — 공간 차분 지도(<code>SpatialDiffService</code>): 두 측정 <strong>그룹</strong>을 하나의 격자에 담아
+타일별 차이. 한쪽만 지나간 타일은 0이 아니라 null. 레퍼런스와 같은 "빈별 평균 → 빼기"이고,
+가중 기준 선택도 같습니다. <strong>2026-09-03 갱신: "그룹당 여러 측정"이 닫혔고, 양쪽 다입니다</strong> —
+p159의 <code>Measurement Group 1</code>과 <code>Measurement Group 2</code>가 둘 다 목록인 것 그대로. 그룹 평균은
+<strong>풀링</strong>입니다(주행별 평균의 평균이 아니라 그룹이 그 타일에 낸 표본 전체의 평균) — 둘은
+주행마다 표본 수가 다를 때 갈립니다. 남은 것은 델타 플로팅의 Time/Distance/Sample 기준 선택뿐입니다.</p>
 <h4 id="uc17--p162168--기지국-셀-빔-범위를-지도에-표시--">UC17 · p162–168 · 기지국 셀 빔 범위를 지도에 표시 — ●</h4>
 <p><strong>입력.</strong> <strong>BTS 파일</strong>에 셀 빔 범위, 또는 <code>Options › BTS</code>의 기본 빔 길이·각도, 또는 <strong>안테나 높이·틸트</strong> · 지도</p>
 <p><strong>우리 데이터.</strong> ◐ <code>cell_ref</code>에 방위각은 있음. 빔 범위·높이·틸트 열 없음</p>
@@ -1110,7 +1116,11 @@ Contents</code>에서 셀을 좌클릭해도 표시됩니다.</p>
 UC20에는 이 조건이 없다"고 적었는데, 원문 필터 대화상자에 <code>RSCP active set best above threshold
 (dBm) = -95</code>가 있습니다. <strong>레퍼런스에도 같은 종류의 하한이 있고, 값만 다릅니다</strong>(−95 대 −110).
 "우리가 더 낫다"는 판정은 철회하고 "같은 설계, 다른 기본값"으로 고칩니다. 레퍼런스의 창(−6 dB)·
-개수(3)·Ec/N0 상한(−12)도 우리 상수와 대조할 기준값입니다.</p>
+개수(3)·Ec/N0 상한(−12)도 우리 상수와 대조할 기준값입니다.
+<strong>2026-09-03 갱신:</strong> Ec/N0 상한에 해당하는 조건은 <code>RSRQ &lt; −15</code>로 들어갔고(P0-1),
+<strong>창과 개수는 이제 상수가 아니라 화면이 묻는 값</strong>입니다 — 대화상자의 두 줄이 우리 패널의 두
+입력이 됐습니다. 설명이 자기가 보낸 값을 되읽으므로 화면에 적힌 조건은 항상 그 표를 만든
+조건입니다. 실측: 3 dB/5 셀에서 0구간, 기본값에서 1구간, 12 dB/2 셀에서 55구간.</p>
 <h4 id="uc21--p174176--cell-locator-분석--">UC21 · p174–176 · Cell locator 분석 — ●</h4>
 <p><strong>입력.</strong> <strong>WCDMA/LTE/5G 옥외 측정</strong>(스캐너 또는 단말)의 <strong>셀별 신호 강도</strong>와 좌표 · carrier number · 전력 하한 · (검증용) 실제 사이트 위치</p>
 <p><strong>우리 데이터.</strong> ◐ 입력(<code>sample_neighbour</code> + 좌표)은 있음. 정답 <code>cell_ref</code>도 있음. 알고리즘 미구현</p>
