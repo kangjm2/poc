@@ -22,6 +22,7 @@ export function GlobalFilterBar({ spec, onApply }: {
 }) {
   const [draft, setDraft] = useState(spec ?? '')
   const [text, setText] = useState<string | null>(null)
+  const [scope, setScope] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [coverage, setCoverage] = useState<FilterCoverage[]>([])
   const [showReach, setShowReach] = useState(false)
@@ -39,7 +40,7 @@ export function GlobalFilterBar({ spec, onApply }: {
     if (!spec) { setText(null); return }
     let live = true
     api.describeFilter(spec)
-      .then((d) => { if (live) setText(d.text) })
+      .then((d) => { if (live) { setText(d.text); setScope(d.scope ?? null) } })
       .catch(() => { if (live) setText(spec) })
     return () => { live = false }
   }, [spec])
@@ -93,6 +94,9 @@ export function GlobalFilterBar({ spec, onApply }: {
 
       {showReach && (
         <div className="gf-reach-list">
+          {/* Above the two columns, because it is true of every row in both of them.
+              A condition evaluated per drive is the right answer and an invisible one. */}
+          {scope && <div className="gf-scope">{scope}</div>}
           <div className="col">
             <h4>Honours the filter ({honoured.length})</h4>
             <ul>

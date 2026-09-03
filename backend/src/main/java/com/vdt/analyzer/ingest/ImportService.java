@@ -41,17 +41,14 @@ public class ImportService {
     private final JdbcTemplate jdbc;
     private final KpiCatalog catalog;
     private final ImportJobLog jobLog;
-    private final com.vdt.analyzer.service.DerivedKpiService derived;
-    private final com.vdt.analyzer.service.KpiGraphService graphs;
+    private final com.vdt.analyzer.service.ComputedKpis computed;
 
     public ImportService(JdbcTemplate jdbc, KpiCatalog catalog, ImportJobLog jobLog,
-                         com.vdt.analyzer.service.DerivedKpiService derived,
-                         com.vdt.analyzer.service.KpiGraphService graphs) {
+                         com.vdt.analyzer.service.ComputedKpis computed) {
         this.jdbc = jdbc;
         this.catalog = catalog;
         this.jobLog = jobLog;
-        this.derived = derived;
-        this.graphs = graphs;
+        this.computed = computed;
     }
 
     public record ImportResult(
@@ -62,6 +59,7 @@ public class ImportService {
     @Transactional
     public ImportResult importCsv(MultipartFile file, String sessionName, String device,
                                   String operator, String technology, String description,
+                                  String buildLabel, String scenario, String locationName,
                                   char delimiter, boolean createUnknownColumns) {
         long jobId = jobLog.start(file.getOriginalFilename());
         try (BufferedReader reader = new BufferedReader(
@@ -89,7 +87,8 @@ public class ImportService {
             }
 
             long sessionId = createSession(sessionName, device, operator, technology,
-                    description, file.getOriginalFilename());
+                    description, buildLabel, scenario, locationName,
+                    file.getOriginalFilename());
 
             Counters counters = loadRows(reader, delimiter, layout, sessionId,
                     new HashSet<>(created), jobId);
@@ -101,8 +100,10 @@ public class ImportService {
             // session has none of their values until they are computed. Doing it here means
             // an import never leaves a computed KPI silently absent from the session it
             // should cover.
-            derived.recomputeAll();
-            graphs.recomputeAll();
+            // One call, in dependency order. Two calls in a fixed order left a KPI
+            // that reads another computed KPI materialised from its input's previous
+            // values - stale rather than absent, which nothing on any screen contradicts.
+            computed.recomputeAll();
 
             log.info("Imported {} samples / {} KPI values from {}",
                     counters.samples, counters.kpis, file.getOriginalFilename());
@@ -401,12 +402,23 @@ public class ImportService {
     // ----------------------------------------------------------------- records
 
     /**
-     * @param description free text the importer types, e.g. which build or which run this
-     *                    was. Ends up in the note bar, and is the only place a session can
-     *                    say anything the filename does not.
+     * @param description  free text the importer types, e.g. which build or which run this
+     *                     was. Ends up in the note bar, and is the only place a session can
+     *                     say anything the filename does not.
+     * @param buildLabel   which software build this drive measured, e.g. `1.5.0`
+     * @param scenario     what the drive was doing, e.g. `Highway DL`
+     * @param locationName where it was driven, e.g. `Gangnam`
+     *
+     * The last three are the axes the cohort screen cuts by, and they are separate fields
+     * rather than words inside `description` for one reason: a free-text note cannot be
+     * grouped. "1.5.0 highway rerun" and "rerun on 1.5.0, highway" are the same drive to a
+     * reader and two cohorts to a GROUP BY. Blank stays NULL rather than becoming the empty
+     * string, so an unfilled field is one bucket - shown as `(unset)` - and not two.
      */
     private long createSession(String name, String device, String operator,
-                               String technology, String description, String filename) {
+                               String technology, String description,
+                               String buildLabel, String scenario, String locationName,
+                               String filename) {
         String sessionName = name == null || name.isBlank() ? "Imported " + filename : name;
 
         // The name is the only handle the session picker offers, so two sessions sharing
@@ -430,16 +442,30 @@ public class ImportService {
                 : description.trim() + " (imported from " + filename + ")";
         jdbc.update("""
                 INSERT INTO measurement_session (name, device, operator, technology,
-                    started_at, ended_at, notes)
-                VALUES (?,?,?,?, now(), now(), ?)
+                    started_at, ended_at, notes, build_label, scenario, location_name)
+                VALUES (?,?,?,?, now(), now(), ?,?,?,?)
                 """,
                 sessionName,
                 device == null ? "unknown" : device,
                 operator == null ? "unknown" : operator,
                 technology == null ? "unknown" : technology,
-                notes);
+                notes,
+                blankToNull(buildLabel),
+                blankToNull(scenario),
+                blankToNull(locationName));
         Long id = jdbc.queryForObject("SELECT max(id) FROM measurement_session", Long.class);
         return id == null ? 0 : id;
+    }
+
+    /**
+     * An unfilled form field is absent, not the empty string.
+     *
+     * A form posts "" for a box the user left alone, and "" is a value: it would group as
+     * its own cohort beside NULL, so half the drives with no build label would sit in one
+     * bucket and half in another with nothing on screen to explain the split.
+     */
+    private static String blankToNull(String s) {
+        return s == null || s.isBlank() ? null : s.trim();
     }
 
     /** Sets the session extent from what actually landed. */

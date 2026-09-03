@@ -59,6 +59,36 @@ export interface ViewState {
    * it and reports a rejection as a correction like any other.
    */
   filter: string | null
+  /**
+   * Which drive property the Compare tab groups by, or null for the two-drive comparison.
+   *
+   * One parameter carrying two facts on purpose. "Group by build" IS the cohort scope -
+   * there is no cohort view that groups by nothing - so a separate `scope=cohorts` beside
+   * it would be a second way to say the same thing, and the two would eventually
+   * disagree in somebody's link.
+   *
+   * Deliberately NOT a list of session ids, which is what a saved folder would have made
+   * it. A link naming eight drives is a link that means something different on the next
+   * server, and this module's whole argument is that a per-drive index travels badly. A
+   * dimension value survives: the recipient's drives with that build are the drives with
+   * that build.
+   *
+   * The name itself is not checked here, for the reason `filter` is not: the vocabulary
+   * belongs to the server's enum and a second copy in TypeScript would eventually accept
+   * a dimension the server has dropped. An unknown one comes back as the endpoint's own
+   * refusal, which names the values it does know.
+   */
+  cohortBy: string | null
+  /**
+   * A second dimension the comparison must not vary, `'NONE'` for explicitly none, or
+   * null to let the server choose the guard it thinks that axis needs.
+   *
+   * Three states rather than two because "I did not say" and "I said no guard" are
+   * different claims: the first should arrive with the scenario held on a build
+   * comparison, the second should arrive with a delta and no verdict, and one nullable
+   * string cannot tell them apart.
+   */
+  cohortHold: string | null
 }
 
 export const DEFAULT_VIEW: ViewState = {
@@ -72,6 +102,8 @@ export const DEFAULT_VIEW: ViewState = {
   distanceStep: 0,
   footprints: false,
   filter: null,
+  cohortBy: null,
+  cohortHold: null,
 }
 
 /**
@@ -120,6 +152,8 @@ export function parseView(search: string): ViewState {
     distanceStep: oneOf(q.get('dist'), DIST_STEPS, 0),
     footprints: q.get('fp') === '1',
     filter: q.get('gf'),
+    cohortBy: q.get('by'),
+    cohortHold: q.get('hold'),
   }
 }
 
@@ -143,6 +177,10 @@ export function encodeView(v: ViewState): string {
   if (v.distanceStep !== 0) q.set('dist', String(v.distanceStep))
   if (v.footprints) q.set('fp', '1')
   if (v.filter) q.set('gf', v.filter)
+  if (v.cohortBy) q.set('by', v.cohortBy)
+  // Only alongside an axis: `hold` on its own is a guard over nothing, and writing it
+  // would produce a link that reconcile() has to repair on arrival for no gain.
+  if (v.cohortBy && v.cohortHold) q.set('hold', v.cohortHold)
   const s = q.toString()
   return s ? `?${s}` : ''
 }
@@ -238,6 +276,26 @@ export function reconcile(
     corrections.push({ param: 'kpi', raw: out.kpi, became: DEFAULT_VIEW.kpi,
       why: 'no such parameter on this server' })
     out.kpi = DEFAULT_VIEW.kpi
+  }
+
+  // 4. The cohort axis against the dimension held constant. Unlike the two rules above
+  //    this one needs nothing from the server: it is a relationship between two values
+  //    the sender wrote, and holding the axis constant would leave every group with one
+  //    value of the axis - which is to say, nothing to compare. The names themselves are
+  //    the server's vocabulary and are left to it, exactly as the filter spec is.
+  if (out.cohortBy != null && out.cohortHold != null
+      && out.cohortBy.toUpperCase() === out.cohortHold.toUpperCase()) {
+    corrections.push({ param: 'hold', raw: out.cohortHold, became: 'nothing held',
+      why: 'a dimension cannot be both the axis and the thing held constant' })
+    out.cohortHold = 'NONE'
+  }
+  //    A guard with nothing to guard. Dropped rather than promoted to an axis: the sender
+  //    asked for the two-drive comparison and a silently invented cohort axis would be a
+  //    different screen than the one they sent.
+  if (out.cohortBy == null && out.cohortHold != null) {
+    corrections.push({ param: 'hold', raw: out.cohortHold, became: 'off',
+      why: 'nothing is grouped, so there is nothing to hold constant' })
+    out.cohortHold = null
   }
 
   return { view: out, corrections }

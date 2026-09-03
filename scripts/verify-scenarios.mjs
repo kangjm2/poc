@@ -1898,6 +1898,569 @@ scenario('S20 · One condition, every screen')
   await page.waitForTimeout(2500)
 }
 
+// ─── S21 · A state machine that measures time it actually measured ───────────
+//
+// The reference's State Machine emits one row per state occupancy carrying start_time and
+// time_interval, and the whole point of it is procedure delay: "how many milliseconds did
+// this take". Ours was a per-sample CASE wearing that name, which the repo's own reference
+// notes call a Classifier. The rename freed the name for a real latching ladder.
+//
+// Two claims are worth checking and they pull in opposite directions: that the machine
+// REMEMBERS (so a run is one row, not one per sample), and that it REFUSES to measure
+// across ground nobody drove. The seed happens to be able to witness both at once.
+scenario('S21 · A state machine that measures time it actually measured')
+{
+  const post = (path, body) => page.request.post(`${API}${path}`, { data: body })
+  const ladder = (states) => ({
+    version: 2,
+    nodes: [
+      { id: 1, kind: 'SOURCE_KPI', x: 40, y: 24, kpiName: 'RSRP', as: 'RSRP' },
+      { id: 2, kind: 'STATE_MACHINE', x: 40, y: 150, states },
+      { id: 3, kind: 'OUTPUT', x: 40, y: 280, column: states[states.length - 1].state },
+    ],
+    edges: [{ from: 1, to: 2 }, { from: 2, to: 3 }],
+  })
+  const FADE = [{ state: 'RECOVERED', condition: 'RSRP > -100' },
+                { state: 'FADED', condition: 'RSRP < -110' }]
+  const outputFor = (name) => ({
+    name, displayName: 'S21 fade dwell',
+    // Deliberately wrong, to prove the server does not take it.
+    unit: 'dB', category: 'Workbench', technology: '5G NR',
+    direction: 'LOWER_IS_BETTER', source: 'UE', decimals: 2,
+    description: null, expression: null,
+  })
+
+  // A document with no version used the name STATE_MACHINE for the per-sample classifier.
+  // Compiling it as a ladder would answer 200 and change every value the KPI ever had.
+  const noVersion = ladder(FADE)
+  delete noVersion.version
+  const old = await (await post('/api/kpi-definitions/graphs/validate',
+    { name: 'x', output: null, spec: noVersion })).json()
+  step('a graph saved before the ladder existed is refused, and says why',
+    old.ok === false && /Classifier/.test(old.error ?? '') && /State machine/.test(old.error ?? ''),
+    old.error ?? 'accepted')
+
+  const ok = await (await post('/api/kpi-definitions/graphs/validate',
+    { name: 'x', output: null, spec: ladder(FADE) })).json()
+  step('with a version it validates, and says it publishes a duration',
+    ok.ok === true && ok.outputIsDuration === true && ok.outputColumn === 'FADED',
+    ok.error ?? `${ok.outputColumn} duration=${ok.outputIsDuration}`)
+
+  const saved = await (await post('/api/kpi-definitions/graphs',
+    { name: 'S21 fade', output: outputFor('S21_FADE_MS'), spec: ladder(FADE) })).json()
+  step('saving computes dwell values', saved.valuesComputed > 0,
+    `${saved.valuesComputed} occupancies across every drive`)
+
+  // ── memory, witnessed against a latch implemented independently in the generator.
+  //
+  // The seed raises a RADIO_LINK_FAILURE from a Java boolean that arms below -110 dBm and
+  // disarms above -100 - the same latch this node compiles to SQL. Two implementations of
+  // one rule, so their counts must agree; and where they DON'T, the disagreement has to be
+  // explainable by the second claim rather than by a bug.
+  const dwellSeqs = async (id, kpi) =>
+    (await apiGet(`/api/sessions/${id}/series?kpis=${kpi}&maxPoints=100000`))[0]
+      .points.filter((p) => p.value != null).map((p) => p.seq)
+  const rlfSeqs = async (id) =>
+    (await apiGet(`/api/sessions/${id}/events`))
+      .filter((e) => e.eventType === 'RADIO_LINK_FAILURE').map((e) => e.seq)
+
+  const cityB = sessions.find((s) => s.name === CITY_B).id
+  const hwy = sessions.find((s) => s.name === HIGHWAY).id
+  const cityA = sessions.find((s) => s.name === CITY_A).id
+
+  const bDwell = await dwellSeqs(cityB, 'S21_FADE_MS')
+  const bRlf = await rlfSeqs(cityB)
+  const hDwell = await dwellSeqs(hwy, 'S21_FADE_MS')
+  const hRlf = await rlfSeqs(hwy)
+  step('one occupancy per fade, not one per sample of it — on the drives with no gaps',
+    bDwell.length === bRlf.length && hDwell.length === hRlf.length && bDwell.length > 0
+    && bDwell.every((q, i) => q === bRlf[i]) && hDwell.every((q, i) => q === hRlf[i]),
+    `1.5.0 dwells [${bDwell}] vs RLF [${bRlf}]; highway [${hDwell}] vs [${hRlf}]`)
+
+  // ── and the refusal, on the one drive that has a logger gap inside a fade.
+  const aDwell = await dwellSeqs(cityA, 'S21_FADE_MS')
+  const aRlf = await rlfSeqs(cityA)
+  const aTrack = await apiGet(`/api/sessions/${cityA}/track?kpi=RSRP&maxPoints=100000`)
+  const breaks = aTrack.filter((p) => p.breakBefore > 0).map((p) => Date.parse(p.ts))
+  const missing = aRlf.filter((q) => !aDwell.includes(q))
+  step('a fade that straddles a logger gap is not measured at all',
+    aDwell.length === aRlf.length - 1 && missing.length === 1,
+    `RLF at [${aRlf}], measured [${aDwell}]`)
+
+  // The load-bearing assertion: not "one row fewer" - which a drive with its break
+  // elsewhere would not show - but that no published interval CONTAINS a break.
+  const series = (await apiGet(
+    `/api/sessions/${cityA}/series?kpis=S21_FADE_MS&maxPoints=100000`))[0].points
+    .filter((p) => p.value != null)
+  const spans = series.map((p) => [Date.parse(p.ts), Date.parse(p.ts) + p.value])
+  step('and no interval that IS published contains one',
+    spans.length > 0 && !spans.some(([a, b]) => breaks.some((t) => t > a && t <= b)),
+    `${spans.length} intervals, ${breaks.length} breaks in the drive`)
+
+  // ── a duration is never longer than the drive it is in.
+  //
+  // A BOUND, not a witness, and labelled as one. The defect it would catch - an episode
+  // closing on the next drive because a window lost its PARTITION BY session_id - cannot
+  // be produced on this corpus: seq numbers repeat across drives, so an unpartitioned
+  // window scrambles into publishing NOTHING rather than publishing something too long.
+  // Dropping the partition IS caught, by KpiGraphTest.everyWindowInTheLadderIsPartitioned-
+  // ByDrive, which reads the compiled SQL. Recorded so nobody reads this step as the guard.
+  const drives = await apiGet('/api/sessions')
+  let worst = null
+  for (const d of drives) {
+    const pts = (await apiGet(
+      `/api/sessions/${d.id}/series?kpis=S21_FADE_MS&maxPoints=100000`))[0].points
+      .filter((p) => p.value != null)
+    const span = Date.parse(d.endedAt) - Date.parse(d.startedAt)
+    for (const p of pts) if (p.value > span) worst = `${d.name}: ${p.value} ms of ${span} ms`
+  }
+  step('no occupancy is longer than the drive it sits in (a bound, not a witness)',
+    worst === null, worst ?? 'every dwell fits inside its own drive')
+
+  // ── every state is measured until it was LEFT, including one that was left without the
+  //    ladder advancing. Witnessed against the same latch computed here, in the checker,
+  //    from the drive's own RSRP - so a machine that only measured states it later
+  //    deepened out of would disagree seq for seq rather than merely count differently.
+  const three = [{ state: 'OK', condition: 'RSRP > -100' },
+                 { state: 'DIPPED', condition: 'RSRP < -105' },
+                 { state: 'FADED', condition: 'RSRP < -115' }]
+  const dipSpec = ladder(three)
+  dipSpec.nodes[2].column = 'DIPPED'
+  const dip = await (await post('/api/kpi-definitions/graphs',
+    { name: 'S21 dip', output: outputFor('S21_DIP_MS'), spec: dipSpec })).json()
+  const deepSpec = ladder(three)
+  const deep = await (await post('/api/kpi-definitions/graphs',
+    { name: 'S21 deep', output: outputFor('S21_DEEP_MS'), spec: deepSpec })).json()
+
+  /** The ladder's latch, run here over one drive's values: arm below `enter`, disarm above `back`. */
+  const latchEntries = async (id, enter, back) => {
+    const pts = (await apiGet(`/api/sessions/${id}/series?kpis=RSRP&maxPoints=100000`))[0].points
+    const out = []
+    let armed = false
+    for (const p of pts.slice().sort((a, b) => a.seq - b.seq)) {
+      if (p.value == null) continue
+      if (!armed && p.value < enter) { armed = true; out.push(p.seq) }
+      else if (armed && p.value > back) armed = false
+    }
+    return out
+  }
+  // Both drives have no logger gap, so nothing is legitimately withheld and the two
+  // implementations must agree exactly.
+  const dipB = await dwellSeqs(cityB, 'S21_DIP_MS')
+  const dipH = await dwellSeqs(hwy, 'S21_DIP_MS')
+  const expB = await latchEntries(cityB, -105, -100)
+  const expH = await latchEntries(hwy, -105, -100)
+  step('every state is measured until it was left, not only when the ladder advanced',
+    dipB.length > 0 && JSON.stringify(dipB) === JSON.stringify(expB)
+    && JSON.stringify(dipH) === JSON.stringify(expH),
+    `1.5.0 published [${dipB}] vs latch [${expB}]; highway [${dipH}] vs [${expH}]`)
+  step('and a deeper state is entered less often than the one above it',
+    dip.valuesComputed > deep.valuesComputed && deep.valuesComputed > 0,
+    `${dip.valuesComputed} dips vs ${deep.valuesComputed} deep fades`)
+
+  // ── a duration is not labelled in the author's unit.
+  const defs = await apiGet('/api/kpi-definitions')
+  const def = defs.find((d) => d.name === 'S21_FADE_MS')
+  step('the author asked for dB and got ms, because a duration is not theirs to label',
+    def != null && def.unit === 'ms' && def.decimals === 0
+    && /Milliseconds the state FADED was held/.test(def.description ?? ''),
+    `${def?.unit} / ${def?.decimals} decimals`)
+
+  // ── the preview still works inside a ladder graph. Its CTE contains the same text the
+  //    preview used to split the whole statement on, several times over.
+  const prev = await (await post(
+    `/api/kpi-definitions/graphs/preview?nodeId=2&sessionId=${cityB}&limit=5`,
+    { name: 'x', output: null, spec: ladder(FADE) })).json()
+  step('a node inside a ladder graph can still be previewed',
+    prev.rowCount > 0 && (prev.columns ?? []).includes('FADED'),
+    `${prev.rowCount} rows, columns ${(prev.columns ?? []).join(', ')}`)
+
+  // ── and the screen shows the ladder as a ladder.
+  await openMode('Import')
+  await page.waitForTimeout(1500)
+  const stored = page.locator('.panels table.grid tbody tr', { hasText: 'S21 fade' })
+  await stored.locator('button', { hasText: 'Open' }).click()
+  await page.waitForTimeout(1500)
+  // textContent, not innerText: an SVG <g> has no innerText, and allInnerTexts() hands
+  // back undefined for each one rather than failing.
+  const cardText = await page.locator('g.wb-node')
+    .evaluateAll((gs) => gs.map((g) => g.textContent ?? ''))
+  step('the canvas prints the ladder in the order that IS its meaning',
+    cardText.some((t) => t.includes('RECOVERED → FADED')), cardText.join(' | '))
+
+  await page.locator('g.wb-node', { hasText: 'RECOVERED → FADED' }).click()
+  await page.waitForTimeout(600)
+  // The panel headed "Node", not the first panel whose text happens to contain the word -
+  // the canvas panel says "3 nodes . 2 edges" and would match that.
+  const inspector = await page.locator('.panel:has(header .title:text-is("Node"))').innerText()
+  step('and the inspector states the limits rather than hiding them',
+    /only from the one above it/.test(inspector) && /no time trigger/.test(inspector)
+    && /logger gap/.test(inspector), inspector.replace(/\n/g, ' / ').slice(0, 120))
+
+  for (const g of [saved.id, dip.id, deep.id]) {
+    await page.request.delete(`${API}/api/kpi-definitions/graphs/${g}`)
+  }
+  const after = await apiGet('/api/kpi-definitions/graphs')
+  step('the scenario leaves no graph behind',
+    !after.some((g) => String(g.outputKpiName).startsWith('S21_')),
+    `${after.length} graphs remain`)
+  await page.goto(BASE, { waitUntil: 'domcontentloaded' })
+  await page.waitForTimeout(2500)
+}
+
+// ─── S22 · What was happening just before this ───────────────────────────────
+//
+// "What was RSRP just before the drop" is the shape root-cause analysis is made of, and
+// the canvas could not express it: Combine relates values on the SAME sample, which is the
+// only relation it knew. The reference has a family of five for this, all built on one
+// rule - the PRIMARY input decides when there is an output at all.
+scenario('S22 · What was happening just before this')
+{
+  const post = (path, body) => page.request.post(`${API}${path}`, { data: body })
+  const cityA = sessions.find((s) => s.name === CITY_A).id
+
+  const spec = (how, primary, within) => ({
+    version: 2,
+    nodes: [
+      { id: 1, kind: 'SOURCE_EVENT', x: 40, y: 24, eventType: 'HANDOVER', as: 'HO' },
+      { id: 2, kind: 'SOURCE_KPI', x: 280, y: 24, kpiName: 'RSRP', as: 'RSRP' },
+      { id: 3, kind: 'CORRELATE', x: 40, y: 140, primary, correlation: how,
+        column: primary === 1 ? 'RSRP' : 'HO', withinMs: within ?? null },
+      { id: 4, kind: 'OUTPUT', x: 40, y: 260,
+        column: `${{ PREVIOUS: 'PREV', CURRENT: 'CURR', NEXT: 'NEXT',
+                     PREVIOUS_OR_CURRENT: 'PREV_OR_CURR' }[how]}_${primary === 1 ? 'RSRP' : 'HO'}` },
+    ],
+    edges: [{ from: 1, to: 3 }, { from: 2, to: 3 }, { from: 3, to: 4 }],
+  })
+  const output = (name) => ({
+    name, displayName: `S22 ${name}`, unit: 'dB', category: 'Workbench',
+    technology: '5G NR', direction: 'HIGHER_IS_BETTER', source: 'UE', decimals: 1,
+    description: null, expression: null,
+  })
+  const made = []
+  const build = async (name, how, primary, within) => {
+    const g = await (await post('/api/kpi-definitions/graphs',
+      { name, output: output(name), spec: spec(how, primary, within) })).json()
+    made.push(g)
+    return g
+  }
+
+  const prev = await build('S22_PREV', 'PREVIOUS', 1)
+  const curr = await build('S22_CURR', 'CURRENT', 1)
+  const next = await build('S22_NEXT', 'NEXT', 1)
+
+  // ── the gate. The output exists at the primary's moments and nowhere else, witnessed
+  //    against the event list rather than against the node's own idea of them.
+  const handovers = (await apiGet(`/api/sessions/${cityA}/events`))
+    .filter((e) => e.eventType === 'HANDOVER').map((e) => e.seq).sort((a, b) => a - b)
+  const at = async (kpi) =>
+    (await apiGet(`/api/sessions/${cityA}/series?kpis=${kpi}&maxPoints=100000`))[0].points
+      .filter((p) => p.value != null).map((p) => p.seq).sort((a, b) => a - b)
+  const prevSeqs = await at('S22_PREV')
+  step('the primary decides when there is an output, and there is one at each of its moments',
+    handovers.length > 0 && JSON.stringify(prevSeqs) === JSON.stringify(handovers),
+    `handovers [${handovers}], output at [${prevSeqs}]`)
+
+  // ── and the three fetch three different samples, checked against the drive's own RSRP.
+  //    The sample before a handover has no event row, so a window that could only see the
+  //    primary's rows could not reach it - which is the whole difficulty of this node.
+  const rsrp = Object.fromEntries(
+    (await apiGet(`/api/sessions/${cityA}/series?kpis=RSRP&maxPoints=100000`))[0].points
+      .map((p) => [p.seq, p.value]))
+  const valuesOf = async (kpi) => Object.fromEntries(
+    (await apiGet(`/api/sessions/${cityA}/series?kpis=${kpi}&maxPoints=100000`))[0].points
+      .filter((p) => p.value != null).map((p) => [p.seq, p.value]))
+  const vPrev = await valuesOf('S22_PREV')
+  const vCurr = await valuesOf('S22_CURR')
+  const vNext = await valuesOf('S22_NEXT')
+  const near = (a, b) => a != null && b != null && Math.abs(a - b) < 0.05
+  const wrong = handovers.filter((q) => !(near(vPrev[q], rsrp[q - 1])
+    && near(vCurr[q], rsrp[q]) && near(vNext[q], rsrp[q + 1])))
+  step('previous, current and next are the samples before, at and after the moment',
+    wrong.length === 0 && handovers.length > 0,
+    wrong.length === 0
+      ? `at seq ${handovers[0]}: ${vPrev[handovers[0]]} / ${vCurr[handovers[0]]}`
+        + ` / ${vNext[handovers[0]]} against ${rsrp[handovers[0] - 1]} /`
+        + ` ${rsrp[handovers[0]]} / ${rsrp[handovers[0] + 1]}`
+      : `wrong at seq ${wrong}`)
+
+  // ── the bound is ours, not the reference's, and it drops rather than reports late.
+  //    Samples are one second apart, so 500 ms reaches nothing and 1500 ms reaches
+  //    exactly the neighbouring sample.
+  const tight = await build('S22_TIGHT', 'PREVIOUS', 1, 500)
+  const loose = await build('S22_LOOSE', 'PREVIOUS', 1, 1500)
+  step('a value further away than the bound is dropped, not reported as if it were near',
+    tight.valuesComputed === 0 && loose.valuesComputed === prev.valuesComputed
+    && prev.valuesComputed > 0,
+    `500 ms reaches ${tight.valuesComputed}, 1500 ms reaches ${loose.valuesComputed},`
+    + ` unbounded ${prev.valuesComputed}`)
+
+  // ── "previous or current" falls back rather than replacing. Witnessed by making
+  //    PREVIOUS unreachable with the bound: what is left must be the current value.
+  const orCurr = await build('S22_OR_CURR', 'PREVIOUS_OR_CURRENT', 1, 500)
+  const vOr = await valuesOf('S22_OR_CURR')
+  step('previous-or-current uses the current value only when there is no previous one',
+    orCurr.valuesComputed === curr.valuesComputed
+    && handovers.every((q) => near(vOr[q], vCurr[q])),
+    `${orCurr.valuesComputed} values, all equal to the current one`)
+
+  // ── swapping the primary changes what the question is about.
+  //
+  // Measured on the NODE, through the preview, not on the published KPI: the graph's tail
+  // drops NULL values, so publishing the sparse event column either way would answer 15
+  // both times and prove nothing. The first version of this step did exactly that.
+  const rowsAt = async (primary) => (await (await post(
+    `/api/kpi-definitions/graphs/preview?nodeId=3&sessionId=${cityA}&limit=1`,
+    { name: 'x', output: null, spec: spec('CURRENT', primary) })).json()).rowCount
+  const atEvents = await rowsAt(1)
+  const atSamples = await rowsAt(2)
+  const drive = (await apiGet(`/api/sessions/${cityA}`)).sampleCount
+  step('naming the other input as primary answers at every sample instead of at the events',
+    atEvents === handovers.length && atSamples === drive,
+    `${atEvents} rows with the event as primary, ${atSamples} with the KPI,`
+    + ` ${handovers.length} handovers and ${drive} samples in the drive`)
+
+  // ── the canvas offers it, and its inspector names the primary rather than implying it
+  //    from a layout the compiler never reads.
+  await openMode('Import')
+  await page.waitForTimeout(1500)
+  const stored = page.locator('.panels table.grid tbody tr', { hasText: 'S22_PREV' })
+  await stored.locator('button', { hasText: 'Open' }).click()
+  await page.waitForTimeout(1800)
+  await page.locator('g.wb-node', { hasText: 'previous' }).click()
+  await page.waitForTimeout(700)
+  const inspector = await page.locator('.panel:has(header .title:text-is("Node"))').innerText()
+  step('the inspector names which input decides the moments',
+    /Primary/.test(inspector) && /no row/.test(inspector),
+    inspector.replace(/\n/g, ' / ').slice(0, 130))
+  const primaryPicked = await page.locator('select[aria-label="Primary input"]').inputValue()
+  step('and it is a control, not a convention about which node sits on the left',
+    primaryPicked === '1', `primary reads ${primaryPicked}`)
+
+  for (const g of made) await page.request.delete(`${API}/api/kpi-definitions/graphs/${g.id}`)
+  const after = await apiGet('/api/kpi-definitions/graphs')
+  step('the scenario leaves no graph behind',
+    !after.some((g) => String(g.outputKpiName).startsWith('S22_')),
+    `${after.length} graphs remain`)
+  await page.goto(BASE, { waitUntil: 'domcontentloaded' })
+  await page.waitForTimeout(2500)
+}
+
+// ─── S23 · Is this build better, over every drive we have ────────────────────
+//
+// The question `/compare` cannot answer. Two drives differ for a hundred reasons that are
+// not the build, so "is 1.5.0 better" has to pool every drive of each build - and the
+// moment it pools, three claims start being made that the screen has to earn:
+//
+//   the pooled number really is pooled (not an average of averages, and not a percentile
+//   borrowed from one member); the groups really are comparable (the confound guard, and
+//   what it removed, by name); and the picture really says what the vertical axis is.
+//
+// Every step below is written so that removing the thing it names changes the number it
+// reads - see docs/ui-testing/README.md §1.5. Each was run against a deliberately broken
+// build before being kept.
+scenario('S23 · Is this build better, over every drive we have')
+{
+  const cohorts = (qs) => apiGet(`/api/cohorts?kpi=RSRP&${qs}`)
+  const raw = (qs) => page.request.get(`${API}/api/cohorts?kpi=RSRP&${qs}`)
+  const round2 = (v) => Math.round(v * 100) / 100
+
+  // ── C1. The pooled mean is POOLED, witnessed against the members it was pooled from.
+  //
+  // Two numbers computed here in the checker from the member list the same response
+  // carries: the count-weighted combination, which the server must equal, and the naive
+  // average of the members' means, which it must NOT - that second one is what a pooling
+  // bug produces, and it is a plausible number sitting a few tenths away.
+  const open = await cohorts('holdConstant=NONE')
+  const big = open.cohorts.find((c) => c.driveCount > 1)
+  step('a cohort spanning several drives exists to test against',
+    Boolean(big) && big.members.length === big.driveCount,
+    big ? `${big.value}: ${big.driveCount} drives` : 'no multi-drive cohort')
+  const n = big.members.reduce((a, m) => a + m.sampleCount, 0)
+  const weighted = round2(
+    big.members.reduce((a, m) => a + m.mean * m.sampleCount, 0) / n)
+  const naive = round2(
+    big.members.reduce((a, m) => a + m.mean, 0) / big.members.length)
+  step('the group mean is the samples pooled, not the members’ means averaged',
+    Math.abs(big.stats.mean - weighted) < 0.02 && Math.abs(big.stats.mean - naive) > 0.05,
+    `pooled ${big.stats.mean}, weighted ${weighted}, average-of-averages ${naive}`)
+
+  // ── C2. The percentiles are pooled too, which is the reason this is one query.
+  //
+  // A group's median is not recoverable from its members' medians under any weighting, so
+  // a client-side implementation would have had to leave it out or invent it. Checked two
+  // ways that a borrowed or interpolated percentile fails: the pooled extremes must be the
+  // members' extremes exactly, and the pooled median must sit inside the members' spread
+  // without being the weighted average of them.
+  const stats = await Promise.all(big.members.map((m) =>
+    apiGet(`/api/sessions/${m.sessionId}/statistics?kpi=RSRP`)))
+  const p50s = stats.map((x) => x.p50)
+  const avgP50 = round2(
+    stats.reduce((a, x, i) => a + x.p50 * big.members[i].sampleCount, 0) / n)
+  step('the group’s min and max are its members’ min and max',
+    big.stats.min === Math.min(...stats.map((x) => x.min))
+    && big.stats.max === Math.max(...stats.map((x) => x.max)),
+    `pooled ${big.stats.min}..${big.stats.max}, members`
+    + ` ${Math.min(...stats.map((x) => x.min))}..${Math.max(...stats.map((x) => x.max))}`)
+  step('and its median is a real pooled median, not one of theirs and not their average',
+    big.stats.p50 > Math.min(...p50s) && big.stats.p50 < Math.max(...p50s)
+    && Math.abs(big.stats.p50 - avgP50) > 0.05,
+    `pooled p50 ${big.stats.p50}, members [${p50s}], weighted average of those ${avgP50}`)
+
+  // ── C3. The sample count is the sum, exactly. The cheapest way to be wrong here is a
+  //    join that multiplies rows, and it shows up nowhere else on the screen.
+  step('the group counts every member’s samples once',
+    big.stats.count === n && n === big.sampleCount,
+    `${big.stats.count} pooled, ${n} summed over ${big.members.length} drives`)
+
+  // ── C4. The confound guard, and the drives it removed - by name, with the value that
+  //    got them removed, checked against what those drives actually are.
+  const held = await cohorts('')
+  const byId = Object.fromEntries(sessions.map((x) => [x.id, x]))
+  step('holding a dimension constant is the default when the axis is the build',
+    held.holdConstant === 'SCENARIO' && held.excluded.length > 0,
+    `holding ${held.holdConstant}, ${held.excluded.length} measurements left out`)
+  const keptScenarios = new Set(held.cohorts.flatMap((c) => c.members.map((m) => m.heldValue)))
+  const wronglyNamed = held.excluded.filter((e) => keptScenarios.has(byId[e.sessionId]?.scenario))
+  step('each excluded measurement is named, and really does have the odd value',
+    wronglyNamed.length === 0
+    && held.excluded.every((e) => e.why.includes(byId[e.sessionId].scenario)),
+    held.excluded.map((e) => `${byId[e.sessionId].name} (${byId[e.sessionId].scenario})`).join('; '))
+
+  // ── C5. Turning the guard OFF has to change the answer, or it was never on.
+  //
+  // The one-number reduction: the same cohort, the same KPI, two guards, and the drive
+  // count and the mean both move. A guard that silently did nothing would pass every
+  // step above and fail this one.
+  const guarded = held.cohorts.find((c) => c.value === big.value)
+  step('with the guard on, the group is a different set of drives and a different number',
+    guarded.driveCount < big.driveCount
+    && Math.abs(guarded.stats.mean - big.stats.mean) > 0.05,
+    `${big.value}: ${big.driveCount} drives ${big.stats.mean} unguarded,`
+    + ` ${guarded.driveCount} drives ${guarded.stats.mean} guarded`)
+
+  // ── C6/C7. What the screen refuses to say. Three silences, all different:
+  //    no dimension held -> a delta and NO verdict; the first group -> nothing to compare
+  //    against, so no verdict either, and NOT "NO DATA", which is a claim about the data.
+  step('without a held dimension there is a delta but no verdict, and the screen says why',
+    open.cohorts.every((c) => c.verdict === null)
+    && open.cohorts.some((c) => c.deltaVsPrevious !== null)
+    && /may differ by more than/.test(open.verdictNote ?? ''),
+    (open.verdictNote ?? 'no note').slice(0, 90))
+  step('with one held, a verdict appears - but never on the first group',
+    held.cohorts[0].verdict === null && held.cohorts[0].deltaVsPrevious === null
+    && held.cohorts.slice(1).every((c) => c.verdict !== null)
+    && held.cohorts.slice(1).some((c) => ['BETTER', 'WORSE'].includes(c.verdict)),
+    held.cohorts.map((c) => `${c.value}=${c.verdict ?? 'none'}`).join(', '))
+
+  // ── C8. The three refusals, each of which has to name what to do instead. A 500, or a
+  //    200 with an empty chart, would each be a screen that looks like an answer.
+  const refusals = await Promise.all([
+    raw('groupBy=SCENARIO&holdConstant=SCENARIO'),
+    raw('weightedBy=DISTANCE'),
+    raw('groupBy=notes'),
+  ])
+  const bodies = await Promise.all(refusals.map((r) => r.text()))
+  step('asking an unanswerable question is a refusal that says what to ask instead',
+    refusals.every((r) => r.status() === 400)
+    && /both the axis and held constant/.test(bodies[0])
+    && /logger gap|unmeasured stretch/.test(bodies[1])
+    && /Build label|BUILD_LABEL/.test(bodies[2]),
+    refusals.map((r) => r.status()).join('/'))
+
+  // ── C9. The global filter reaches this screen too, which the server's own coverage list
+  //    now claims. Checked as a number that moves, on the group AND on every member -
+  //    a filter threaded into the pooled query but not the per-drive one would leave a
+  //    screen whose members no longer add up to their group.
+  const coverage = await apiGet('/api/global-filter/coverage')
+  step('the coverage list claims the cohort screen honours the filter',
+    coverage.some((c) => c.path === '/api/cohorts' && c.honoured),
+    coverage.find((c) => c.path === '/api/cohorts')?.note ?? 'not listed')
+  const narrowed = await cohorts(
+    `holdConstant=NONE&filter=${encodeURIComponent('kpi:RSRP:>=:-100')}`)
+  const nBig = narrowed.cohorts.find((c) => c.value === big.value)
+  const nSum = nBig.members.reduce((a, m) => a + m.sampleCount, 0)
+  step('the condition narrows the group and each of its drives, and they still add up',
+    nBig.stats.count < big.stats.count && nSum === nBig.stats.count
+    && nBig.members.every((m, i) => m.sampleCount < big.members[i].sampleCount)
+    && nBig.stats.mean > big.stats.mean,
+    `${big.stats.count} -> ${nBig.stats.count} samples, mean ${big.stats.mean} ->`
+    + ` ${nBig.stats.mean}`)
+
+  // ── C10. The strip. Every member is drawn, not only the group's mark - a chart of three
+  //    means says "this group is -81.8" and hides that one drive of the three is at -86.6.
+  await page.goto(BASE, { waitUntil: 'domcontentloaded' })
+  await page.waitForTimeout(2500)
+  await openMode('Compare')
+  await page.locator('.scope-switch button', { hasText: 'Cohorts' }).click()
+  await page.waitForTimeout(2200)
+  await page.locator('select[aria-label="Hold constant"]').selectOption('NONE')
+  await page.waitForTimeout(2200)
+
+  const rows = await page.locator('.cohort-strip .cohort-row').count()
+  const marks = await page.locator('.cohort-strip .cohort-member').count()
+  const drivesOnScreen = open.cohorts.reduce((a, c) => a + c.members.length, 0)
+  step('every group is a row and every drive in it is a mark of its own',
+    rows === open.cohorts.length && marks === drivesOnScreen,
+    `${rows} rows for ${open.cohorts.length} groups, ${marks} marks for ${drivesOnScreen} drives`)
+
+  // The axis is published in the DOM rather than left to be measured off pixels: a check
+  // that reads a pixel is checking the renderer. Every mark has to be inside it, or the
+  // strip is drawing values it has clipped.
+  // textContent, not innerText: <desc> is an SVGElement, and innerText is not defined on
+  // one - the same trap S21 hit reading node cards.
+  const desc = await page.locator('.cohort-strip desc')
+    .evaluate((d) => d.textContent ?? '')
+  const axis = Object.fromEntries(desc.split(' ').map((kv) => kv.split('=')))
+  const drawn = await page.locator('.cohort-strip [data-mean]')
+    .evaluateAll((es) => es.map((e) => Number(e.getAttribute('data-mean'))))
+  step('the strip states its own axis, and every mark it drew is inside it',
+    drawn.length > 0 && drawn.every((v) => v >= Number(axis.axisLo) && v <= Number(axis.axisHi)),
+    `${drawn.length} marks within [${axis.axisLo}, ${axis.axisHi}]`)
+
+  // ── C11. The vertical is a sequence, not a timeline - so the connector between two rows
+  //    is never a diagonal. A diagonal claims the KPI moved smoothly between two builds
+  //    that were tested a month apart, which nothing measured.
+  const elbows = await page.locator('.cohort-strip path.cohort-elbow')
+    .evaluateAll((ps) => ps.map((p) => p.getAttribute('d')))
+  const diagonal = elbows.filter((d) => {
+    const pts = d.split(/[ML]\s*/).filter(Boolean).map((q) => q.trim().split(/\s+/).map(Number))
+    return pts.some((p, i) => i > 0 && p[0] !== pts[i - 1][0] && p[1] !== pts[i - 1][1])
+  })
+  step('the connector between two groups is axis-aligned, never a diagonal',
+    elbows.length === open.cohorts.length - 1 && diagonal.length === 0,
+    `${elbows.length} connectors, ${diagonal.length} with a diagonal segment`)
+  const footer = await page.locator('.cohort-footer').innerText()
+  step('and the chart says the spacing is not time',
+    /spacing is not time/.test(footer), footer.replace(/\n/g, ' ').slice(0, 80))
+
+  // ── C12. The link. Which axis and which guard are the question itself, so a cohort view
+  //    handed to somebody else has to arrive as the same question - and `by === hold`,
+  //    which is not a question at all, has to arrive repaired and SAID.
+  await page.locator('select[aria-label="Group by"]').selectOption('SCENARIO')
+  await page.waitForTimeout(1800)
+  const url = new URL(page.url())
+  step('the axis and the guard are in the address bar',
+    url.searchParams.get('by') === 'SCENARIO' && url.searchParams.get('hold') === 'NONE',
+    url.search || 'nothing in the query')
+  await page.goto(`${BASE}${url.search}`, { waitUntil: 'domcontentloaded' })
+  await page.waitForTimeout(3000)
+  step('and the link reopens on the same question rather than on the default one',
+    await page.locator('select[aria-label="Group by"]').inputValue() === 'SCENARIO',
+    await page.locator('select[aria-label="Group by"]').inputValue())
+
+  await page.goto(`${BASE}?mode=compare&by=SCENARIO&hold=SCENARIO`,
+    { waitUntil: 'domcontentloaded' })
+  await page.waitForTimeout(3000)
+  const notice = await page.locator('.view-notice').innerText().catch(() => '')
+  step('a link that holds its own axis constant is repaired, and the repair is stated',
+    /both the axis and the thing held constant/.test(notice),
+    notice.replace(/\n/g, ' / ').slice(0, 120))
+
+  await page.goto(BASE, { waitUntil: 'domcontentloaded' })
+  await page.waitForTimeout(2500)
+}
+
 // ─── wrap-up ─────────────────────────────────────────────────────────────────
 const appErrors = errors.filter((e) =>
   !/tile\.openstreetmap\.org|ERR_CONNECTION|Failed to load resource|ERR_TIMED_OUT/.test(e))

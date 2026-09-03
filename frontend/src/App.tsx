@@ -13,6 +13,7 @@ import {
   ParameterGrid, ParameterTree, PciLegend,
 } from './components/Panels'
 import { CompareView } from './components/CompareView'
+import { CohortView } from './components/CohortView'
 import { CellsPage } from './components/CellBarChart'
 import { MonitoredSetDock, MonitoredSetPage } from './components/MonitoredSetPanel'
 import { ComposedWorkbook } from './components/ComposedWorkbook'
@@ -126,6 +127,15 @@ export function App() {
   const [kpi, setKpi] = useState(initial.kpi)
   const [workbook, setWorkbook] = useState<WorkbookId>(initial.workbook as WorkbookId)
   const [mode, setMode] = useState<'analyze' | 'compare' | 'lab' | 'import'>(initial.mode)
+  /**
+   * Which drive property the Compare tab groups by, or null for the two-drive comparison.
+   *
+   * The scope switch and the axis are one value: see `ViewState.cohortBy`. `cohortHold`
+   * is three-valued - null lets the server choose the guard, `'NONE'` is an explicit
+   * refusal of one - which is why it is not a boolean here either.
+   */
+  const [cohortBy, setCohortBy] = useState<string | null>(initial.cohortBy)
+  const [cohortHold, setCohortHold] = useState<string | null>(initial.cohortHold)
 
   // Area binning replaces the raw route once a drive is too dense to read.
   const [binSize, setBinSize] = useState(initial.binSize)
@@ -294,7 +304,8 @@ export function App() {
     if (reconciled || sessions.length === 0 || defs.length === 0) return
     const { view, corrections: fixes } = reconcile(
       { ...initial, sessionId, kpi, workbook, seq: cursorSeq, range,
-        mode, binSize, distanceStep, footprints: showFootprints, filter: filterSpec },
+        mode, binSize, distanceStep, footprints: showFootprints, filter: filterSpec,
+        cohortBy, cohortHold },
       sessions, defs)
     setReconciled(true)
     // Appended, not assigned. The filter check runs on mount and reconcile runs later,
@@ -310,6 +321,7 @@ export function App() {
     if (view.kpi !== kpi) setKpi(view.kpi)
     if (view.seq !== cursorSeq) setCursorSeq(view.seq)
     if (view.range !== range) setRange(view.range)
+    if (view.cohortHold !== cohortHold) setCohortHold(view.cohortHold)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sessions, defs, reconciled])
 
@@ -627,12 +639,12 @@ export function App() {
     const url = window.location.pathname
       + encodeView({ mode, sessionId, kpi, workbook, seq: cursorSeq, range,
                      binSize, distanceStep, footprints: showFootprints,
-                     filter: filterSpec })
+                     filter: filterSpec, cohortBy, cohortHold })
     if (url !== window.location.pathname + window.location.search) {
       window.history.replaceState(null, '', url)
     }
   }, [reconciled, mode, sessionId, kpi, workbook, cursorSeq, range,
-      binSize, distanceStep, showFootprints, filterSpec])
+      binSize, distanceStep, showFootprints, filterSpec, cohortBy, cohortHold])
 
   // Playback belongs to the Analysis screen. Leaving it running while the user is in
   // Import means a cursor sweeping a drive they are not looking at, and two fetches a
@@ -1113,7 +1125,28 @@ export function App() {
       )}
 
       {mode === 'compare' ? (
-        <div className="body"><div className="center"><CompareView sessions={sessions} /></div></div>
+        <div className="body"><div className="center">
+          {/* Two scopes for one question. "Is this build better" is asked of two drives
+              when there are two, and of every drive of each build when there are twelve -
+              the second is not a bigger version of the first, because pooling is the only
+              way a group gets a percentile at all. Both live on this tab so the reader
+              picks the scope rather than the screen. */}
+          <div className="scope-switch" role="group" aria-label="Comparison scope">
+            <button className={cohortBy == null ? 'active' : ''}
+                    onClick={() => { setCohortBy(null); setCohortHold(null) }}>
+              Two drives
+            </button>
+            <button className={cohortBy != null ? 'active' : ''}
+                    onClick={() => { if (cohortBy == null) setCohortBy('BUILD_LABEL') }}>
+              Cohorts
+            </button>
+          </div>
+          {cohortBy == null
+            ? <CompareView sessions={sessions} />
+            : <CohortView defs={defs} kpi={kpi} groupBy={cohortBy} holdConstant={cohortHold}
+                          onKpi={setKpi}
+                          onDimension={(by, hold) => { setCohortBy(by); setCohortHold(hold) }} />}
+        </div></div>
       ) : mode === 'lab' ? (
         <div className="body"><div className="center">
           <LabView onOpenSession={openSessionFromLab} />

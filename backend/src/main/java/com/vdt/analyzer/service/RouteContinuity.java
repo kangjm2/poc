@@ -14,11 +14,13 @@ package com.vdt.analyzer.service;
  *     added to the distance travelled, so every distance-based figure downstream
  *     inherits a kilometre the vehicle never drove.
  *
- * Both rules live here, once, because two consumers need them and a disagreement
- * between the two would be invisible: {@link AnalysisService#track} decides where to
+ * Both rules live here, once, because several consumers need them and a disagreement
+ * between any two would be invisible: {@link AnalysisService#track} decides where to
  * break the line, and {@link GeoAnalysisService#distanceBins} decides which steps count
  * toward distance travelled. If the map broke the line somewhere the distance query
- * still counted, the two screens would quietly describe different drives.
+ * still counted, the two screens would quietly describe different drives. The weighted
+ * statistics and the field-to-lab channel model read the same fragments for the same
+ * reason.
  *
  * The thresholds are deliberately loose. Their job is to catch the impossible, not to
  * second-guess the data: a rule that trims plausible-but-unusual movement would delete
@@ -55,20 +57,37 @@ final class RouteContinuity {
     static final int GLITCH = 2;
 
     /**
-     * Great-circle metres from the previous sample, NULL on the first row of a session.
-     * Callers must order the window by seq, which every caller already does.
+     * The window every step is measured over: within ONE drive, in sample order.
+     *
+     * The partition is not optional and is not an optimisation. Without it `lag()` walks
+     * off the last sample of one drive into the first of the next, and the step it
+     * reports is the distance between two cities and the time between two afternoons -
+     * which then classifies as a GLITCH and silently deletes a real sample's step from
+     * the distance travelled.
+     *
+     * Every caller today narrows to one session first, so this changes none of their
+     * answers - a single-session query has one partition. It is here so that the NEXT
+     * caller, which will not narrow first, cannot inherit the bug: the compiled KPI
+     * graph's CTEs carry every drive at once by design.
+     */
+    private static final String PER_DRIVE = "PARTITION BY session_id ORDER BY seq";
+
+    /**
+     * Great-circle metres from the previous sample, NULL on the first row of a drive.
+     *
+     * Requires `session_id`, `latitude`, `longitude` and `seq` to be in scope.
      */
     public static final String STEP_METRES = """
             2 * 6371000 * asin(sqrt(
-                power(sin(radians(latitude - lag(latitude) OVER (ORDER BY seq)) / 2), 2)
-                + cos(radians(lag(latitude) OVER (ORDER BY seq)))
+                power(sin(radians(latitude - lag(latitude) OVER (%1$s)) / 2), 2)
+                + cos(radians(lag(latitude) OVER (%1$s)))
                   * cos(radians(latitude))
-                  * power(sin(radians(longitude - lag(longitude) OVER (ORDER BY seq)) / 2), 2)
-            ))""";
+                  * power(sin(radians(longitude - lag(longitude) OVER (%1$s)) / 2), 2)
+            ))""".formatted(PER_DRIVE);
 
-    /** Seconds since the previous sample, NULL on the first row. */
+    /** Seconds since the previous sample, NULL on the first row of a drive. */
     public static final String SECONDS_SINCE_PREV =
-            "extract(epoch FROM (ts - lag(ts) OVER (ORDER BY seq)))";
+            "extract(epoch FROM (ts - lag(ts) OVER (" + PER_DRIVE + ")))";
 
     /**
      * Classifies the step INTO each row as {@link #CONTINUOUS}, {@link #GAP} or
@@ -76,13 +95,21 @@ final class RouteContinuity {
      *
      * Glitch is tested first: an implausible jump also satisfies the gap rule, and
      * calling it a gap would credit the excursion to distance travelled.
+     *
+     * A step where the clock did not advance is a glitch too. It used to fall through to
+     * CONTINUOUS - the speed guard skipped it to avoid dividing by zero and the gap rule
+     * needs five seconds - so a log whose timestamps go backwards was drawn as an
+     * unbroken line and its metres counted. Nothing in the importer prevents that: `seq`
+     * is a bare row counter and the timestamps are parsed, never sorted or checked. A
+     * backward step is not a step; it is evidence the clock is wrong.
      */
     public static String classify(String stepMetresColumn, String secondsColumn) {
         double maxMetresPerSecond = MAX_PLAUSIBLE_KMH / 3.6;
         return """
                 CASE
                     WHEN %1$s IS NULL OR %2$s IS NULL THEN %3$d
-                    WHEN %2$s > 0 AND %1$s / %2$s > %4$s THEN %5$d
+                    WHEN %2$s <= 0 THEN %5$d
+                    WHEN %1$s / %2$s > %4$s THEN %5$d
                     WHEN %2$s >= %6$s AND %1$s >= %7$s THEN %8$d
                     ELSE %3$d
                 END""".formatted(

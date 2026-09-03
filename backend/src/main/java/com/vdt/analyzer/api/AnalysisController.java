@@ -7,6 +7,7 @@ import com.vdt.analyzer.repo.CellRefRepo;
 import com.vdt.analyzer.repo.MessageRepo;
 import com.vdt.analyzer.service.AreaStatsService;
 import com.vdt.analyzer.service.AnalysisService;
+import com.vdt.analyzer.service.CohortService;
 import com.vdt.analyzer.service.EventTypeCatalog;
 import com.vdt.analyzer.service.FieldToLabService;
 import com.vdt.analyzer.service.SpatialDiffService;
@@ -31,12 +32,14 @@ public class AnalysisController {
     private final EventTypeCatalog eventTypes;
     private final AreaStatsService areaStats;
     private final SpatialDiffService spatialDiff;
+    private final CohortService cohorts;
 
     public AnalysisController(AnalysisService analysis, CellRefRepo cells,
                               MessageRepo messages,
                               ProblemSurvey problems, FieldToLabService fieldToLab,
                               MonitoredSetService monitored, EventTypeCatalog eventTypes,
-                              AreaStatsService areaStats, SpatialDiffService spatialDiff) {
+                              AreaStatsService areaStats, SpatialDiffService spatialDiff,
+                              CohortService cohorts) {
         this.analysis = analysis;
         this.cells = cells;
         this.messages = messages;
@@ -46,6 +49,7 @@ public class AnalysisController {
         this.eventTypes = eventTypes;
         this.areaStats = areaStats;
         this.spatialDiff = spatialDiff;
+        this.cohorts = cohorts;
     }
 
     /**
@@ -75,7 +79,8 @@ public class AnalysisController {
         // validation the analytics reach - a spec that parses here parses there.
         com.vdt.analyzer.service.GlobalFilter.scope(filter, 0L, "s");
         String text = com.vdt.analyzer.service.GlobalFilter.describe(filter);
-        return Map.of("active", text != null, "text", text == null ? "" : text);
+        return Map.of("active", text != null, "text", text == null ? "" : text,
+                "scope", com.vdt.analyzer.service.GlobalFilter.PER_MEASUREMENT);
     }
 
     /**
@@ -318,5 +323,35 @@ public class AnalysisController {
                               @RequestParam(defaultValue = "SAMPLE") String weightedBy,
                               @RequestParam(defaultValue = "AS_RECORDED") String domain) {
         return analysis.compare(a, b, kpis, weightedBy, domain);
+    }
+
+    /**
+     * One KPI over every drive that matches, cut into cohorts by a property they carry.
+     *
+     * `/compare` answers "these two drives"; this answers "these two builds", which is a
+     * different question and not a bigger one - it pools each group's samples into one
+     * weighted distribution rather than combining two summaries, because a group's median
+     * is not recoverable from its members' medians. The narrowing parameters are exactly
+     * the measurement list's, so the set on screen is the set the reader just chose.
+     *
+     * `holdConstant` names a second dimension the comparison must not vary; without one
+     * there is still a delta but the verdict is withheld, since an unguarded "better"
+     * measures the road as much as the build.
+     */
+    @GetMapping("/cohorts")
+    public CohortSet cohorts(@RequestParam String kpi,
+                             @RequestParam(defaultValue = "BUILD_LABEL") String groupBy,
+                             @RequestParam(required = false) String holdConstant,
+                             @RequestParam(defaultValue = "SAMPLE") String weightedBy,
+                             @RequestParam(defaultValue = "AS_RECORDED") String domain,
+                             @RequestParam(required = false) String q,
+                             @RequestParam(required = false) String device,
+                             @RequestParam(required = false) String operator,
+                             @RequestParam(required = false) String technology,
+                             @RequestParam(required = false) String from,
+                             @RequestParam(required = false) String to,
+                             @RequestParam(required = false) String filter) {
+        return cohorts.cohorts(kpi, groupBy, holdConstant, weightedBy, domain,
+                q, device, operator, technology, from, to, filter);
     }
 }

@@ -1,6 +1,7 @@
 import { Fragment, useEffect, useState } from 'react'
 import { api } from '../api/client'
 import { RouteMap } from './RouteMap'
+import { SERIES_PALETTE } from '../view/paint'
 import type {
   CellRef, KpiDefinition, Series, SeriesPoint, SessionSummary, TrackPoint, Workbook,
   WorkbookLimits, WorkbookPane,
@@ -22,9 +23,14 @@ import type {
  * not a re-add.
  */
 
-/** Trace colours, distinct at a glance and stable per layer position. */
-const TRACE = ['#30578d', '#c0392b', '#1f7a1f', '#8a2be2', '#d4783c', '#0080c0',
-               '#7a6000', '#b5179e']
+/**
+ * Trace colours, distinct at a glance and stable per layer position.
+ *
+ * Read from `view/paint` rather than declared here since the cohort strip and the CDF
+ * overlay paint ordered series too: three copies of one list would have drifted the first
+ * time somebody added a ninth colour to whichever one they were looking at.
+ */
+const TRACE = SERIES_PALETTE
 
 function LayersDock({ pane, defs, sessions, maxLayers, onChange, onRemove }: {
   pane: WorkbookPane
@@ -336,10 +342,18 @@ export function ComposedWorkbook({
                     // The measurement is named on the map when it is NOT the open one.
                     // Without that a pane pinned to last month looks like this month, and
                     // the only difference is that the numbers are wrong.
+                    // ... and when a global filter is in force, the map also says WHICH
+                    // drive the condition was applied to. One condition over two drives
+                    // selects two different sample sets - each drive filtered against
+                    // itself - which is the right answer and an invisible one: the map
+                    // would otherwise show a pinned drive, narrowed by a condition the
+                    // user set while looking at a different one, and say nothing.
                     kpiName={(defs.find((d) => d.name === visible[0].kpiName)?.displayName
                               ?? visible[0].kpiName)
                              + (visible[0].sessionId && visible[0].sessionId !== sessionId
-                               ? ` · ${sessionName(visible[0].sessionId)}` : '')} />
+                               ? ` · ${sessionName(visible[0].sessionId)}`
+                                 + (filterSpec ? ' · filtered against its own measurement' : '')
+                               : '')} />
                 )
               ) : visible.length === 0 ? (
                 <div className="panel">

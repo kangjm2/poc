@@ -48,11 +48,33 @@ for (const f of javaFiles) {
 }
 
 const clientText = srcFiles.filter((f) => f.includes('/api/')).map(read).join('\n')
+
+/**
+ * The whole path shape, not just its last word.
+ *
+ * This used to test `clientText.includes(tail)` - the endpoint's final literal segment,
+ * as a bare substring of the entire client file. Two unrelated endpoints ending in the
+ * same word therefore covered for each other, and one did: nothing called
+ * `POST /kpi-definitions/graphs/{id}/recompute`, and the check passed anyway because a
+ * DIFFERENT URL a few lines away contains the word "recompute". A checker that can be
+ * satisfied by a coincidence in another line is not checking the thing it names.
+ *
+ * The shape is built from the endpoint's own segments: literals are matched literally,
+ * `{var}` matches whatever the client interpolates there. The client's BASE is `/api`,
+ * so that prefix is dropped before matching.
+ */
+const pathShape = (path) => new RegExp(
+  path.replace(/^\/api/, '')
+      .split('/')
+      .filter(Boolean)
+      .map((seg) => (seg.startsWith('{') ? '[^/`\'"\\s]+' : seg.replace(/[.*+?^$()|[\]\\]/g, '\\$&')))
+      .map((seg) => '/' + seg)
+      .join(''))
+
 const unreachedEndpoints = mappings.filter(({ path }) => {
-  // Compare on the literal segments, ignoring path variables.
-  const segs = path.split('/').filter((s) => s && !s.startsWith('{'))
-  const tail = segs[segs.length - 1]
-  return tail ? !clientText.includes(tail) : false
+  const segs = path.replace(/^\/api/, '').split('/').filter(Boolean)
+  if (segs.length === 0) return false
+  return !pathShape(path).test(clientText)
 })
 
 // -------------------------------------------------------- 2. client methods

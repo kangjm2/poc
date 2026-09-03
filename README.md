@@ -87,9 +87,9 @@ sudo -u postgres createdb -O vdt vdt
 ```bash
 # 세 검사기가 서로 다른 실패 계열을 담당합니다
 node scripts/verify-ui.mjs             # 개별 동작 125개
-node scripts/verify-scenarios.mjs      # 사용자 여정 184단계 / 20 시나리오
+node scripts/verify-scenarios.mjs      # 사용자 여정 226단계 / 23 시나리오
 node tools/uxtest/api-surface.mjs      # 로직은 있는데 뷰가 없는 격차
-(cd backend && mvn test)               # SQL을 조립하는 코드·색 램프·기하 — 47개
+(cd backend && mvn test)               # SQL을 조립하는 코드·색 램프·기하 — 89개
 node tools/uxtest/measure-signals.mjs  # (선택) 검증 신호별 비용 측정
 ```
 
@@ -170,10 +170,9 @@ UE 측만 보면 "이 단말이 힘들다"와 "이 셀이 혼잡하다"를 구�
   세션 간 추세·대시보드. 전체 목록과 우선순위는 [`docs/gap-analysis.md`](docs/gap-analysis.md),
   다음 리서치 항목은 [`docs/research-agenda.md`](docs/research-agenda.md)에 있습니다.
   (CSV 임포트, area binning, 랩 런 실행기, 파생 KPI 수식은 이후 구현되었습니다.)
-- **레퍼런스 대비 다음 세 가지**(2026-09-01, 사용자 가이드 505페이지를 읽고 갱신):
-  ⓪ **그래프의 두 번째 결과 모양을 결정** — 지금은 *표본당 한 행 × 출력 열 하나*로 고정돼 있고,
-  아래 ②③이 전부 여기 걸립니다,
-  ① **`SOURCE_SAMPLE` 노드**(위경도·속도·서빙 PCI) — ⓪과 무관하게 지금 가능,
-  ② **`SOURCE_EVENT` + 시간 상관** — 이벤트는 `ts`만 있고 `seq`가 없어 캔버스에 못 올립니다,
-  ③ **진짜 State Machine** / **Previous·Current·Next** — ⓪② 이후.
+- **레퍼런스 대비 워크벤치**(2026-09-02 갱신): ①`SOURCE_SAMPLE`(위경도·속도·서빙 PCI)과
+  ②`SOURCE_EVENT`(최근접 표본으로 이벤트를 `seq` 척추에 올림)는 **구현됐습니다.**
+  ③ **진짜 State Machine**과 **Previous·Current·Next 상관**도 구현됐고, ⓪ *그래프의 두 번째
+  결과 모양*은 **필요 없다는 것으로 판명**됐습니다 — 구간은 `ts`(=시작)와 `value`(=머문 ms)
+  두 열로 표본 행 하나에 들어갑니다.
   근거와 전체 순서는 [`docs/briefs/index.html`](docs/briefs/index.html)에 있습니다.

@@ -1,15 +1,15 @@
 # 검증 기록
 
-**현재 규모 (2026-09-02)** — 아래 본문의 기록은 최초 실행일(2026-08-30) 기준이며,
+**현재 규모 (2026-09-03)** — 아래 본문의 기록은 최초 실행일(2026-08-30) 기준이며,
 그때 이후 네 배 이상 늘었습니다. 본문을 읽기 전에 이 표를 보십시오.
 
 | 검사기 | 지금 | 최초 기록 시점 |
 |---|---|---|
 | `scripts/verify-ui.mjs` | **125/125** | 15 → 30 |
-| `scripts/verify-scenarios.mjs` | **184/184 단계 / 20 시나리오** | 75 / 8 |
-| `tools/uxtest/api-surface.mjs` | 격차 없음 (엔드포인트 66 · 클라이언트 65 · KPI 18/18 도달) | 엔드포인트 14 |
-| `mvn test` | **47개** (`KpiGraphTest` 24 · `GlobalFilterTest` 10 · `ColourRampTest` 7 · `ConvexHullTest` 6) | 없었음 |
-| Flyway 마이그레이션 | V1–V12 | V1–V3 |
+| `scripts/verify-scenarios.mjs` | **226/226 단계 / 23 시나리오** | 75 / 8 |
+| `tools/uxtest/api-surface.mjs` | 격차 없음 (엔드포인트 67 · 클라이언트 67 · KPI 18/18 도달) | 엔드포인트 14 |
+| `mvn test` | **89개** (`KpiGraphTest` 46 · `CohortTest` 13 · `GlobalFilterTest` 11 · `ColourRampTest` 7 · `ComputedKpisTest` 6 · `ConvexHullTest` 6) | 없었음 |
+| Flyway 마이그레이션 | V1–V13 | V1–V3 |
 
 > **이 표의 숫자는 낡습니다.** 권위 있는 값은 검사기를 실행한 출력이며, 이 문서가 아닙니다.
 > 아래 본문은 *무엇을* 어떻게 검증하는지에 대한 기록으로 읽으십시오.

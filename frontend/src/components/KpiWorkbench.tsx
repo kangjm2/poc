@@ -2,9 +2,9 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { api } from '../api/client'
 import type {
   EventType, GraphEdge, GraphNode, GraphNodeKind, GraphNodePreview, GraphSpec,
-  GraphValidation, KpiDefinition, StoredGraph,
+  GraphStateRule, GraphValidation, KpiDefinition, StoredGraph,
 } from '../api/types'
-import { SAMPLE_FIELDS } from '../api/types'
+import { CORRELATIONS, SAMPLE_FIELDS } from '../api/types'
 
 /**
  * The KPI Workbench: a KPI built by wiring nodes rather than by typing one formula.
@@ -60,6 +60,13 @@ const KIND_INFO: Record<GraphNodeKind, { label: string; hint: string; inputs: st
         + 'of them have a value.',
     inputs: '1–8 inputs',
   },
+  CORRELATE: {
+    label: 'Correlate',
+    hint: 'Fetches one value of one input relative to the moments of the other — the '
+        + 'value just before an event, at it, or just after. The primary input decides '
+        + 'when there is an output at all; where it has no value, there is no row.',
+    inputs: '2 inputs',
+  },
   EXPRESSION: {
     label: 'Expression',
     hint: 'Arithmetic over the columns reaching it, named by the alias.',
@@ -70,10 +77,19 @@ const KIND_INFO: Record<GraphNodeKind, { label: string; hint: string; inputs: st
     hint: 'Keeps only the samples where the condition holds.',
     inputs: '1 input',
   },
+  CLASSIFIER: {
+    label: 'Classifier',
+    hint: 'Labels each sample with the first state whose condition holds. States become '
+        + 'the numbers 1, 2, 3… in this order, because the result becomes a KPI value. '
+        + 'It has no memory: every sample is judged on its own.',
+    inputs: '1 input',
+  },
   STATE_MACHINE: {
     label: 'State machine',
-    hint: 'Labels each sample with the first state whose condition holds. States are '
-        + 'numbered in order, because the result becomes a KPI value.',
+    hint: 'Measures how long the machine held each state, in milliseconds, recorded at '
+        + 'the sample where the state began. A state can be entered only from the one '
+        + 'above it; the first state is the idle state, and its condition is the only '
+        + 'way back.',
     inputs: '1 input',
   },
   OUTPUT: {
@@ -91,10 +107,17 @@ function detailOf(n: GraphNode): string {
       return `${n.metric ?? 'RSRP'} ${n.rank ?? 1}. best`
     case 'EXPRESSION': return n.expression ? `${n.expression} AS ${n.as ?? 'VALUE'}` : '(formula)'
     case 'FILTER': return n.expression ?? '(condition)'
-    case 'STATE_MACHINE':
+    case 'CLASSIFIER':
       return (n.states ?? []).map((s) => s.state).join(', ') || '(no states)'
-    case 'OUTPUT': return n.column ? `Column: ${n.column}` : 'Column: last'
+    // The arrow is the semantics: a ladder's order IS what it means, so the card shows
+    // the order rather than a set that happens to be stored in one.
+    case 'STATE_MACHINE':
+      return (n.states ?? []).map((s) => s.state).join(' → ') || '(no states)'
+    case 'OUTPUT': return n.column ? `Column: ${n.column}` : 'Column: (pick one)'
     case 'COMBINE': return 'All values within time range'
+    case 'CORRELATE':
+      return `${(n.correlation ?? 'PREVIOUS').replace(/_/g, ' ').toLowerCase()}`
+           + (n.column ? ` ${n.column}` : '')
     default: return ''
   }
 }
@@ -108,8 +131,9 @@ function detailOf(n: GraphNode): string {
  * output, which made the connecting edge double back on itself and the graph unreadable.
  */
 const TIER: Record<GraphNodeKind, number> = {
-  SOURCE_KPI: 0, SOURCE_NEIGHBOUR: 0, SOURCE_SAMPLE: 0, SOURCE_EVENT: 0, COMBINE: 1,
-  EXPRESSION: 2, FILTER: 2, STATE_MACHINE: 3, OUTPUT: 4,
+  SOURCE_KPI: 0, SOURCE_NEIGHBOUR: 0, SOURCE_SAMPLE: 0, SOURCE_EVENT: 0,
+  COMBINE: 1, CORRELATE: 1,
+  EXPRESSION: 2, FILTER: 2, CLASSIFIER: 3, STATE_MACHINE: 3, OUTPUT: 4,
 }
 
 /**
@@ -132,6 +156,194 @@ let nextId = 1
 const freshId = (nodes: GraphNode[]) => {
   nextId = Math.max(nextId, ...nodes.map((n) => n.id), 0) + 1
   return nextId
+}
+
+/**
+ * The Correlate node's inspector.
+ *
+ * Three questions, and the first is the one the reference answers with geometry: WHICH
+ * INPUT decides the moments. Their rule is "the leftmost input is primary", which is a
+ * layout convention nothing enforces and which our compiler could not read even if it
+ * wanted to - a node's inputs arrive as edges and are ordered by node id so the same
+ * drawing always compiles the same way. So it is a control, and the control says what it
+ * decides rather than leaving the author to infer it from the picture.
+ */
+function CorrelateEditor({ node, patch, nodes, edges, columnsOf }: {
+  node: GraphNode
+  patch: (id: number, p: Partial<GraphNode>) => void
+  nodes: GraphNode[]
+  edges: GraphEdge[]
+  columnsOf: (id: number) => string[]
+}) {
+  const inputs = edges.filter((e) => e.to === node.id).map((e) => e.from).sort((a, b) => a - b)
+  const nameOf = (id: number) => {
+    const n = nodes.find((x) => x.id === id)
+    return n ? `${n.label ?? KIND_INFO[n.kind].label}${detailOf(n) ? ` — ${detailOf(n)}` : ''}`
+             : `#${id}`
+  }
+  const primary = node.primary ?? inputs[0] ?? null
+  const secondary = inputs.find((i) => i !== primary) ?? null
+  const secCols = secondary == null ? [] : columnsOf(secondary)
+
+  if (inputs.length !== 2) {
+    return (
+      <div style={{ color: '#666', whiteSpace: 'normal' }}>
+        Wire exactly two inputs. One decides the moments; the other supplies the value.
+        This node has {inputs.length}.
+      </div>
+    )
+  }
+
+  return (
+    <div style={{ display: 'grid', gap: 8 }}>
+      <label>Primary — the input that decides when there is an output<br />
+        <select value={String(primary)} aria-label="Primary input"
+                onChange={(e) => patch(node.id, { primary: Number(e.target.value) })}
+                style={{ width: '100%' }}>
+          {inputs.map((i) => <option key={i} value={i}>{nameOf(i)}</option>)}
+        </select></label>
+      <div style={{ color: '#666', whiteSpace: 'normal', fontSize: 11 }}>
+        Where the primary has no value there is no row at all. That is the opposite of
+        Combine, which keeps a sample when only some inputs have a value — and it is the
+        point: the primary is the thing being asked about.
+      </div>
+
+      <label>Fetch<br />
+        <select value={node.correlation ?? 'PREVIOUS'} aria-label="Correlation"
+                onChange={(e) => patch(node.id, { correlation: e.target.value })}
+                style={{ width: '100%' }}>
+          {CORRELATIONS.map((c) => (
+            <option key={c} value={c}>{c.replace(/_/g, ' ').toLowerCase()}</option>
+          ))}
+        </select></label>
+
+      <label>…of this column of {secondary == null ? 'the other input' : nameOf(secondary)}<br />
+        <select value={node.column ?? ''} aria-label="Column to fetch"
+                onChange={(e) => patch(node.id, { column: e.target.value || null })}
+                style={{ width: '100%', fontFamily: 'monospace' }}>
+          <option value="">{secCols.length === 1 ? secCols[0] : '(pick one)'}</option>
+          {secCols.map((c) => <option key={c} value={c}>{c}</option>)}
+        </select></label>
+
+      <label>Within (ms) — optional<br />
+        <input value={node.withinMs ?? ''} inputMode="numeric"
+               aria-label="Within milliseconds"
+               placeholder="no bound"
+               onChange={(e) => patch(node.id, {
+                 withinMs: e.target.value.trim() === '' ? null : Number(e.target.value),
+               })}
+               style={{ width: '100%', fontFamily: 'monospace' }} /></label>
+      <div style={{ color: '#666', whiteSpace: 'normal', fontSize: 11 }}>
+        Ours, not the reference&rsquo;s. Left empty, &ldquo;just before&rdquo; can reach
+        back across a whole drive and answer with a value from twenty minutes earlier —
+        true, and useless. With a bound, a value further away than that is dropped rather
+        than reported as if it were near.
+      </div>
+
+      <label>Output column name (AS)<br />
+        <input value={node.as ?? ''}
+               onChange={(e) => patch(node.id, { as: e.target.value.toUpperCase() || null })}
+               placeholder={`${(node.correlation ?? 'PREVIOUS') === 'PREVIOUS' ? 'PREV'
+                 : (node.correlation ?? '') === 'CURRENT' ? 'CURR'
+                 : (node.correlation ?? '') === 'NEXT' ? 'NEXT'
+                 : (node.correlation ?? '') === 'PREVIOUS_OR_CURRENT' ? 'PREV_OR_CURR'
+                 : 'NEXT_OR_CURR'}_${node.column ?? secCols[0] ?? 'VALUE'}`}
+               style={{ width: '100%', fontFamily: 'monospace' }} /></label>
+    </div>
+  )
+}
+
+/** The ladder cap, matching KpiGraph.MAX_LADDER_STATES. */
+const MAX_LADDER_STATES = 4
+
+/** Matches KpiGraph.LADDER_VERSION: the version in which State machine became a ladder. */
+const GRAPH_VERSION = 2
+
+/**
+ * The state machine's inspector: an ordered ladder, edited as one.
+ *
+ * The order IS the semantics - state k can be entered only from state k-1 - so it has to
+ * be visible and movable rather than implied by the order rows happened to be added in.
+ * The three sentences under the list are the node's real limits, and they are always on
+ * screen rather than in a tooltip, because each one is a case where a user would
+ * otherwise read an absent value as a bug.
+ */
+function LadderEditor({ node, patch }: {
+  node: GraphNode
+  patch: (id: number, p: Partial<GraphNode>) => void
+}) {
+  const states = node.states ?? []
+  const set = (next: typeof states) => patch(node.id, { states: next })
+  const edit = (i: number, p: Partial<GraphStateRule>) =>
+    set(states.map((x, j) => (j === i ? { ...x, ...p } : x)))
+  const move = (i: number, by: number) => {
+    const j = i + by
+    if (j < 1 || j >= states.length) return   // row 0 is the initial state and stays
+    const next = [...states]
+    ;[next[i], next[j]] = [next[j], next[i]]
+    set(next)
+  }
+
+  return (
+    <div style={{ display: 'grid', gap: 6 }}>
+      {states.map((st, i) => (
+        <div key={i} style={{ display: 'grid', gap: 3 }}>
+          <div style={{ color: '#666', fontSize: 11 }}>
+            {i === 0 ? 'Initial state — return here when:' : 'Then enter when:'}
+          </div>
+          <div style={{ display: 'flex', gap: 6 }}>
+            <input value={st.state} placeholder={i === 0 ? 'IDLE' : 'STATE_NAME'}
+                   aria-label={`State ${i + 1} name`}
+                   onChange={(e) => edit(i, { state: e.target.value.toUpperCase() })}
+                   style={{ width: 140, fontFamily: 'monospace' }} />
+            <input value={st.condition} placeholder="DL_BLER > 10"
+                   aria-label={`State ${i + 1} condition`}
+                   onChange={(e) => edit(i, { condition: e.target.value })}
+                   style={{ flex: 1, fontFamily: 'monospace' }} />
+            {i > 0 && (
+              <>
+                <button title="Earlier in the ladder" aria-label={`Move ${st.state} up`}
+                        disabled={i <= 1} onClick={() => move(i, -1)}>↑</button>
+                <button title="Later in the ladder" aria-label={`Move ${st.state} down`}
+                        disabled={i >= states.length - 1} onClick={() => move(i, 1)}>↓</button>
+                <button aria-label={`Remove ${st.state}`}
+                        disabled={states.length <= 2}
+                        onClick={() => set(states.filter((_, j) => j !== i))}>&times;</button>
+              </>
+            )}
+          </div>
+          {i === 0 && (
+            <div style={{ color: '#666', whiteSpace: 'normal', fontSize: 11 }}>
+              This is the only way back, and it is what ends a measurement.
+            </div>
+          )}
+          {i > 0 && (
+            <div style={{ color: '#888', fontSize: 11 }}>
+              publishes the column <code>{st.state || '…'}</code>
+            </div>
+          )}
+        </div>
+      ))}
+      <div>
+        <button disabled={states.length >= MAX_LADDER_STATES}
+                title={states.length >= MAX_LADDER_STATES
+                  ? 'Four states is the cap: each one adds two levels to the compiled query.'
+                  : 'Add a state below the last one'}
+                onClick={() => set([...states, { state: '', condition: '' }])}>+ state</button>
+      </div>
+      <div style={{ color: '#666', whiteSpace: 'normal' }}>
+        Each state can be entered only from the one above it. There is no transition that
+        skips one, and no way back other than the initial state&rsquo;s condition.
+        There is no time trigger: a transition fires on a condition, never on a condition
+        failing to hold for N milliseconds.
+      </div>
+      <div style={{ color: '#666', whiteSpace: 'normal' }}>
+        A state entered and left within one sample is not measured. A state whose end falls
+        after a logger gap, a bad position fix, or the end of the drive is not measured
+        either &mdash; it contributes no value rather than a shortened one.
+      </div>
+    </div>
+  )
 }
 
 export function KpiWorkbench({ defs, onChanged, eventTypes = [], sessionId = null }: {
@@ -163,7 +375,10 @@ export function KpiWorkbench({ defs, onChanged, eventTypes = [], sessionId = nul
   const svgRef = useRef<SVGSVGElement>(null)
   const drag = useRef<{ id: number; dx: number; dy: number } | null>(null)
 
-  const spec: GraphSpec = useMemo(() => ({ nodes, edges }), [nodes, edges])
+  // Always the current version. A document the editor produced is by definition one the
+  // editor's own meanings apply to; the number exists to refuse the ones it did not.
+  const spec: GraphSpec = useMemo(
+    () => ({ version: GRAPH_VERSION, nodes, edges }), [nodes, edges])
 
   const reloadStored = useCallback(() => {
     api.kpiGraphs().then(setStored).catch(() => setStored([]))
@@ -201,8 +416,15 @@ export function KpiWorkbench({ defs, onChanged, eventTypes = [], sessionId = nul
       eventType: kind === 'SOURCE_EVENT' ? 'HANDOVER' : null,
       metric: kind === 'SOURCE_NEIGHBOUR' ? 'RSRP' : null,
       excludeServing: kind === 'SOURCE_NEIGHBOUR' ? true : null,
-      expression: null, as: null, states: kind === 'STATE_MACHINE' ? [] : null,
-      defaultState: null, column: null,
+      expression: null, as: null,
+      // A ladder opens with its two mandatory rows rather than an empty list: an empty
+      // one would put the author in front of a node whose first error is that it has no
+      // states, when what it actually needs is an idle state and one to measure.
+      states: kind === 'CLASSIFIER' ? []
+        : kind === 'STATE_MACHINE' ? [{ state: 'IDLE', condition: '' },
+                                      { state: '', condition: '' }]
+        : null,
+      column: null,
     }])
     setSelected(id)
   }
@@ -271,6 +493,26 @@ export function KpiWorkbench({ defs, onChanged, eventTypes = [], sessionId = nul
     setNodes(g.spec.nodes); setEdges(g.spec.edges ?? [])
     setKpiName(g.outputKpiName); setDisplayName(g.name); setSelected(null)
     setResult(null); setSaveError(null)
+  }
+
+  /**
+   * Recompute one saved graph against the data as it is now.
+   *
+   * A graph KPI's values are a SNAPSHOT - computed when the graph is saved, and again
+   * when an import brings in a drive - and this screen says so. Saying so without
+   * offering a way to refresh one made the statement a dead end: the only way to
+   * recompute a graph you had not edited was to open it and press Save, which also
+   * rewrites the stored document. The endpoint existed all along and nothing called it.
+   */
+  const recompute = async (g: StoredGraph) => {
+    setBusy(true); setSaveError(null)
+    try {
+      const r = await api.recomputeKpiGraph(g.id)
+      setResult(`${g.outputKpiName}: ${r.valuesComputed} values computed`)
+      reloadStored(); onChanged()
+    } catch (e) {
+      setSaveError(e instanceof Error ? e.message : String(e))
+    } finally { setBusy(false) }
   }
 
   const remove = async (g: StoredGraph) => {
@@ -397,7 +639,10 @@ export function KpiWorkbench({ defs, onChanged, eventTypes = [], sessionId = nul
           {validation == null ? <span style={{ color: '#666' }}>Add a node to begin.</span>
             : validation.ok ? (
               <span style={{ color: '#147a14' }}>
-                Valid. Output column <b>{validation.outputColumn}</b>
+                Valid. {validation.outputIsDuration
+                  ? <>Publishes <b>{validation.outputColumn}</b> as a duration in
+                      milliseconds, one value at the sample where the state began</>
+                  : <>Output column <b>{validation.outputColumn}</b></>}
                 {validation.referencedKpis.length > 0
                   && ` · reads ${validation.referencedKpis.join(', ')}`}
                 {validation.readsNeighbours && ' · reads the monitored set'}
@@ -484,7 +729,7 @@ export function KpiWorkbench({ defs, onChanged, eventTypes = [], sessionId = nul
 
               {(sel.kind === 'EXPRESSION' || sel.kind === 'SOURCE_KPI'
                 || sel.kind === 'SOURCE_NEIGHBOUR' || sel.kind === 'SOURCE_SAMPLE'
-                || sel.kind === 'SOURCE_EVENT' || sel.kind === 'STATE_MACHINE') && (
+                || sel.kind === 'SOURCE_EVENT' || sel.kind === 'CLASSIFIER') && (
                 <label>Output column name (AS)<br />
                   <input value={sel.as ?? ''}
                          onChange={(e) => patch(sel.id, { as: e.target.value.toUpperCase() })}
@@ -509,7 +754,7 @@ export function KpiWorkbench({ defs, onChanged, eventTypes = [], sessionId = nul
                         direction: 'HIGHER_IS_BETTER', source: 'UE', decimals: 2,
                         description: null, expression: null,
                       },
-                      spec: { nodes, edges },
+                      spec,
                     }, sel.id, sessionId))
                   } catch (e) {
                     setPreviewError(e instanceof Error ? e.message : String(e))
@@ -550,13 +795,16 @@ export function KpiWorkbench({ defs, onChanged, eventTypes = [], sessionId = nul
                 )}
               </div>
 
-              {sel.kind === 'STATE_MACHINE' && (
+              {sel.kind === 'CLASSIFIER' && (
                 <div style={{ display: 'grid', gap: 6 }}>
                   <div style={{ color: '#666', whiteSpace: 'normal' }}>
                     The first state whose condition holds wins. States become the numbers
                     1, 2, 3&hellip; in this order, because a KPI value is a number. The
-                    names stay here on the canvas &mdash; a published state machine charts
+                    names stay here on the canvas &mdash; a published classifier charts
                     as 1, 2, 3, so note which is which before you leave this pane.
+                    A sample no condition claims &mdash; including one where a condition
+                    reads a column that has no value there, such as an event column
+                    between events &mdash; gets no state and drops out of the result.
                   </div>
                   {(sel.states ?? []).map((st, i) => (
                     <div key={i} style={{ display: 'flex', gap: 6 }}>
@@ -585,11 +833,18 @@ export function KpiWorkbench({ defs, onChanged, eventTypes = [], sessionId = nul
                 </div>
               )}
 
+              {sel.kind === 'STATE_MACHINE' && <LadderEditor node={sel} patch={patch} />}
+
+              {sel.kind === 'CORRELATE' && (
+                <CorrelateEditor node={sel} patch={patch} nodes={nodes} edges={edges}
+                                 columnsOf={(id) => validation?.columnsByNode?.[String(id)] ?? []} />
+              )}
+
               {sel.kind === 'OUTPUT' && (
                 <label>Column to publish<br />
                   <input value={sel.column ?? ''}
                          onChange={(e) => patch(sel.id, { column: e.target.value.toUpperCase() })}
-                         placeholder="defaults to the last column"
+                         placeholder="required when the input has more than one column"
                          style={{ width: '100%', fontFamily: 'monospace' }} /></label>
               )}
 
@@ -610,13 +865,22 @@ export function KpiWorkbench({ defs, onChanged, eventTypes = [], sessionId = nul
                 <input value={displayName} onChange={(e) => setDisplayName(e.target.value)}
                        placeholder="defaults to the name" style={{ width: '100%' }} /></label>
               <label style={{ width: 90 }}>Unit<br />
-                <input value={unit} onChange={(e) => setUnit(e.target.value)}
-                       placeholder="dB" style={{ width: '100%' }} /></label>
+                {/* A duration's unit is not the author's to choose. Left editable, a
+                    dwell could be published as "dB" and every screen would then colour
+                    milliseconds on a signal-level scale. */}
+                {validation?.outputIsDuration
+                  ? <div title="A duration's unit is not the author's to choose."
+                         style={{ padding: '3px 0', fontFamily: 'monospace' }}>ms</div>
+                  : <input value={unit} onChange={(e) => setUnit(e.target.value)}
+                           placeholder="dB" style={{ width: '100%' }} />}</label>
             </div>
             <div style={{ color: '#666', whiteSpace: 'normal' }}>
               Values are computed now and again on import, not on every read, so a graph
               KPI behaves like every other KPI everywhere else in the tool &mdash; coloured,
               binned, exported and reported by the same code.
+              {validation?.outputIsDuration && ' Values are milliseconds at the sample where'
+                + ' the state began, so this KPI is sparse: most samples have no value, and'
+                + ' a mean over it is a mean of durations, not of samples.'}
             </div>
             <div>
               <button onClick={save}
@@ -643,6 +907,9 @@ export function KpiWorkbench({ defs, onChanged, eventTypes = [], sessionId = nul
                     <td className="num">{g.valuesComputed}</td>
                     <td>
                       <button disabled={busy} onClick={() => load(g)}>Open</button>{' '}
+                      <button disabled={busy} onClick={() => recompute(g)}
+                              title="Recompute this KPI against the measurements as they are now"
+                      >Recompute</button>{' '}
                       <button disabled={busy} onClick={() => remove(g)}>Delete</button>
                     </td>
                   </tr>
