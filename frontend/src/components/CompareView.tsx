@@ -36,12 +36,27 @@ export function CompareView({ sessions }: { sessions: SessionSummary[] }) {
    */
   const [weightedBy, setWeightedBy] = useState('SAMPLE')
 
+  /**
+   * Arithmetic on the dB readings, or on the powers behind them.
+   *
+   * `/compare` has always accepted this and this screen never sent it, so every comparison
+   * silently answered AS_RECORDED while the Statistics panel let the reader choose - two
+   * screens printing different means for the same drives with nothing saying why. It is not
+   * a rounding nicety: by Jensen's inequality the gap for lognormal shadowing is about
+   * 0.115 sigma^2 dB, which is 1.8 dB at sigma 4 and 7.4 dB at sigma 8 - larger than most
+   * verdicts in the table below.
+   *
+   * The mean is the only statistic it moves. Percentiles are order statistics and
+   * dB-to-linear is monotone, so the median is the same sample either way.
+   */
+  const [domain, setDomain] = useState('AS_RECORDED')
+
   useEffect(() => {
     if (a === null || b === null) return
     setError(null)
-    api.compare(a, b, COMPARE_KPIS, weightedBy)
+    api.compare(a, b, COMPARE_KPIS, weightedBy, domain)
       .then(setData).catch((e) => setError(String(e)))
-  }, [a, b, weightedBy])
+  }, [a, b, weightedBy, domain])
 
   // The row whose CDFs are overlaid; defaults to the first KPI both sides measured.
   const selectedRow = data
@@ -83,6 +98,13 @@ export function CompareView({ sessions }: { sessions: SessionSummary[] }) {
                 <option value="SAMPLE">Sample</option>
                 <option value="DISTANCE">Distance</option>
               </select>
+              <label>Mean in</label>
+              <select value={domain} aria-label="Compare mean in"
+                      title="dB values averaged as recorded, or converted to power first - the mean is the only statistic this moves"
+                      onChange={(e) => setDomain(e.target.value)}>
+                <option value="AS_RECORDED">dB as recorded</option>
+                <option value="LINEAR">linear power</option>
+              </select>
             </span>
             <span className="meta">
               {data.sessionA.sampleCount} / {data.sessionB.sampleCount} samples
@@ -95,6 +117,10 @@ export function CompareView({ sessions }: { sessions: SessionSummary[] }) {
             {weightedBy === 'DISTANCE'
               ? ' — comparing the road rather than where each drive happened to stop'
               : ' — one row per sample, so time spent stopped counts once per second'}
+            {domain === 'LINEAR'
+              ? '. dB parameters are averaged in power and converted back; percentiles are'
+                + ' unchanged, because dB-to-linear is monotone.'
+              : ''}
           </div>
           <table className="grid">
             <thead>

@@ -166,6 +166,9 @@ public final class GlobalFilter {
                         "Statistics inside a drawn shape"),
                 new Coverage("/api/sessions/{id}/bins", true,
                         "Map tiles"),
+                new Coverage("/api/sessions/{id}/distance-bins", true,
+                        "Distance profile; the axis stays the whole road so two profiles of"
+                        + " one drive remain comparable"),
                 new Coverage("/api/sessions/{id}/cell-footprints", true,
                         "Measured cell coverage shapes"),
                 new Coverage("/api/sessions/{id}/export.csv", true,

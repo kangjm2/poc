@@ -95,6 +95,25 @@ public class ImportJobLog {
         update(jobId, null, 0, 0, 0, "FAILED", message);
     }
 
+    /**
+     * Records a failure ONLY if nothing has already said what happened.
+     *
+     * The last word belongs to whoever knows the most. A caught exception knows the reason -
+     * "No column matched a known KPI" - and writes it; this is the fallback for the case
+     * where nothing was caught at all, because the transaction was marked rollback-only by
+     * something nested and the failure surfaced after the method returned. Guarding on
+     * status='RUNNING' rather than writing unconditionally is the whole point: without it
+     * this generic sentence overwrites every specific one, which a scenario check caught
+     * within minutes of the first version.
+     *
+     * @return true when this call was the one that recorded the outcome
+     */
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public boolean failedIfStillRunning(long jobId, String message) {
+        return jdbc.update("UPDATE import_job SET status='FAILED', finished_at=now(),"
+                + " message=? WHERE id=? AND status='RUNNING'", message, jobId) > 0;
+    }
+
     private void update(long jobId, Long sessionId, long rows, long samples, long kpis,
                         String status, String message) {
         jdbc.update("UPDATE import_job SET status=?, session_id=?, rows_read=?, samples_loaded=?,"

@@ -6,6 +6,7 @@
  * what is the cheapest representation that still carries the answer?
  */
 import { chromium } from 'playwright'
+import { chromiumPath } from './browser.mjs'
 import { writeFileSync, mkdirSync } from 'node:fs'
 
 const BASE = process.env.BASE ?? 'http://127.0.0.1:4173'
@@ -14,7 +15,7 @@ mkdirSync(OUT, { recursive: true })
 
 export async function openApp() {
   const browser = await chromium.launch({
-    executablePath: '/opt/pw-browsers/chromium-1194/chrome-linux/chrome',
+    executablePath: chromiumPath(),
     proxy: process.env.HTTPS_PROXY
       ? { server: process.env.HTTPS_PROXY, bypass: 'localhost,127.0.0.1,::1' }
       : undefined,

@@ -89,7 +89,10 @@ export function DerivedKpiPanel({ defs, onChanged }: {
             <input value={unit} onChange={(e) => setUnit(e.target.value)}
                    placeholder="Mbps/%" style={{ width: '100%' }} /></label>
           <label style={{ width: 80 }}>Decimals<br />
-            <input type="number" min={0} max={6} value={decimals}
+            {/* 4, not 6: KpiDefinitionForm.MAX_DECIMALS refuses more with a 400, and the
+                refusal arrives only after the name, unit and formula are filled in - failure
+                far from the control, the same defect already closed for the ninth layer. */}
+            <input type="number" min={0} max={4} value={decimals}
                    onChange={(e) => setDecimals(Number(e.target.value))}
                    style={{ width: '100%' }} /></label>
         </div>

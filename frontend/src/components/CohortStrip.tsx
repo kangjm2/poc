@@ -32,14 +32,21 @@ export function CohortStrip({ cohorts, unit, decimals, onPick, picked }: {
   const ROW_H = 34
   const GAP = 8
 
-  const rows = cohorts.filter((c) => c.stats.mean != null)
-  if (rows.length === 0) {
+  // Every cohort is a row, including one that measured nothing.
+  //
+  // This filtered them out, which was wrong in a way the screen could not show: the header
+  // above says "N groups", the table below prints a row of em dashes for it, and the CDF
+  // legend names it - so three surfaces disagreed about how many groups there were, and the
+  // one that was missing is exactly the group whose emptiness IS the answer. Worse, the delta
+  // on the next group is measured from a baseline the reader could not see.
+  const rows = cohorts
+  if (!rows.some((c) => c.stats.mean != null)) {
     return <div className="empty-note">No cohort on screen has a value for this parameter.</div>
   }
 
   const H = PAD.top + rows.length * (ROW_H + GAP) - GAP + PAD.bottom
   const points = rows.flatMap((c) => [
-    c.stats.mean as number,
+    ...(c.stats.mean == null ? [] : [c.stats.mean]),
     ...c.members.map((m) => m.mean).filter((v): v is number => v != null),
   ])
   const rawLo = Math.min(...points)
@@ -86,15 +93,24 @@ export function CohortStrip({ cohorts, unit, decimals, onPick, picked }: {
           </g>
         ))}
 
-        {rows.map((c, i) => i === 0 ? null : (
-          <path key={`e${c.value}`} className="cohort-elbow"
-                d={elbow(x(rows[i - 1].stats.mean as number), rowY(i - 1),
-                         x(c.stats.mean as number), rowY(i))}
-                fill="none" stroke="#9a9aa2" strokeWidth={1} strokeDasharray="4 3" />
-        ))}
+        {rows.map((c, i) => {
+          // To the nearest row above that has a mean, not to i-1: that is the pair the delta
+          // column compares, so a connector to a valueless row would draw a comparison the
+          // table does not make.
+          if (c.stats.mean == null) return null
+          let j = i - 1
+          while (j >= 0 && rows[j].stats.mean == null) j--
+          if (j < 0) return null
+          return (
+            <path key={`e${c.value}`} className="cohort-elbow"
+                  d={elbow(x(rows[j].stats.mean as number), rowY(j),
+                           x(c.stats.mean as number), rowY(i))}
+                  fill="none" stroke="#9a9aa2" strokeWidth={1} strokeDasharray="4 3" />
+          )
+        })}
 
         {rows.map((c, i) => {
-          const mean = c.stats.mean as number
+          const mean = c.stats.mean
           const colour = seriesColor(i)
           return (
             <g key={c.value} className="cohort-row" data-bucket={c.value}
@@ -122,11 +138,19 @@ export function CohortStrip({ cohorts, unit, decimals, onPick, picked }: {
                     + `${m.heldValue ? ` · ${m.heldValue}` : ''}`}</title>
                 </circle>
               ))}
-              <line className="cohort-mean" data-bucket={c.value} data-mean={mean}
-                    x1={x(mean)} x2={x(mean)} y1={rowY(i) - 11} y2={rowY(i) + 11}
-                    stroke={colour} strokeWidth={2.5}>
-                <title>{`${c.value} pooled mean ${fmt(mean)} ${unit} over ${c.sampleCount} samples`}</title>
-              </line>
+              {mean == null ? (
+                // Said in the row rather than by the row's absence. "This group measured
+                // nothing" is an answer, and a strip that silently omitted it made the reader
+                // count groups wrong.
+                <text x={PAD.left + 6} y={rowY(i) + 4} fontSize="10" fill="#8a8a92"
+                      className="cohort-nodata">no value for this parameter</text>
+              ) : (
+                <line className="cohort-mean" data-bucket={c.value} data-mean={mean}
+                      x1={x(mean)} x2={x(mean)} y1={rowY(i) - 11} y2={rowY(i) + 11}
+                      stroke={colour} strokeWidth={2.5}>
+                  <title>{`${c.value} pooled mean ${fmt(mean)} ${unit} over ${c.sampleCount} samples`}</title>
+                </line>
+              )}
 
               <text x={W - PAD.right + 6} y={rowY(i) - 2} fontSize="11" fill="#222"
                     className="cohort-figure">{fmt(mean)}</text>

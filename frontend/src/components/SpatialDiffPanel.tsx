@@ -27,6 +27,16 @@ export function SpatialDiffPanel({ sessionId, sessions, kpi, cursorSeq, onPick }
    * "the evening runs are worse here" a statement about evenings.
    */
   const [withB, setWithB] = useState<number[]>([])
+  /**
+   * Extra measurements on the NEAR side.
+   *
+   * The reference's dialog is symmetric - `Measurement Group 1` and `Measurement Group 2`,
+   * each with `Group · Parameter · Measurements · Configure` (UC16 p158-162) - and so is
+   * the service behind this panel. Only this screen was one-sided, which made the near
+   * group permanently the one drive the user happened to have open. "The evening runs
+   * against the morning runs" needs both sides to be groups.
+   */
+  const [withA, setWithA] = useState<number[]>([])
   const [size, setSize] = useState(150)
   const [data, setData] = useState<SpatialDiff | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -42,9 +52,9 @@ export function SpatialDiffPanel({ sessionId, sessions, kpi, cursorSeq, onPick }
   useEffect(() => {
     if (sessionId == null || other == null) { setData(null); return }
     setError(null)
-    api.spatialDiff(sessionId, other, kpi, size, withB).then(setData)
+    api.spatialDiff(sessionId, other, kpi, size, withB, withA).then(setData)
       .catch((e) => { setData(null); setError(e instanceof Error ? e.message : String(e)) })
-  }, [sessionId, other, kpi, size, withB])
+  }, [sessionId, other, kpi, size, withB, withA])
 
   const legend = data?.direction === 'NEUTRAL'
     ? [['#5b3fa8', 'changed a lot'], ['#a390d4', 'changed'], ['#e8e8ec', 'unchanged']]
@@ -59,12 +69,28 @@ export function SpatialDiffPanel({ sessionId, sessions, kpi, cursorSeq, onPick }
           <span className="meta" style={{ marginLeft: 'auto', display: 'flex', gap: 6 }}>
             <label>against</label>
             <select value={other ?? ''} aria-label="Compare against"
-                    onChange={(e) => { setOther(Number(e.target.value)); setWithB([]) }}>
+                    onChange={(e) => { setOther(Number(e.target.value)); setWithB([]); setWithA([]) }}>
               {sessions.filter((s) => s.id !== sessionId)
                 .map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
             </select>
             {/* Only measurements on neither side are offered: one on both would be
                 differenced against itself and pull its tiles towards "these agree". */}
+            {/* The near side, mirroring the far one. Same exclusion rule in both: a
+                measurement already on either side is not offered, because one on both
+                would be differenced against itself and drag its tiles towards "agree". */}
+            <select value="" aria-label="Add to the near side"
+                    title="Average another measurement into the near side"
+                    onChange={(e) => {
+                      const id = Number(e.target.value)
+                      if (id) setWithA((v) => v.includes(id) ? v : [...v, id])
+                      e.currentTarget.value = ''
+                    }}>
+              <option value="">+ add to near side…</option>
+              {sessions
+                .filter((s) => s.id !== sessionId && s.id !== other
+                  && !withA.includes(s.id) && !withB.includes(s.id))
+                .map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+            </select>
             <select value="" aria-label="Add to the far side"
                     title="Average another measurement into the far side"
                     onChange={(e) => {
@@ -74,7 +100,8 @@ export function SpatialDiffPanel({ sessionId, sessions, kpi, cursorSeq, onPick }
                     }}>
               <option value="">+ add to far side…</option>
               {sessions
-                .filter((s) => s.id !== sessionId && s.id !== other && !withB.includes(s.id))
+                .filter((s) => s.id !== sessionId && s.id !== other
+                  && !withA.includes(s.id) && !withB.includes(s.id))
                 .map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
             </select>
             <select value={size} aria-label="Diff tile size"
@@ -85,6 +112,16 @@ export function SpatialDiffPanel({ sessionId, sessions, kpi, cursorSeq, onPick }
             </select>
           </span>
         </header>
+        {withA.length > 0 && (
+          <div className="diff-group" style={{ padding: '4px 8px', color: '#444' }}>
+            Near side is a group of {withA.length + 1}, averaged together:{' '}
+            {[sessionId, ...withA].map((id) => sessions.find((s) => s.id === id)?.name ?? id)
+              .join(' · ')}
+            <button style={{ marginLeft: 8 }} onClick={() => setWithA([])}>
+              back to one measurement
+            </button>
+          </div>
+        )}
         {withB.length > 0 && (
           <div className="diff-group" style={{ padding: '4px 8px', color: '#444' }}>
             Far side is a group of {withB.length + 1}, averaged together:{' '}

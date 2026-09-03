@@ -30,6 +30,14 @@ interface Props {
    */
   footprints?: CellFootprint[] | null
   /**
+   * What the footprint layer left out, in words, or null when it left out nothing.
+   *
+   * Passed in rather than derived here: the filter is typed in the toolbar and parsed once,
+   * beside the state, and a second parse in this component would be a second opinion about
+   * the same string - the map could then draw five hulls under a caption claiming three.
+   */
+  footprintNote?: string | null
+  /**
    * Events the network reported, each already placed on a sample by the server. Drawn as
    * per-type symbols on the route: "were all six link failures on the same street" is a
    * question about geography, and until now the only way to ask it was to click six table
@@ -84,7 +92,7 @@ interface Props {
  */
 export function RouteMap({
   track, cells, cursorSeq, onCursorChange, kpiName, bins, showServingLine = true,
-  monitored = null, footprints = null, events = [], eventTypes,
+  monitored = null, footprints = null, footprintNote = null, events = [], eventTypes,
   frameKey = '', refitToken = 0, colorBy = 'kpi', isolate = null,
   drawingArea = false, onAreaDrawn, diffBins = null,
 }: Props) {
@@ -484,9 +492,18 @@ export function RouteMap({
       L.polygon(f.hull as [number, number][], {
         color: `hsl(${hue} 55% 40%)`, weight: 1.5, opacity: 0.85,
         fillColor: `hsl(${hue} 55% 50%)`, fillOpacity: 0.10,
+        // Named so a hull is countable apart from the route: both are SVG paths in the
+        // same pane, and "how many footprints are drawn" is otherwise unanswerable
+        // without also counting the several hundred coloured route segments.
+        className: 'footprint-hull',
       })
-        .bindTooltip(`PCI ${f.pci}${f.band ? ` \u00b7 ${f.band}` : ''} \u2014 served `
-                     + `${f.sampleCount} samples, mean RSRP ${f.avgRsrp} dBm`)
+        // "covers", not "served": under the three-strongest basis these samples are ones the
+        // cell was a contender on, which is a different claim. And an em dash for a cell with
+        // no mean - a cell can reach the top three without ever winning a sample, and printing
+        // 0 dBm there put a level 80 dB above anything reportable where absence belongs.
+        .bindTooltip(`PCI ${f.pci}${f.band ? ` \u00b7 ${f.band}` : ''} \u2014 covers `
+                     + `${f.sampleCount} samples, mean RSRP `
+                     + `${f.avgRsrp == null ? '\u2014' : `${f.avgRsrp} dBm`}`)
         .addTo(layer)
     })
     layer.eachLayer((l) => (l as L.Polygon).bringToBack?.())
@@ -504,12 +521,21 @@ export function RouteMap({
     }
     p ??= track[0]
     if (!p) return
+    // "Was the car actually moving here?" - the question that separates a real bad stretch
+    // from hundreds of samples taken at one traffic light. The speed is already on every
+    // track point and was rendering nowhere; this is the sample under the cursor, so the
+    // reading is that sample's, not a run's.
+    const cursorLabel = `seq ${p.seq}`
+      + (p.speedKmh == null ? '' : ` \u00b7 ${p.speedKmh} km/h`)
     if (!cursorMarker.current) {
       cursorMarker.current = L.circleMarker([p.latitude, p.longitude], {
         radius: 7, color: '#da0000', weight: 3, fillColor: '#ffffff', fillOpacity: 1,
+        className: 'cursor-marker',
       }).addTo(map)
+      cursorMarker.current.bindTooltip(cursorLabel, { className: 'cursor-tip' })
     } else {
       cursorMarker.current.setLatLng([p.latitude, p.longitude])
+      cursorMarker.current.setTooltipContent(cursorLabel)
     }
 
     // Lines from the terminal to the cells it can see. The serving cell is drawn solid
@@ -566,6 +592,14 @@ export function RouteMap({
             ? `${bins.length} area bins of ${bins[0].sizeMeters} m `
               + `${bins[0].statisticLabel ?? '[Average]'}`
             : `route coloured by ${kpiName}`}
+          {footprintNote && (
+            // The layer says what it left out, beside the drawing rather than in a tooltip:
+            // a map of three hulls where the drive met five is a different picture, and
+            // nothing else on screen would tell the reader which one they are looking at.
+            <span style={{ color: '#666', fontWeight: 400 }}>
+              {' '}&mdash; {footprintNote}
+            </span>
+          )}
           {areaFiltered && (
             // Said on the map itself, not only in the statistics panel beside it: the
             // route outside the shape is grey, and grey already means "another bin is

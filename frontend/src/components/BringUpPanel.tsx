@@ -56,9 +56,13 @@ function Chain({ data }: { data: RunBringUp }) {
             + (inst.id === activeId ? ' active' : '')}>
             <div className="chain-role">{ROLE_LABEL[inst.role] ?? inst.role}</div>
             <div className="chain-name">{inst.name}</div>
+            {/* The serial belongs beside the model: the chain already commits to saying
+                what equipment produced a number, and with two identical emulators in a
+                rack the model does not answer "which one". */}
             <div className="chain-meta">
               {inst.model}
               {inst.firmware && inst.firmware !== '-' ? ` · fw ${inst.firmware}` : ''}
+              {inst.serial ? ` · s/n ${inst.serial}` : ''}
             </div>
             <div className="chain-meta">{inst.address}</div>
           </div>

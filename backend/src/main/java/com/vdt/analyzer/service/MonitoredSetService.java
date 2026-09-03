@@ -142,10 +142,15 @@ public class MonitoredSetService {
      * the levels compare.
      */
     public MonitoredSet at(long sessionId, int seq) {
-        Integer servingPci = jdbc.query(
+        // Indexed rather than `.stream().findFirst().orElse(null)`, which is what this was.
+        // `serving_pci` is nullable - a log without a PCI column is a legal import - so the
+        // mapper hands back a list whose first element is null, and `findFirst()` throws NPE
+        // on a null element rather than returning empty. Every seeded drive has a PCI, so no
+        // checker could see it: the panel simply went blank with a 500 per cursor move.
+        List<Integer> servingRow = jdbc.query(
                 "SELECT serving_pci FROM sample WHERE session_id = ? AND seq = ?",
-                (rs, i) -> (Integer) rs.getObject("serving_pci"), sessionId, seq)
-                .stream().findFirst().orElse(null);
+                (rs, i) -> (Integer) rs.getObject("serving_pci"), sessionId, seq);
+        Integer servingPci = servingRow.isEmpty() ? null : servingRow.get(0);
 
         List<Object[]> rows = jdbc.query("""
                 SELECT n.arfcn, n.pci, n.rsrp, n.rsrq,

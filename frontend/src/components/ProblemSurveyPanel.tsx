@@ -52,7 +52,26 @@ export function ProblemSurveyPanel({ sessionId, onPick, events = [], eventTypes 
 }) {
   const [data, setData] = useState<ProblemSurvey | null>(null)
   const [error, setError] = useState<string | null>(null)
-  const [drill, setDrill] = useState<string | null>(null)
+  /**
+   * Which causes are open, in the order they were opened.
+   *
+   * A list rather than one nullable string, because the reference opens a TAB per
+   * drill-down and keeps them: *"Each drill-down from the same chart will open a new tab in
+   * the same window. These tabs are displayed on the left side of the window with the
+   * colors of the corresponding sectors"* (p87, quoted in `data-views.md` and
+   * `corrections.md` C5).
+   *
+   * The workflow that needs it is comparing two causes - open both, flip between their case
+   * grids, notice that the overshoot cases and the interference cases are the same three
+   * streets. With one slot that costs a round trip through the pie every time, and the
+   * comparison is done from memory.
+   *
+   * This project sized it 작음 as a styling difference once, and corrected itself after
+   * reading p87: the tabs are the feature, not the decoration.
+   */
+  const [open, setOpen] = useState<string[]>([])
+  const [active, setActive] = useState<string | null>(null)
+  const drill = active
   // Which case the context view is showing. Clicking a case used to only move a cursor
   // that nothing on this page displays - the pie and the case list were all the user
   // could see, so "what was RSRP doing in the ten seconds before it" meant leaving the
@@ -62,7 +81,7 @@ export function ProblemSurveyPanel({ sessionId, onPick, events = [], eventTypes 
 
   useEffect(() => {
     if (sessionId == null) return
-    setError(null); setDrill(null); setSelected(null)
+    setError(null); setOpen([]); setActive(null); setSelected(null)
     api.problemSurvey(sessionId).then(setData)
       .catch((e) => setError(e instanceof Error ? e.message : String(e)))
     // One fetch per session, not per case: the window is applied to the x domain, so
@@ -87,6 +106,21 @@ export function ProblemSurveyPanel({ sessionId, onPick, events = [], eventTypes 
     ? data.instances.filter((i) => i.category === drill)
     : data.instances
 
+  /**
+   * Clicking a cause opens its tab and makes it the one being read; clicking the cause
+   * that is already active closes it, which is how the single-slot version behaved and is
+   * still the shortest way back to everything.
+   */
+  const openCause = (category: string) => {
+    if (active === category) {
+      setOpen((v) => v.filter((c) => c !== category))
+      setActive(null)
+      return
+    }
+    setOpen((v) => (v.includes(category) ? v : [...v, category]))
+    setActive(category)
+  }
+
   let acc = 0
   const arcs = data.categories.map((c) => {
     const from = acc
@@ -102,9 +136,10 @@ export function ProblemSurveyPanel({ sessionId, onPick, events = [], eventTypes 
           <span className="meta" style={{ marginLeft: 'auto' }}>
             {data.total} problems
           </span>
-          {drill && (
-            <button style={{ marginLeft: 8 }} onClick={() => setDrill(null)}>
-              Back to all categories
+          {open.length > 0 && (
+            <button style={{ marginLeft: 8 }}
+                    onClick={() => { setOpen([]); setActive(null) }}>
+              Close all
             </button>
           )}
         </header>
@@ -118,7 +153,7 @@ export function ProblemSurveyPanel({ sessionId, onPick, events = [], eventTypes 
                     stroke="#fff" strokeWidth={1}
                     opacity={drill && drill !== a.category ? 0.25 : 1}
                     style={{ cursor: 'pointer' }}
-                    onClick={() => setDrill(drill === a.category ? null : a.category)}>
+                    onClick={() => openCause(a.category)}>
                 <title>{`${a.label}: ${a.count} (${a.share.toFixed(2)}%)`}</title>
               </path>
             ))}
@@ -127,7 +162,7 @@ export function ProblemSurveyPanel({ sessionId, onPick, events = [], eventTypes 
             <tbody>
               {arcs.map((a) => (
                 <tr key={a.category} className="deg-row"
-                    onClick={() => setDrill(drill === a.category ? null : a.category)}
+                    onClick={() => openCause(a.category)}
                     style={drill === a.category ? { background: '#eef3fa' } : undefined}>
                   <td style={{ width: 22 }}>
                     <span className="swatch" style={{ background: a.color }} />
@@ -141,6 +176,40 @@ export function ProblemSurveyPanel({ sessionId, onPick, events = [], eventTypes 
           </table>
         </div>
       </div>
+
+      {/* The tabs, on the left and in each sector's own colour, as p87 specifies. The
+          colour is what makes a tab findable without reading it: the reader picked the
+          slice by its colour a moment ago, and the tab is the same colour. */}
+      {open.length > 0 && (
+        <div className="cause-tabs" role="tablist" aria-label="Open causes">
+          {open.map((category) => {
+            const arc = arcs.find((a) => a.category === category)
+            return (
+              <button key={category} role="tab" data-cause={category}
+                      aria-selected={active === category}
+                      className={active === category ? 'active' : ''}
+                      style={{ borderLeftColor: arc?.color ?? '#999' }}
+                      onClick={() => setActive(category)}>
+                <span className="swatch" style={{ background: arc?.color ?? '#999' }} />
+                {arc?.label ?? category}
+                <span className="dim">{arc?.count ?? 0}</span>
+                <span className="close" role="presentation" title="Close this cause"
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        setOpen((v) => v.filter((c) => c !== category))
+                        // Fall back to whatever is still open rather than to nothing: the
+                        // reader closed one tab, not the comparison they were making.
+                        setActive((cur) => {
+                          if (cur !== category) return cur
+                          const left = open.filter((c) => c !== category)
+                          return left.length > 0 ? left[left.length - 1] : null
+                        })
+                      }}>×</span>
+              </button>
+            )
+          })}
+        </div>
+      )}
 
       <div className="panel">
         <header>

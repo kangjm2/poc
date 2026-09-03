@@ -14,6 +14,7 @@ import {
 } from './components/Panels'
 import { CompareView } from './components/CompareView'
 import { CohortView } from './components/CohortView'
+import { parsePciFilter } from './view/pciFilter'
 import { CellsPage } from './components/CellBarChart'
 import { MonitoredSetDock, MonitoredSetPage } from './components/MonitoredSetPanel'
 import { ComposedWorkbook } from './components/ComposedWorkbook'
@@ -185,6 +186,19 @@ export function App() {
   const [binStat, setBinStat] = useState('AVERAGE')
   /** Whether a footprint is where the cell served or where it was among the three best. */
   const [footprintBasis, setFootprintBasis] = useState('SERVING')
+  /**
+   * Which cells the footprint layer draws, in the reference's own filter syntax.
+   *
+   * UC1 p67 asks for this before it draws anything, and its dialog help gives the grammar:
+   * `3,10-30,42,100-`. The manual states the reason too - "Analysis will not work properly
+   * if there will be hundreds of pages in the results" - which is our reason as well: the
+   * hulls overlap, and overlapping every cell at once is how the layer stops answering.
+   *
+   * The server has taken `pcis` since P2-2. Narrowing is done HERE, on the drawn set,
+   * rather than by refetching: the parse has to produce the caption anyway, and a refetch
+   * per keystroke would make a typo cost a round trip.
+   */
+  const [footprintCells, setFootprintCells] = useState('')
   const [footprints, setFootprints] = useState<CellFootprint[] | null>(null)
   const [workbooks, setWorkbooks] = useState<Workbook[]>([])
   const [issues, setIssues] = useState<CoverageIssue[]>([])
@@ -381,7 +395,13 @@ export function App() {
         // opening a field measurement passes every earlier check and then paints an
         // entirely grey route with a zeroed legend and nothing to say why - a screen that
         // looks like a finding rather than like a mismatch.
-        if (d.total === 0 && kpi !== 'RSRP' && range == null) {
+        // ...and only while the ANALYSE screen is the one being read. The correction is
+        // about the drive currently open, and the Cohorts tab is explicitly about several
+        // drives at once - there, "this measurement recorded none of it" is an answer the
+        // screen exists to show, not a mismatch to repair. Without this guard a link to a
+        // fronthaul counter grouped by build silently became RSRP, which is exactly the
+        // quietly-different-view failure `view/state.ts` is built to prevent.
+        if (d.total === 0 && kpi !== 'RSRP' && range == null && mode === 'analyze') {
           setCorrections((c) => c.some((x) => x.param === 'kpi') ? c : [...c, {
             param: 'kpi', raw: kpi, became: 'RSRP',
             why: 'this measurement recorded no values for it',
@@ -391,7 +411,7 @@ export function App() {
       })
       .catch(fail)
     api.degradations(sessionId, kpi, 5, range).then(setDegradations).catch(fail)
-  }, [sessionId, kpi, range, scaleVersion, legendBasis, filterSpec, fail])
+  }, [sessionId, kpi, range, scaleVersion, legendBasis, filterSpec, mode, fail])
 
   useEffect(() => {
     if (sessionId == null || SERIES_KPIS.includes(kpi)) { setExtraSeries(null); return }
@@ -446,6 +466,24 @@ export function App() {
       .catch(() => { if (live) setFootprints(null) })
     return () => { live = false }
   }, [sessionId, showFootprints, footprintBasis, filterSpec])
+
+  /**
+   * The footprints actually drawn, and what the caption has to say about the rest.
+   *
+   * One derivation feeding both the map and the notice: a screen that drew five hulls while
+   * saying it had narrowed to three would be the exact defect this project keeps finding,
+   * and two independent reads of one typed string is how that happens.
+   */
+  const footprintFilter = parsePciFilter(footprintCells)
+  const shownFootprints = footprints == null ? null
+    : (footprintFilter.match == null ? footprints
+       : footprints.filter((f) => footprintFilter.match!(f.pci)))
+  const footprintNote = !showFootprints || footprints == null ? null
+    : footprintFilter.error != null
+      ? `cell filter ignored: ${footprintFilter.error}`
+      : footprintFilter.match == null ? null
+        : `footprints for ${footprintFilter.terms.join(', ')}`
+          + ` (${shownFootprints!.length} of ${footprints.length} cells)`
 
   const reloadWorkbooks = useCallback(() => {
     api.workbooks().then(setWorkbooks).catch(() => setWorkbooks([]))
@@ -760,7 +798,7 @@ export function App() {
                       eventTypes={eventTypes} />
             {areaStats && (
               <AreaStatsPanel data={areaStats} onClose={() => setAreaStats(null)}
-                              onPick={moveCursor} />
+                              onPick={moveCursor} filterSpec={filterSpec} />
             )}
             {distanceStep > 0 && (
               <DistanceProfile sessionId={sessionId} kpiName={kpi} stepMeters={distanceStep}
@@ -802,7 +840,8 @@ export function App() {
             <RouteMap track={track} cells={cells} cursorSeq={cursorSeq}
                       frameKey={String(sessionId)} refitToken={refitToken}
                       onCursorChange={moveCursor} kpiName={activeDef?.displayName ?? kpi}
-                      monitored={monitored?.cells ?? null} footprints={footprints}
+                      monitored={monitored?.cells ?? null} footprints={shownFootprints}
+                      footprintNote={footprintNote}
                       colorBy={colorBy} isolate={isolate}
                       events={events} eventTypes={eventTypes} />
             <div className="panel">
@@ -881,7 +920,7 @@ export function App() {
             <RouteMap track={track} cells={cells} cursorSeq={cursorSeq}
                       frameKey={String(sessionId)} refitToken={refitToken}
                       onCursorChange={moveCursor} kpiName={activeDef?.displayName ?? kpi}
-                      bins={bins} footprints={footprints}
+                      bins={bins} footprints={shownFootprints} footprintNote={footprintNote}
                       colorBy={colorBy} isolate={isolate}
                       events={events} eventTypes={eventTypes} />
             <div className="panel">
@@ -889,6 +928,15 @@ export function App() {
                 <span className="title">Detected coverage issues</span>
                 <span className="meta">{issues.length}</span>
               </header>
+              {/* The bars the detectors used, stated where the verdicts are read. A row
+                  saying "weak coverage" is a judgement, and a judgement whose threshold is
+                  invisible cannot be argued with - the same reason the pilot-pollution
+                  panel prints its window and cell count. These are the server's defaults
+                  (AnalyticsController.coverage); the endpoint accepts others. */}
+              <div className="basis-note">
+                Weak coverage below &minus;105 dBm &middot; poor quality below 0 dB SINR with
+                adequate power &middot; overshoot beyond 3 km from the site.
+              </div>
               <div style={{ maxHeight: 320, overflow: 'auto' }}>
                 <table className="grid">
                   <thead><tr><th>Type</th><th>Severity</th><th className="num">Samples</th>
@@ -1030,6 +1078,13 @@ export function App() {
                   <option value="SERVING">where it served</option>
                   <option value="TOP3">where it was top 3</option>
                 </select>
+              )}
+              {showFootprints && (
+                <input className="footprint-cells" value={footprintCells}
+                       aria-label="Footprint cells"
+                       placeholder="all cells — try 3,10-30,42,100-"
+                       title="Comma-separated PCIs and ranges, the reference's own syntax (UC1 p67)"
+                       onChange={(e) => setFootprintCells(e.target.value)} />
               )}
             </div>
             <div className="group">

@@ -670,34 +670,57 @@ public class AnalysisService {
         boolean higherBetter = !"LOWER_IS_BETTER".equals(def.getDirection());
         String sevExpr = KpiSql.severityExpr(autoScale.effective(sessionId, def), "value");
 
+        // A stretch ends where the LOG ends, not only where the values recover.
+        //
+        // The island key used to be `seq - row_number()` alone, which makes a run of bad
+        // samples one island however much unlogged time sits inside it. On the seeded city
+        // drive that reported a single ~70 s outage across a 26-sample hole the map draws as
+        // a GAP break, and put the row's marker - avg(lat)/avg(lon) - inside the hole. So the
+        // same RouteContinuity rule the map paints with breaks the island here: a duration is
+        // then wall clock over ground the log actually covered.
         String sql = """
-                WITH classified AS (
-                    SELECT k.seq, k.ts, k.value, %s AS severity, s.latitude, s.longitude
+                WITH picked AS (
+                    SELECT k.session_id, k.seq, k.ts, k.value, %1$s AS severity,
+                           s.latitude, s.longitude
                     FROM sample_kpi k
                     JOIN sample s ON s.session_id = k.session_id AND s.seq = k.seq
                     WHERE k.session_id = ? AND k.kpi_name = ?
                       AND k.seq >= ? AND k.seq <= ?%3$s
                 ),
+                stepped AS (
+                    SELECT *, %4$s AS step_m, %5$s AS dt_s FROM picked
+                ),
+                classified AS (
+                    SELECT seq, ts, value, severity, latitude, longitude,
+                           %6$s AS brk
+                    FROM stepped
+                ),
                 flagged AS (
                     SELECT *, (severity IN ('WARNING','CRITICAL')) AS bad FROM classified
                 ),
                 islands AS (
-                    SELECT *, seq - row_number() OVER (PARTITION BY bad ORDER BY seq) AS grp
+                    SELECT *,
+                           seq - row_number() OVER (PARTITION BY bad ORDER BY seq)
+                             AS run_key,
+                           sum(CASE WHEN brk = 0 THEN 0 ELSE 1 END)
+                             OVER (ORDER BY seq ROWS UNBOUNDED PRECEDING) AS break_no
                     FROM flagged
                 )
                 SELECT min(seq) AS start_seq, max(seq) AS end_seq,
                        min(ts) AS start_ts, max(ts) AS end_ts,
                        count(*) AS n,
-                       %s AS worst,
+                       %2$s AS worst,
                        avg(value) AS mean_value,
                        max(CASE WHEN severity = 'CRITICAL' THEN 1 ELSE 0 END) AS has_critical,
                        avg(latitude) AS lat, avg(longitude) AS lon
                 FROM islands WHERE bad
-                GROUP BY grp
+                GROUP BY run_key, break_no
                 HAVING count(*) >= ?
                 ORDER BY count(*) DESC
                 """.formatted(sevExpr, higherBetter ? "min(value)" : "max(value)",
-                GlobalFilter.and(scope));
+                GlobalFilter.and(scope),
+                RouteContinuity.STEP_METRES, RouteContinuity.SECONDS_SINCE_PREV,
+                RouteContinuity.classify("step_m", "dt_s"));
 
         return jdbc.query(sql, (rs, i) -> {
             Instant start = rs.getTimestamp("start_ts").toInstant();

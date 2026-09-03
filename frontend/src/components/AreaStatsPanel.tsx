@@ -9,10 +9,22 @@ import type { AreaStats } from '../api/types'
  * and have different causes; the pass list is what separates them, and clicking one takes
  * the cursor there.
  */
-export function AreaStatsPanel({ data, onClose, onPick }: {
+export function AreaStatsPanel({ data, onClose, onPick, filterSpec = null }: {
   data: AreaStats
   onClose: () => void
   onPick: (seq: number) => void
+  /**
+   * The global condition in force, or null.
+   *
+   * Needed because a pass is a run of CONSECUTIVE samples and the condition is applied
+   * before the runs are cut, so a sample removed from the middle of one drive-through
+   * splits it. The count stays correct - it is the sum of the passes - but "27 passes"
+   * over a junction the car crossed once is not what the reader takes it for, and the
+   * pass list exists precisely to separate "this street is bad" from "one of the times
+   * we drove it was bad". Stated rather than silently fixed: moving the condition out of
+   * the run computation would put an unfiltered pass list beside filtered statistics.
+   */
+  filterSpec?: string | null
 }) {
   const s = data.statistics
   return (
@@ -37,7 +49,8 @@ export function AreaStatsPanel({ data, onClose, onPick }: {
         <>
           <table className="grid">
             <tbody>
-              <tr><td>{data.displayName}{data.unit ? ` (${data.unit})` : ''}</td>
+              <tr><td>{data.displayName}{data.unit ? ` (${data.unit})` : ''}{' '}
+                <b>{s.basisLabel}</b></td>
                 <td className="num">{s.count} values</td></tr>
               <tr><td>Mean</td><td className="num">{s.mean}</td></tr>
               <tr><td>Min / Max</td><td className="num">{s.min} / {s.max}</td></tr>
@@ -45,6 +58,12 @@ export function AreaStatsPanel({ data, onClose, onPick }: {
                 <td className="num">{s.p05} / {s.p50} / {s.p95}</td></tr>
             </tbody>
           </table>
+          {filterSpec && (
+            <div className="basis-note">
+              Passes are runs of consecutive samples that also pass the filter
+              (<code>{filterSpec}</code>) &mdash; one drive-through can appear as several.
+            </div>
+          )}
           <table className="grid">
             <thead>
               <tr><th>Pass</th><th className="num">From seq</th><th className="num">To seq</th>

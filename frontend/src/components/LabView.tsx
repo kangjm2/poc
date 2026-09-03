@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { api } from '../api/client'
 import { BringUpPanel } from './BringUpPanel'
 import type {
@@ -23,12 +23,28 @@ export function LabView({ onOpenSession }: { onOpenSession?: (id: number) => voi
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  const reload = () => {
-    api.runs().then((r) => {
+  /**
+   * Which campaign's runs are listed, or null for all of them.
+   *
+   * The server has always filtered by campaign and the client method has always taken the
+   * argument; the campaigns table simply had no click handler, so a campaign was a name and
+   * a run count that could never be opened. With several acceptance campaigns the run list
+   * - and every Evaluate taken from it - covered the whole lab at once.
+   */
+  const [campaignFilter, setCampaignFilter] = useState<number | null>(null)
+
+  const reload = useCallback(() => {
+    api.runs(campaignFilter ?? undefined).then((r) => {
       setRuns(r)
-      setSelected((cur) => cur ?? (r.length ? r[0].id : null))
+      // Keep the selection when it survives the reload, fall back when it does not.
+      // Neither half is optional: always resetting throws away the run a user is reading
+      // every time the list refreshes after an Evaluate, and never resetting leaves a
+      // details pane showing a run the table above no longer contains - which is the
+      // screen this project treats as worse than an empty one.
+      setSelected((cur) => (cur != null && r.some((x) => x.id === cur))
+        ? cur : (r.length ? r[0].id : null))
     }).catch((e) => setError(String(e)))
-  }
+  }, [campaignFilter])
 
   useEffect(() => {
     api.campaigns().then(setCampaigns).catch((e) => setError(String(e)))
@@ -36,8 +52,9 @@ export function LabView({ onOpenSession }: { onOpenSession?: (id: number) => voi
     api.cellConfigs().then(setCells).catch(() => {})
     api.ueProfiles().then(setUes).catch(() => {})
     api.duEndpoints().then(setDus).catch(() => {})
-    reload()
   }, [])
+
+  useEffect(() => { reload() }, [reload])
 
   const run = runs.find((r) => r.id === selected) ?? null
 
@@ -68,7 +85,9 @@ export function LabView({ onOpenSession }: { onOpenSession?: (id: number) => voi
             <th>Description</th></tr></thead>
           <tbody>
             {campaigns.map((c) => (
-              <tr key={c.id}>
+              <tr key={c.id} className="deg-row"
+                  onClick={() => setCampaignFilter((cur) => (cur === c.id ? null : c.id))}
+                  style={c.id === campaignFilter ? { background: '#eef3fa' } : undefined}>
                 <td>{c.name}</td><td>{c.owner}</td>
                 <td className="num">{c.runCount}</td>
                 <td style={{ whiteSpace: 'normal', color: '#666' }}>{c.description}</td>
@@ -79,7 +98,21 @@ export function LabView({ onOpenSession }: { onOpenSession?: (id: number) => voi
       </div>
 
       <div className="panel">
-        <header><span className="title">Runs</span><span className="meta">{runs.length}</span></header>
+        <header>
+          <span className="title">Runs</span>
+          <span className="meta">
+            {runs.length}
+            {campaignFilter != null && (
+              <>
+                {' in '}
+                <b>{campaigns.find((c) => c.id === campaignFilter)?.name ?? campaignFilter}</b>
+                {' \u00b7 '}
+                <button style={{ fontSize: 11, padding: '0 6px' }}
+                        onClick={() => setCampaignFilter(null)}>show all</button>
+              </>
+            )}
+          </span>
+        </header>
         <table className="grid">
           <thead><tr><th>Run</th><th>Channel model</th><th>DU connection</th>
             <th>Status</th><th>Verdict</th><th /></tr></thead>
@@ -126,6 +159,10 @@ export function LabView({ onOpenSession }: { onOpenSession?: (id: number) => voi
                 ) : ' — no session attached'}
               </span>
             </header>
+            {/* Every configured input, not a selection of them. A lab result is only
+                reproducible if the screen that reports it names what produced it - path
+                loss, AWGN, transmit power and layer cap were seeded, carried and typed all
+                the way to the browser and then rendered nowhere. */}
             <div className="config-grid">
               <ConfigCard title="Channel model (emulated)" rows={run.channelModel ? [
                 ['Name', run.channelModel.name],
@@ -134,6 +171,8 @@ export function LabView({ onOpenSession }: { onOpenSession?: (id: number) => voi
                 ['Delay spread', fmt(run.channelModel.delaySpreadNs, 'ns')],
                 ['Max Doppler', fmt(run.channelModel.maxDopplerHz, 'Hz')],
                 ['MIMO correlation', run.channelModel.mimoCorrelation ?? '-'],
+                ['Path loss', fmt(run.channelModel.pathLossDb, 'dB')],
+                ['AWGN SNR', fmt(run.channelModel.awgnSnrDb, 'dB')],
                 ['Replay source', run.channelModel.sourceSessionId
                   ? `session ${run.channelModel.sourceSessionId}` : '-'],
               ] : []} />
@@ -146,6 +185,7 @@ export function LabView({ onOpenSession }: { onOpenSession?: (id: number) => voi
                   + (run.cellConfig.tddPattern ? ` (${run.cellConfig.tddPattern})` : '')],
                 ['MIMO layers', String(run.cellConfig.mimoLayers ?? '-')],
                 ['Antennas', `${run.cellConfig.txAntennas ?? '-'}T${run.cellConfig.rxAntennas ?? '-'}R`],
+                ['Max power', fmt(run.cellConfig.maxPowerDbm, 'dBm')],
               ] : []} />
               <ConfigCard title="UE profile (emulated)" rows={run.ueProfile ? [
                 ['Name', run.ueProfile.name],
@@ -154,6 +194,7 @@ export function LabView({ onOpenSession }: { onOpenSession?: (id: number) => voi
                 ['Traffic', run.ueProfile.trafficProfile],
                 ['Target rate', fmt(run.ueProfile.targetMbps, 'Mbps')],
                 ['Mobility', fmt(run.ueProfile.mobilityKmh, 'km/h')],
+                ['Max MIMO layers', String(run.ueProfile.maxMimoLayers ?? '-')],
               ] : []} />
               <ConfigCard title="DU under test (real)" rows={run.duEndpoint ? [
                 ['Name', run.duEndpoint.name],

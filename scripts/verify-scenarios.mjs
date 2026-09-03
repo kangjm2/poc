@@ -21,6 +21,7 @@
  * Scale beyond the seed is covered separately by scripts/load-test.sh.
  */
 import { chromium } from 'playwright'
+import { chromiumPath } from '../tools/uxtest/browser.mjs'
 
 const BASE = process.env.BASE ?? 'http://127.0.0.1:4173'
 const API = process.env.API ?? 'http://127.0.0.1:8080'
@@ -42,7 +43,7 @@ const step = (name, ok, detail = '') => {
 
 const PROXY = process.env.HTTPS_PROXY ?? process.env.https_proxy
 const browser = await chromium.launch({
-  executablePath: '/opt/pw-browsers/chromium-1194/chrome-linux/chrome',
+  executablePath: chromiumPath(),
   ...(PROXY ? { proxy: { server: PROXY, bypass: 'localhost,127.0.0.1,::1' } } : {}),
   args: ['--ignore-certificate-errors'],
 })
@@ -83,6 +84,18 @@ const clickProgressAt = async (fraction) => {
 await page.goto(BASE, { waitUntil: 'domcontentloaded' })
 await page.waitForSelector('.statusbar', { timeout: 15000 })
 await page.waitForTimeout(2500)
+// A run starts from the seeded four drives, whatever an aborted previous run left behind.
+//
+// Not tidiness: a scenario here imports a drive with NO build label and no scenario, and one
+// such drive left in the database makes the cohort screen's hold-constant guard refuse
+// outright - so a leftover does not linger quietly, it changes what an EARLIER scenario
+// measures on the next run. The clean-up at the end of each scenario cannot cover the case
+// where the run died before reaching it, so the baseline is established here instead.
+for (const stale of await apiGet('/api/sessions')) {
+  if (/^S\d+ /.test(stale.name)) await page.request.delete(`${API}/api/sessions/${stale.id}`)
+}
+await page.request.delete(`${API}/api/kpi-definitions/S24_MARGIN_DB`)
+
 const sessions = await apiGet('/api/sessions')
 
 // ─── S1 · Post-drive field analysis ──────────────────────────────────────────
@@ -679,6 +692,26 @@ scenario('S11 · Unknown columns become KPIs instead of being dropped')
     rejected.status() === 400 && failed?.status === 'FAILED' && /No column matched/.test(failed?.message ?? ''),
     `HTTP ${rejected.status()}, history: ${failed?.status ?? 'absent'}`)
 
+  // A real log need not carry a serving-cell column, and every seeded drive does - so this
+  // is the shape of defect no checker over the seed can see. `serving_pci` is nullable, the
+  // row mapper hands back a list whose first element is null, and `Stream.findFirst()` throws
+  // NPE on a null element rather than returning empty: 500 on every cursor move, and the
+  // Monitored Set and Mobility overlay simply blank with nothing on screen to say why.
+  const noPci = await page.request.post(`${API}/api/import/csv`, {
+    multipart: {
+      file: { name: 'S11 no-pci.csv', mimeType: 'text/csv',
+              buffer: Buffer.from('lat,lon,rsrp\n65.01,25.47,-88\n65.02,25.48,-91\n') },
+      sessionName: 'S11 no serving cell',
+    },
+  })
+  const noPciId = noPci.ok() ? (await noPci.json()).sessionId : null
+  const mon = noPciId == null ? null
+    : await page.request.get(`${API}/api/sessions/${noPciId}/monitored-set?seq=0`)
+  step('a drive with no serving-cell column still answers the neighbour panel',
+    noPci.ok() && mon?.ok() === true,
+    noPciId == null ? `import ${noPci.status()}` : `import 200, monitored-set ${mon.status()}`)
+  if (noPciId != null) await page.request.delete(`${API}/api/sessions/${noPciId}`)
+
   const off = await importFile('S11 dropped', false)
   step('by default an unrecognised column is reported as dropped',
     /Ignored columns\s+Beam SSB index, Custom margin \(dB\)/.test(off)
@@ -971,8 +1004,11 @@ scenario('S14 · Cause to the moment, with context')
 
   const ctxMarks = await page.locator('.case-context g.chart-event').count()
   const ctxTrace = await page.locator('.case-context svg path').count()
+  // `ctxMarks >= 0` is a tautology on a Playwright count, so the step named two things and
+  // asserted one. The window is chosen to bracket a problem case, and every seeded case has
+  // at least one event in it, so the honest assertion is that both are there.
   step('the context view carries the trace and the events in that window',
-    ctxTrace > 0 && ctxMarks >= 0, `${ctxTrace} traces, ${ctxMarks} event marks`)
+    ctxTrace > 0 && ctxMarks > 0, `${ctxTrace} traces, ${ctxMarks} event marks`)
 
   await page.locator('.case-context button', { hasText: 'Close' }).click()
   await page.waitForTimeout(300)
@@ -1264,7 +1300,10 @@ scenario('S16 · A complaint about a place, not a time')
   const diff = await apiGet(`/api/sessions/${sessA}/spatial-diff?other=${otherId}&kpi=DL_BLER&sizeMeters=150`)
   const improved = diff.bins.filter((b) => b.deltaValue != null && b.deltaValue < -1)
   step('a lower-is-better KPI improving is coloured as better',
-    diff.direction === 'LOWER_IS_BETTER'
+    // `improved.length > 0 &&` first: `every` is true of an empty array, so without it a
+    // change that stopped producing improved tiles at all would read as a pass. The same
+    // guard sits fourteen lines above on `oneSided`; this one was missed.
+    diff.direction === 'LOWER_IS_BETTER' && improved.length > 0
     && improved.every((b) => /better/.test(b.label)),
     `${improved.length} tiles improved, labels ${[...new Set(improved.map((b) => b.label))].join(',') || 'none'}`)
 
@@ -1811,6 +1850,64 @@ scenario('S20 · One condition, every screen')
     hitExempt.length > 0 && !hitExempt.some(carried),
     hitExempt.filter(carried).map((r) => r.path).join(', ') || `${hitExempt.length} exempt calls, none filtered`)
 
+  // ── the footprint tooltip must never render absence as a level. Under the three-strongest
+  //    basis a cell can shape a hull it never served, and its mean used to fall back to 0 -
+  //    a value about 80 dB above anything this catalogue can report, printed where "none"
+  //    belongs. Checked on the response rather than the pixel: the tooltip formats what
+  //    arrives, so a null here is what makes the em dash possible.
+  const serving = await apiGet(`/api/sessions/${sid}/cell-footprints?minSamples=10&basis=SERVING`)
+  const tops = await apiGet(`/api/sessions/${sid}/cell-footprints?minSamples=10&basis=TOP3`)
+  const servingBy = Object.fromEntries(serving.map((f) => [f.pci, f]))
+  // The count and the mean must describe ONE set. Under the three-strongest basis the count
+  // grew to the contended samples while the mean stayed the serving one, so the tooltip
+  // paired a number from each. It is also physically checkable: a cell is weaker where it
+  // merely competes than where it wins, so the wider set's mean must be the lower one.
+  const paired = tops.filter((f) => servingBy[f.pci])
+  const mismatched = paired.filter((f) =>
+    f.sampleCount <= servingBy[f.pci].sampleCount
+    || f.avgRsrp == null || f.avgRsrp >= servingBy[f.pci].avgRsrp)
+  step('a footprint\u2019s level is the mean of the samples it counted, not of another set',
+    paired.length > 0 && mismatched.length === 0
+    && !tops.some((f) => f.avgRsrp === 0),
+    paired.map((f) => `PCI ${f.pci}: ${f.sampleCount}@${f.avgRsrp} vs serving `
+      + `${servingBy[f.pci].sampleCount}@${servingBy[f.pci].avgRsrp}`).slice(0, 2).join(' \u00b7 '))
+
+  // ── the distance profile. It was in NEITHER list, which is the sharpest shape this
+  //    mechanism can fail in: S20 checks that honoured paths carry the filter and exempt
+  //    paths do not, so a path in neither list passes whatever it does. The reader saw the
+  //    whole drive's profile beside six filtered panels with no exemption note anywhere.
+  //
+  //    Two numbers, opposite directions: the VALUES narrow, and the AXIS does not - a
+  //    filtered profile that also shortened the road would make two profiles of one drive
+  //    incomparable, which is the reason the `travelled` CTE stays unfiltered.
+  const profile = async (amp) => {
+    const bins = await apiGet(`/api/sessions/${sid}/distance-bins?kpi=RSRP&stepMeters=250${amp}`)
+    return {
+      bins: bins.length,
+      samples: bins.reduce((a, b) => a + b.sampleCount, 0),
+      road: Math.max(...bins.map((b) => b.toMetres)),
+    }
+  }
+  const wholeRoad = await profile('')
+  const narrowedRoad = await profile(`&filter=${enc}`)
+  step('the distance profile joins the same one number the other nine agree on',
+    wholeRoad.samples === wholeSet[0] && narrowedRoad.samples === narrowSet[0],
+    `${wholeRoad.samples} whole (others ${wholeSet[0]}),`
+    + ` ${narrowedRoad.samples} filtered (others ${narrowSet[0]})`)
+  // The AXIS, not the bin list. A bin no longer holding a passing sample drops out of the
+  // result - it has nothing to plot - but every remaining bin keeps its true road distance,
+  // so the profile still runs the length of the drive and two profiles of it stay
+  // comparable. Narrowing the `travelled` CTE instead would shorten the road itself, which
+  // is the failure this distinguishes from.
+  step('and its axis still measures the whole road, so two profiles stay comparable',
+    narrowedRoad.road === wholeRoad.road && wholeRoad.road > 0
+    && narrowedRoad.bins <= wholeRoad.bins,
+    `${wholeRoad.road} m of road either way; `
+    + `${wholeRoad.bins} bins whole, ${narrowedRoad.bins} filtered`)
+  step('and the coverage list says so, so a later drift fails a check instead of a screen',
+    coverage.some((c) => c.path === '/api/sessions/{id}/distance-bins' && c.honoured),
+    coverage.find((c) => c.path.endsWith('/distance-bins'))?.note ?? 'not listed')
+
   // The downloads are links, not fetches, so they are checked as links.
   const hrefs = await page.locator('.toolbar .group:has(label:text("Export")) a')
     .evaluateAll((as) => as.map((a) => a.getAttribute('href')))
@@ -1976,6 +2073,31 @@ scenario('S21 · A state machine that measures time it actually measured')
     bDwell.length === bRlf.length && hDwell.length === hRlf.length && bDwell.length > 0
     && bDwell.every((q, i) => q === bRlf[i]) && hDwell.every((q, i) => q === hRlf[i]),
     `1.5.0 dwells [${bDwell}] vs RLF [${bRlf}]; highway [${hDwell}] vs [${hRlf}]`)
+
+  // ── the same rule, one screen over: a DEGRADATION must not count unlogged time either.
+  //
+  // The island key was `seq - row_number()` alone, so a bad stretch stayed one row however
+  // much of it was never recorded - and `avg(latitude)` then put the row's map marker inside
+  // the hole. The witness is arithmetic rather than a threshold: the stretches the list
+  // reports across the gap must sum to LESS wall clock than the span from the first to the
+  // last of their samples, and the shortfall must be exactly the unlogged seconds.
+  const cityDeg = (await apiGet(`/api/sessions/${cityA}/degradations?kpi=RSRP&minSamples=5`))
+    .sort((a, b) => a.startSeq - b.startSeq)
+  const gapTrack = await apiGet(`/api/sessions/${cityA}/track?kpi=RSRP&maxPoints=100000`)
+  const tsOf = Object.fromEntries(gapTrack.map((p) => [p.seq, Date.parse(p.ts) / 1000]))
+  // The pair either side of the drive's logger gap: consecutive rows whose seq are adjacent
+  // (one ends where the next begins) but which the list nevertheless reports separately.
+  const split = cityDeg.find((d, i) => i > 0 && cityDeg[i - 1].endSeq + 1 === d.startSeq)
+  const before = split ? cityDeg[cityDeg.indexOf(split) - 1] : null
+  const spanned = split ? tsOf[split.endSeq] - tsOf[before.startSeq] : 0
+  const reported = split ? before.durationSeconds + split.durationSeconds : 0
+  step('a bad stretch is cut where the log stops, not carried across the hole',
+    Boolean(split) && spanned > reported && spanned - reported >= 5,
+    split
+      ? `seq ${before.startSeq}-${split.endSeq} spans ${spanned}s, reported as`
+        + ` ${before.durationSeconds}s + ${split.durationSeconds}s = ${reported}s,`
+        + ` so ${spanned - reported}s of unlogged time is excluded`
+      : 'no adjacent pair found')
 
   // ── and the refusal, on the one drive that has a logger gap inside a fade.
   const aDwell = await dwellSeqs(cityA, 'S21_FADE_MS')
@@ -2200,7 +2322,7 @@ scenario('S22 · What was happening just before this')
   const orCurr = await build('S22_OR_CURR', 'PREVIOUS_OR_CURRENT', 1, 500)
   const vOr = await valuesOf('S22_OR_CURR')
   step('previous-or-current uses the current value only when there is no previous one',
-    orCurr.valuesComputed === curr.valuesComputed
+    orCurr.valuesComputed === curr.valuesComputed && handovers.length > 0
     && handovers.every((q) => near(vOr[q], vCurr[q])),
     `${orCurr.valuesComputed} values, all equal to the current one`)
 
@@ -2334,10 +2456,12 @@ scenario('S23 · Is this build better, over every drive we have')
   // step above and fail this one.
   const guarded = held.cohorts.find((c) => c.value === big.value)
   step('with the guard on, the group is a different set of drives and a different number',
-    guarded.driveCount < big.driveCount
+    guarded != null && guarded.driveCount < big.driveCount
     && Math.abs(guarded.stats.mean - big.stats.mean) > 0.05,
-    `${big.value}: ${big.driveCount} drives ${big.stats.mean} unguarded,`
-    + ` ${guarded.driveCount} drives ${guarded.stats.mean} guarded`)
+    guarded == null
+      ? `no ${big.value} group survived the guard - ${held.cohorts.length} groups held`
+      : `${big.value}: ${big.driveCount} drives ${big.stats.mean} unguarded,`
+        + ` ${guarded.driveCount} drives ${guarded.stats.mean} guarded`)
 
   // ── C6/C7. What the screen refuses to say. Three silences, all different:
   //    no dimension held -> a delta and NO verdict; the first group -> nothing to compare
@@ -2449,6 +2573,35 @@ scenario('S23 · Is this build better, over every drive we have')
     await page.locator('select[aria-label="Group by"]').inputValue() === 'SCENARIO',
     await page.locator('select[aria-label="Group by"]').inputValue())
 
+  // ── C13. A group that measured NOTHING is still a group.
+  //
+  // The strip filtered those out, and the failure was invisible from inside the strip: the
+  // header above said "2 groups", the table below printed a row of em dashes, and the CDF
+  // legend named it - three surfaces disagreeing about how many groups there are, with the
+  // missing one being exactly the group whose emptiness is the answer. `FH_RX_LATE` is the
+  // witness because only the lab drive measures it, so the 1.4.2 build cohort has one drive
+  // and no values.
+  const sparse = await apiGet('/api/cohorts?kpi=FH_RX_LATE&holdConstant=NONE')
+  const valueless = sparse.cohorts.filter((c) => c.stats.mean == null)
+  step('a parameter one build never measured still gives that build a group',
+    sparse.cohorts.length > 1 && valueless.length === 1 && valueless[0].sampleCount === 0,
+    sparse.cohorts.map((c) => `${c.value}=${c.stats.mean ?? 'none'}`).join(', '))
+
+  await page.goto(`${BASE}?mode=compare&by=BUILD_LABEL&hold=NONE&kpi=FH_RX_LATE`,
+    { waitUntil: 'domcontentloaded' })
+  await page.waitForTimeout(3000)
+  const sparseRows = await page.locator('.cohort-strip .cohort-row').count()
+  const sparseTable = await page.locator('.cohort-table tbody tr').count()
+  const headerGroups = Number(
+    (await page.locator('.panels.cohorts .panel:has(.cohort-strip) header .meta').innerText())
+      .match(/(\d+)/)?.[1] ?? -1)
+  const noData = await page.locator('.cohort-strip .cohort-nodata').count()
+  step('and the strip, the table and the header all count it',
+    sparseRows === sparse.cohorts.length && sparseTable === sparse.cohorts.length
+    && headerGroups === sparse.cohorts.length && noData === valueless.length,
+    `${sparseRows} strip rows, ${sparseTable} table rows, header says ${headerGroups},`
+    + ` ${noData} marked as having no value`)
+
   await page.goto(`${BASE}?mode=compare&by=SCENARIO&hold=SCENARIO`,
     { waitUntil: 'domcontentloaded' })
   await page.waitForTimeout(3000)
@@ -2456,6 +2609,372 @@ scenario('S23 · Is this build better, over every drive we have')
   step('a link that holds its own axis constant is repaired, and the repair is stated',
     /both the axis and the thing held constant/.test(notice),
     notice.replace(/\n/g, ' / ').slice(0, 120))
+
+  await page.goto(BASE, { waitUntil: 'domcontentloaded' })
+  await page.waitForTimeout(2500)
+}
+
+// ─── S24 · The half-built things, finished ───────────────────────────────────
+//
+// Nine capabilities the server computed, carried and typed all the way to the browser, and
+// that no screen reached. An audit proposed deleting them; the reason on offer was "the
+// reference tool has no such control", which is not a reason this product can use - it
+// promises parity PLUS added insight, and deleting the plus half to save a few lines is a
+// permanent decision made for a temporary saving.
+//
+// So each is wired, and each is checked HERE rather than trusted, because a control that is
+// present and inert looks exactly like a control that works.
+scenario('S24 · The half-built things, finished')
+{
+  const made = []
+  const cityA = sessions.find((x) => x.name === CITY_A).id
+
+
+  // ── the separator. Two-sided: the same bytes must load with it and fail without it, or
+  //    the control is decoration and the failure was never about the separator.
+  const semi = 'lat;lon;rsrp\n65.01;25.47;-88\n65.02;25.48;-91\n65.03;25.49;-84\n'
+  const post = (name, extra) => page.request.post(`${API}/api/import/csv`, {
+    multipart: {
+      file: { name: `${name}.csv`, mimeType: 'text/csv', buffer: Buffer.from(semi) },
+      sessionName: name, ...extra,
+    },
+  })
+  const withoutSep = await post('S24 semicolon rejected', {})
+  const withSep = await post('S24 semicolon', { delimiter: ';' })
+  if (withSep.ok()) made.push((await withSep.json()).sessionId)
+  step('a semicolon export loads with the separator set, and only with it',
+    withoutSep.status() === 400 && withSep.ok(),
+    `default separator ${withoutSep.status()}, semicolon ${withSep.status()}`)
+
+  // Through the SCREEN, not the API. The first draft of this step read the option list and
+  // passed with the form's `delimiter` append deleted - a control that exists and sends
+  // nothing looks exactly like one that works, which is section 1.5.1 in this project's own
+  // words. So the file goes in through the file input and the separator through the select.
+  await openMode('Import')
+  await page.waitForTimeout(1200)
+  const uiImport = async (name, sep) => {
+    await page.locator('.panel:has(select[aria-label="Column separator"]) input[type=file]')
+      .setInputFiles({ name: `${name}.csv`, mimeType: 'text/csv', buffer: Buffer.from(semi) })
+    await page.locator('input[aria-label="Session name"]').fill(name)
+    await page.locator('select[aria-label="Column separator"]').selectOption(sep)
+    await page.locator('.panel:has(select[aria-label="Column separator"]) button',
+      { hasText: 'Import' }).click()
+    await page.waitForTimeout(2500)
+    return (await apiGet('/api/sessions')).find((x) => x.name === name) ?? null
+  }
+  const uiComma = await uiImport('S24 ui comma', ',')
+  const uiSemi = await uiImport('S24 ui semicolon', ';')
+  if (uiSemi) made.push(uiSemi.id)
+  if (uiComma) made.push(uiComma.id)
+  step('and the screen sends it, not merely offers it',
+    uiComma === null && uiSemi !== null && uiSemi.sampleCount === 3,
+    `comma: ${uiComma ? 'loaded (should not have)' : 'refused'},`
+    + ` semicolon: ${uiSemi ? `${uiSemi.sampleCount} samples` : 'refused (should have loaded)'}`)
+
+  // ── the linear-power mean. The claim is exact and falsifiable in two directions at once:
+  //    averaging dB arithmetically is not the same quantity, so the MEAN must move - and
+  //    percentiles are order statistics under a monotone map, so the MEDIAN must not.
+  const asRec = await apiGet(`/api/cohorts?kpi=RSRP&holdConstant=NONE&domain=AS_RECORDED`)
+  const linear = await apiGet(`/api/cohorts?kpi=RSRP&holdConstant=NONE&domain=LINEAR`)
+  const pairs = asRec.cohorts.map((c, i) => [c, linear.cohorts[i]])
+  step('a cohort mean in linear power differs from the mean of the dB readings',
+    pairs.length > 0 && pairs.every(([a, b]) => Math.abs(a.stats.mean - b.stats.mean) > 0.2),
+    pairs.map(([a, b]) => `${a.value}: ${a.stats.mean} -> ${b.stats.mean}`).join(' · '))
+  step('and the median does not move, because dB-to-linear preserves order',
+    pairs.every(([a, b]) => a.stats.p50 === b.stats.p50),
+    pairs.map(([a, b]) => `${a.value}: p50 ${a.stats.p50}/${b.stats.p50}`).join(' · '))
+
+  // Again through the screen: counting the select proved nothing, because a select whose
+  // value never reaches the request looks identical. The witness is the NUMBER on screen
+  // moving when the control is used.
+  const meanCell = (row) => page.locator('.cohort-table tbody tr', { hasText: row })
+    .locator('td').nth(3).innerText()
+  await page.goto(`${BASE}?mode=compare&by=BUILD_LABEL&hold=NONE`, { waitUntil: 'domcontentloaded' })
+  await page.waitForTimeout(3000)
+  const cohortAsRec = await meanCell('1.4.2')
+  await page.locator('select[aria-label="Cohort mean in"]').selectOption('LINEAR')
+  await page.waitForTimeout(2500)
+  const cohortLinear = await meanCell('1.4.2')
+  step('choosing linear power on the cohort screen changes the number on it',
+    cohortAsRec !== cohortLinear && Math.abs(Number(cohortAsRec) - Number(cohortLinear)) > 0.2,
+    `1.4.2 mean ${cohortAsRec} -> ${cohortLinear}`)
+
+  await openMode('Compare')
+  await page.locator('.scope-switch button', { hasText: 'Two drives' }).click()
+  await page.waitForTimeout(2500)
+  const compareRow = () => page.locator('table.grid tbody tr').first().locator('td').nth(1).innerText()
+  const compAsRec = await compareRow()
+  await page.locator('select[aria-label="Compare mean in"]').selectOption('LINEAR')
+  await page.waitForTimeout(2500)
+  const compLinear = await compareRow()
+  step('and so does the two-drive comparison, which answered AS_RECORDED silently',
+    compAsRec !== compLinear,
+    `A mean ${compAsRec} -> ${compLinear}`)
+
+  // ── the group that has no build label. The import above filled no Build, so the axis now
+  //    has an `(unset)` bucket - and the picker has to say so, because "Build (3)" meaning
+  //    two builds and a junk drawer is a different answer from three builds.
+  const dims = (await apiGet('/api/cohorts?kpi=RSRP&holdConstant=NONE')).dimensions
+  const build = dims.find((d) => d.key === 'BUILD_LABEL')
+  await page.goto(`${BASE}?mode=compare&by=BUILD_LABEL&hold=NONE`, { waitUntil: 'domcontentloaded' })
+  await page.waitForTimeout(3000)
+  const groupLabels = await page.locator('select[aria-label="Group by"] option')
+    .evaluateAll((os) => os.map((o) => o.textContent ?? ''))
+  step('an axis with an unfilled group says so before the chart is drawn',
+    build.hasUnset === true
+    && groupLabels.some((t) => /Build/.test(t) && /incl\. unset/.test(t)),
+    groupLabels.find((t) => /Build/.test(t)) ?? 'no Build option')
+
+  // ── when each group was measured. The one confound hold-constant cannot pin: builds are
+  //    sequential, so no held dimension will ever make two builds share a time.
+  const tested = await page.locator('.cohort-table thead th')
+    .evaluateAll((ths) => ths.map((t) => t.textContent ?? ''))
+  const firstRow = await page.locator('.cohort-table tbody tr').first().innerText()
+  step('and the table says when each group was measured',
+    tested.includes('Tested') && /\d{4}-\d{2}-\d{2}/.test(firstRow),
+    `${tested.join('|')} — ${firstRow.replace(/\n|\t/g, ' ').slice(0, 60)}`)
+
+  // ── the contended count. It must carry information the other columns cannot: a cell 25 dB
+  //    down is "detected" exactly as much as one 1 dB down, so a contended count equal to
+  //    either neighbour column would be a column that says nothing.
+  const bars = (await apiGet(`/api/sessions/${cityA}/neighbour-breakdown`)).bars
+  const informative = bars.filter((b) =>
+    b.samplesStrong !== b.samplesSeen && b.samplesStrong !== b.samplesServing)
+  await page.goto(BASE, { waitUntil: 'domcontentloaded' })
+  await page.waitForTimeout(2500)
+  await selectSession(CITY_A)
+  await openWorkbook('Monitored Set')
+  await page.waitForTimeout(1400)
+  const monHeads = await page.locator('table.grid thead th')
+    .evaluateAll((ths) => ths.map((t) => (t.textContent ?? '').trim()))
+  step('the neighbour table shows how often a cell CONTENDED, not only that it was seen',
+    monHeads.includes('Contended') && informative.length > 0,
+    `${informative.length} of ${bars.length} bars differ from both neighbours`)
+
+  // ── was the car moving. Already on every track point, rendered nowhere.
+  await openWorkbook('Overview')
+  await page.waitForTimeout(1400)
+  // Hovered, not permanent: a label pinned to the map would clutter every screenshot, and
+  // the reading is only wanted when the reader asks for it.
+  // dispatchEvent rather than hover(): an event dot sits over the cursor marker on this
+  // drive and intercepts the pointer, which is correct behaviour for the map and merely
+  // inconvenient for a check. Leaflet opens the tooltip on 'mouseover' either way.
+  await page.locator('path.cursor-marker').dispatchEvent('mouseover')
+  await page.waitForTimeout(700)
+  const tip = await page.locator('.leaflet-tooltip.cursor-tip').innerText().catch(() => '')
+  const cursorSpeed = (await apiGet(`/api/sessions/${cityA}/track?kpi=RSRP&maxPoints=100000`))[0]
+  step('the cursor says whether the vehicle was moving there',
+    /km\/h/.test(tip) && cursorSpeed.speedKmh != null,
+    tip.replace(/\n/g, ' ').slice(0, 48) || 'no cursor tooltip')
+
+  // ── which physical unit produced a lab result.
+  await openMode('Lab Campaigns')
+  await page.waitForTimeout(1800)
+  const chain = await page.locator('.chain-meta').allInnerTexts().catch(() => [])
+  step('the lab chain names the unit, not only its model',
+    chain.some((t) => /s\/n/.test(t)), chain.filter((t) => /s\/n/.test(t))[0] ?? chain.join(' | ').slice(0, 60))
+
+  // ── a campaign is something you can open, not a name and a count.
+  //
+  // The seed has ONE campaign holding every run, so a click cannot be shown to NARROW here -
+  // 3 of 3 is 3 either way. Rather than invent a second campaign, the two halves are
+  // witnessed apart: the server's filter is shown to discriminate, and the click is shown to
+  // reach it. Named so nobody later reads this as end-to-end proof of narrowing.
+  const campaigns = await apiGet('/api/lab/campaigns')
+  const target = campaigns[0]
+  const runsAll = (await apiGet('/api/lab/runs')).length
+  const runsIn = (await apiGet(`/api/lab/runs?campaignId=${target.id}`)).length
+  const runsNone = (await apiGet('/api/lab/runs?campaignId=999999')).length
+  step('the server really scopes runs to a campaign (a bound: the seed has only one)',
+    runsIn === target.runCount && runsAll === runsIn && runsNone === 0,
+    `${runsAll} in all, ${runsIn} in campaign ${target.id}, ${runsNone} in a campaign that does not exist`)
+
+  await page.locator('.panel:has(header .title:text-is("Campaigns")) tbody tr',
+    { hasText: target.name }).click()
+  await page.waitForTimeout(1500)
+  const runsHeader = await page.locator('.panel:has(header .title:text-is("Runs")) header .meta')
+    .innerText()
+  const scopedRuns = await page.locator('.panel:has(header .title:text-is("Runs")) tbody tr').count()
+  step('and the click reaches it, with a way back',
+    scopedRuns === target.runCount && runsHeader.includes(target.name)
+    && await page.locator('.panel:has(header .title:text-is("Runs")) header button',
+      { hasText: 'show all' }).count() === 1,
+    `header reads "${runsHeader.replace(/\n/g, ' ')}", ${scopedRuns} rows`)
+
+  // ── a measured column can be given its meaning BEFORE the file arrives. The import can
+  //    define unknown columns, but with nothing to go on it stamps NEUTRAL - which tells the
+  //    ramp there is no bad end and tells the verdict to withhold, permanently, because no
+  //    endpoint edits a definition afterwards.
+  await openMode('Import')
+  await page.waitForTimeout(1500)
+  await page.locator('input[aria-label="Measured KPI name"]').fill('S24_MARGIN_DB')
+  await page.locator('input[aria-label="Measured KPI unit"]').fill('dB')
+  await page.locator('select[aria-label="Measured KPI direction"]').selectOption('LOWER_IS_BETTER')
+  await page.locator('.panel:has(input[aria-label="Measured KPI name"]) button',
+    { hasText: 'Define' }).click()
+  await page.waitForTimeout(1500)
+  const defined = (await apiGet('/api/kpi-definitions')).find((d) => d.name === 'S24_MARGIN_DB')
+  step('a measured column can be declared with a real direction instead of NEUTRAL',
+    defined?.direction === 'LOWER_IS_BETTER' && defined?.unit === 'dB',
+    defined ? `${defined.name}: ${defined.direction}, ${defined.unit}` : 'not defined')
+
+  for (const id of made) await page.request.delete(`${API}/api/sessions/${id}`)
+  await page.request.delete(`${API}/api/kpi-definitions/S24_MARGIN_DB`)
+  const leftKpi = (await apiGet('/api/kpi-definitions')).some((d) => d.name === 'S24_MARGIN_DB')
+  const leftSession = (await apiGet('/api/sessions')).some((x) => x.name.startsWith('S24 '))
+  step('the scenario leaves nothing behind', !leftKpi && !leftSession,
+    `${leftKpi ? 'kpi remains ' : ''}${leftSession ? 'session remains' : 'clean'}`)
+  await page.goto(BASE, { waitUntil: 'domcontentloaded' })
+  await page.waitForTimeout(2500)
+}
+
+// ─── S25 · Four things the manual asks for before it draws ───────────────────
+//
+// The only four items of this whole audit that are new capability rather than repair, and
+// the only four with a page number: each was confirmed verbatim against the transcription
+// before a line was written, because this project has been wrong about what the reference
+// has - dashboards, NPS and trend analysis all traced to a marketing flyer.
+//
+// Three of the four are questions the reference asks BEFORE it draws anything: which cells,
+// how close counts as competing, how many competitors. Ours drew first and answered with
+// defaults nobody chose.
+scenario('S25 · Four things the manual asks for before it draws')
+{
+  const cityA = sessions.find((x) => x.name === CITY_A).id
+
+  // ── UC20 p173. The filter dialog's own two rows: `Polluter level window from the best
+  //    active set` = -6 and `Pilot count threshold` = 3. Both were server parameters no
+  //    screen sent, so the caption asserted "≥3" as a property of the tool.
+  const pollution = async (qs) => (await apiGet(`/api/sessions/${cityA}/pilot-pollution${qs}`)).length
+  const atDefault = await pollution('')
+  const atWide = await pollution('?windowDb=12&minCells=2')
+  const atStrict = await pollution('?windowDb=3&minCells=5')
+  step('how close counts as competing, and how many competitors, change the verdict',
+    atWide > atDefault && atStrict < atDefault,
+    `${atStrict} stretches at 3 dB/5 cells, ${atDefault} at the default, ${atWide} at 12 dB/2 cells`)
+
+  await selectSession(CITY_A)
+  await openWorkbook('Monitored Set')
+  await page.waitForTimeout(1600)
+  const spanCount = () => page.locator('.panel:has(header .title:text-is("Pilot pollution")) header .meta')
+    .innerText()
+  const uiDefault = await spanCount()
+  await page.locator('input[aria-label="Pollution cell count"]').fill('2')
+  await page.locator('input[aria-label="Pollution window dB"]').fill('12')
+  await page.waitForTimeout(2000)
+  const uiWide = await spanCount()
+  const caption = await page.locator('.panel:has(header .title:text-is("Pilot pollution")) div')
+    .first().innerText()
+  step('the screen asks them too, and its caption reports what it asked',
+    uiDefault !== uiWide && /≥\s*2 cells/.test(caption) && /12 dB/.test(caption),
+    `${uiDefault} -> ${uiWide}; caption "${caption.split('\n')[0].slice(0, 70)}"`)
+
+  // ── UC1 p67. The dialog's own help gives the grammar: `3,10-30,42,100-`. The manual also
+  //    gives the reason - "Analysis will not work properly if there will be hundreds of
+  //    pages in the results" - which is ours too: overlapping every hull at once is how the
+  //    layer stops answering.
+  // Coverage Issues, not Overview: the footprint layer draws on the maps where cell
+  // identity is the question, and asking for hulls on a map that never draws them would
+  // have made this check pass on a route polyline count.
+  await openWorkbook('Coverage Issues')
+  await page.waitForTimeout(1200)
+  await page.locator('.toolbar .group:has(label:text("Footprints")) button').click()
+  await page.waitForTimeout(1800)
+  const hulls = () => page.locator('path.footprint-hull').count()
+  const allCells = (await apiGet(`/api/sessions/${cityA}/cell-footprints?basis=SERVING`))
+    .map((f) => f.pci).sort((a, b) => a - b)
+  const before = await hulls()
+  const keep = `${allCells[0]},${allCells[1]}`
+  await page.locator('input[aria-label="Footprint cells"]').fill(keep)
+  await page.waitForTimeout(1200)
+  const after = await hulls()
+  const note = await page.locator('.map-panel header .title').innerText()
+  // Exact, not "fewer": keeping two of N cells has to remove exactly N-2 hulls, and the
+  // header has to name both numbers. A `<` alone would pass on any narrowing at all,
+  // including one that dropped the wrong hulls.
+  const flat = note.replace(/\n/g, ' ')
+  step('the cell filter narrows what is drawn, and the map says what it left out',
+    before - after === allCells.length - 2
+    && new RegExp(`2 of ${allCells.length} cells`).test(flat),
+    `${before} shapes -> ${after} for "${keep}" of ${allCells.length} cells; header says`
+    + ` "${flat.slice(0, 90)}"`)
+
+  // A range and an open range, the two forms a bare list cannot express. `100-` is how an
+  // operator says "the small-cell layer" without knowing where it ends.
+  const lo = allCells[0]
+  const hi = allCells[allCells.length - 1]
+  await page.locator('input[aria-label="Footprint cells"]').fill(`${lo}-${lo}`)
+  await page.waitForTimeout(1000)
+  const single = await hulls()
+  await page.locator('input[aria-label="Footprint cells"]').fill(`${hi}-`)
+  await page.waitForTimeout(1000)
+  const openEnded = await hulls()
+  await page.locator('input[aria-label="Footprint cells"]').fill('not a cell')
+  await page.waitForTimeout(1000)
+  const badNote = await page.locator('.map-panel header .title').innerText()
+  step('ranges and open ranges parse, and a typo is refused rather than silently obeyed',
+    single < before && openEnded < before && /ignored/.test(badNote),
+    `${lo}-${lo} -> ${single}, ${hi}- -> ${openEnded}, typo -> `
+    + `"${badNote.replace(/\n/g, ' ').match(/ignored[^—]*/)?.[0]?.slice(0, 40) ?? 'no notice'}"`)
+  await page.locator('input[aria-label="Footprint cells"]').fill('')
+  await page.locator('.toolbar .group:has(label:text("Footprints")) button').click()
+  await page.waitForTimeout(800)
+
+  // ── UC16 p158-162. `Measurement Group 1` AND `Measurement Group 2`, each with its own
+  //    list. The service was symmetric from the first commit; only this screen was not, so
+  //    "the evening runs against the morning runs" could be asked one way round.
+  const others = sessions.filter((x) => x.id !== cityA).map((x) => x.id)
+  const oneSide = await apiGet(
+    `/api/sessions/${cityA}/spatial-diff?other=${others[0]}&kpi=RSRP&sizeMeters=150`)
+  const bothSides = await apiGet(
+    `/api/sessions/${cityA}/spatial-diff?other=${others[0]}&kpi=RSRP&sizeMeters=150`
+    + `&withA=${others[1]}`)
+  step('the NEAR side can be a group too, and adding to it changes the ground covered',
+    oneSide.groupA.length === 1 && bothSides.groupA.length === 2
+    && bothSides.tilesOnlyA > oneSide.tilesOnlyA,
+    `near side ${oneSide.groupA.length} -> ${bothSides.groupA.length} drives,`
+    + ` one-sided tiles ${oneSide.tilesOnlyA} -> ${bothSides.tilesOnlyA}`)
+
+  await openWorkbook('Compare on the Ground')
+  await page.waitForTimeout(1800)
+  const nearAdd = page.locator('select[aria-label="Add to the near side"]')
+  const nearOptions = await nearAdd.locator('option').count()
+  await nearAdd.selectOption({ index: 1 })
+  await page.waitForTimeout(2000)
+  const nearBanner = await page.locator('.diff-group').first().innerText()
+  step('and the screen offers it symmetrically, saying which drives each side holds',
+    nearOptions > 1 && /Near side is a group of 2/.test(nearBanner),
+    nearBanner.replace(/\n/g, ' ').slice(0, 90))
+
+  // ── p87, quoted verbatim in two of our own reference files: "Each drill-down from the
+  //    same chart will open a NEW TAB in the same window... with the colors of the
+  //    corresponding sectors." The workflow is holding two causes open at once; with one
+  //    slot, comparing them is done from memory.
+  await openWorkbook('Problem Survey')
+  await page.waitForTimeout(1800)
+  const causeRows = page.locator('.panels table.grid tbody tr')
+  const firstTwo = Math.min(2, await causeRows.count())
+  for (let i = 0; i < firstTwo; i++) {
+    await causeRows.nth(i).click()
+    await page.waitForTimeout(700)
+  }
+  const tabs = await page.locator('.cause-tabs button').count()
+  const swatches = await page.locator('.cause-tabs button .swatch')
+    .evaluateAll((els) => els.map((e) => getComputedStyle(e).backgroundColor))
+  step('two causes stay open at once, each tab in its own sector colour',
+    tabs === firstTwo && firstTwo === 2 && new Set(swatches).size === 2,
+    `${tabs} tabs, colours ${JSON.stringify(swatches)}`)
+
+  // The tab has to SELECT, not merely exist: switching must change the case grid under it.
+  const casesHeader = () => page.locator('.panels .panel:has(header .title:text("cases")) header .title')
+    .innerText()
+  const onSecond = await casesHeader()
+  await page.locator('.cause-tabs button').first().click()
+  await page.waitForTimeout(900)
+  const onFirst = await casesHeader()
+  step('and switching tabs changes the cases underneath, which is the point of keeping both',
+    onFirst !== onSecond && /cases/.test(onFirst),
+    `"${onSecond.trim()}" -> "${onFirst.trim()}"`)
 
   await page.goto(BASE, { waitUntil: 'domcontentloaded' })
   await page.waitForTimeout(2500)

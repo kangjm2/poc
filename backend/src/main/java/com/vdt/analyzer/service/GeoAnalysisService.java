@@ -144,11 +144,26 @@ public class GeoAnalysisService {
      * far the drive went.
      */
     public List<DistanceBin> distanceBins(long sessionId, String kpiName, double stepMetres) {
+        return distanceBins(sessionId, kpiName, stepMetres, null);
+    }
+
+    /**
+     * @param filterSpec the global condition, honoured on the VALUES but never on the axis.
+     *
+     * The distance axis measures the road, so the `travelled` CTE stays unfiltered: narrowing
+     * it would make the same stretch of road a different length depending on the condition,
+     * and two profiles of one drive would no longer be comparable. The condition selects which
+     * samples contribute a VALUE to a bin - which is the same thing it does everywhere else.
+     */
+    public List<DistanceBin> distanceBins(long sessionId, String kpiName, double stepMetres,
+                                          String filterSpec) {
         KpiDefinition def = catalog.require(kpiName);
         List<KpiThreshold> scale = autoScale.effective(sessionId, def);
         if (stepMetres < 5 || stepMetres > 20_000) {
             throw new IllegalArgumentException("Bin step must be between 5 and 20000 metres");
         }
+
+        GlobalFilter.Scope scope = GlobalFilter.scope(filterSpec, sessionId, "k");
 
         // The step formula and the rule for which steps count are shared with the map
         // (RouteContinuity), so a stretch the map refuses to draw as travelled road
@@ -175,13 +190,14 @@ public class GeoAnalysisService {
                        avg(k.value) AS avg_v, min(k.value) AS min_v, max(k.value) AS max_v
                 FROM travelled t
                 JOIN sample_kpi k ON k.session_id = ? AND k.seq = t.seq
-                WHERE k.kpi_name = ?
+                WHERE k.kpi_name = ?%5$s
                 GROUP BY bucket
                 ORDER BY bucket
                 """.formatted(RouteContinuity.STEP_METRES,
                               RouteContinuity.SECONDS_SINCE_PREV,
                               RouteContinuity.classify("step_m", "dt_s"),
-                              RouteContinuity.travelledMetres("step_m", "brk"));
+                              RouteContinuity.travelledMetres("step_m", "brk"),
+                              GlobalFilter.and(scope));
         return jdbc.query(sql, (rs, i) -> {
             double bucket = rs.getDouble("bucket");
             double avg = rs.getDouble("avg_v");
@@ -194,7 +210,7 @@ public class GeoAnalysisService {
                     rs.getInt("from_seq"), rs.getInt("to_seq"),
                     bin.map(KpiThreshold::getColor).orElse("#999999"),
                     bin.map(KpiThreshold::getLabel).orElse("no data"));
-        }, sessionId, stepMetres, sessionId, kpiName);
+        }, distanceArgs(sessionId, stepMetres, kpiName, scope));
     }
 
     /**
@@ -217,8 +233,14 @@ public class GeoAnalysisService {
      * coverage claim it cannot support; a concave hull would need a tightness parameter that
      * is itself a guess.
      */
+    /**
+     * @param avgRsrp the mean over THE SAME SAMPLES `sampleCount` counted, or null when there
+     *                is no mean to give. Null rather than 0: a cell that never served has no
+     *                serving mean, and 0 dBm is not "no value" - it is a level about 80 dB
+     *                above anything this catalogue can report, printed where absence belongs.
+     */
     public record CellFootprint(int pci, Integer arfcn, String band, long sampleCount,
-                                double avgRsrp, List<double[]> hull) {}
+                                Double avgRsrp, List<double[]> hull) {}
 
     /** Which samples a cell's footprint is drawn from. */
     public static final String BY_SERVING = "SERVING";
@@ -278,12 +300,12 @@ public class GeoAnalysisService {
                 """.formatted(GlobalFilter.and(scope));
         String topThreeSql = """
                 WITH ranked AS (
-                    SELECT n.seq, n.pci,
+                    SELECT n.seq, n.pci, n.rsrp,
                            row_number() OVER (PARTITION BY n.seq ORDER BY n.rsrp DESC) AS rank
                     FROM sample_neighbour n
                     WHERE n.session_id = ?
                 )
-                SELECT r.pci AS pci, s.latitude, s.longitude
+                SELECT r.pci AS pci, r.rsrp AS rsrp, s.latitude, s.longitude
                 FROM ranked r
                 JOIN sample s ON s.session_id = ? AND s.seq = r.seq
                 WHERE r.rank <= 3%s
@@ -291,6 +313,11 @@ public class GeoAnalysisService {
                 """.formatted(GlobalFilter.and(scope));
 
         Map<Integer, List<double[]>> byPci = new LinkedHashMap<>();
+        // Under the three-strongest basis the level comes off the SAME rows the hull is built
+        // from, so the mean and the count describe one set. Reading the serving-only mean here
+        // instead paired a count over the wider set with a mean over the narrower one and
+        // labelled both "served" - two numbers about two different things, side by side.
+        Map<Integer, double[]> topThreeMean = new LinkedHashMap<>();
         List<Object> pos = new ArrayList<>();
         pos.add(sessionId);
         if (topThree) pos.add(sessionId);
@@ -298,8 +325,17 @@ public class GeoAnalysisService {
         Object[] posArgs = pos.toArray();
         jdbc.query(topThree ? topThreeSql : servingSql,
                 rs -> {
-                    byPci.computeIfAbsent(rs.getInt("pci"), k -> new ArrayList<>())
+                    int pci = rs.getInt("pci");
+                    byPci.computeIfAbsent(pci, k -> new ArrayList<>())
                             .add(new double[]{rs.getDouble("latitude"), rs.getDouble("longitude")});
+                    if (topThree) {
+                        double v = rs.getDouble("rsrp");
+                        if (!rs.wasNull()) {
+                            double[] acc = topThreeMean.computeIfAbsent(pci, k -> new double[2]);
+                            acc[0] += v;
+                            acc[1] += 1;
+                        }
+                    }
                 }, posArgs);
 
         // Narrowing AFTER collection rather than in the SQL: the filter is a viewing
@@ -340,10 +376,29 @@ public class GeoAnalysisService {
                     ref == null ? null : (Integer) ref[0],
                     ref == null ? null : (String) ref[1],
                     pts.size(),
-                    meanRsrp.containsKey(e.getKey()) ? round2(meanRsrp.get(e.getKey())) : 0,
+                    mean(e.getKey(), topThree, topThreeMean, meanRsrp),
                     hull));
         }
         return out;
+    }
+
+    /**
+     * The mean over the samples this footprint was actually drawn from.
+     *
+     * Null when there is none, which is a real state under the three-strongest basis: a cell
+     * can reach the top three on hundreds of samples and never win one, and it then has a
+     * shape, a count, and no serving level. The screen prints an em dash for that; it used to
+     * print 0.
+     */
+    private static Double mean(int pci, boolean topThree,
+                               Map<Integer, double[]> topThreeMean,
+                               Map<Integer, Double> servingMean) {
+        if (topThree) {
+            double[] acc = topThreeMean.get(pci);
+            return acc == null || acc[1] == 0 ? null : round2(acc[0] / acc[1]);
+        }
+        Double v = servingMean.get(pci);
+        return v == null ? null : round2(v);
     }
 
     /**
@@ -507,6 +562,14 @@ public class GeoAnalysisService {
     private static Object[] binArgs(double dLat, double dLon, long sessionId, String kpiName,
                                     GlobalFilter.Scope scope) {
         List<Object> out = new ArrayList<>(List.of(dLat, dLon, sessionId, kpiName));
+        out.addAll(GlobalFilter.params(scope));
+        return out.toArray();
+    }
+
+    /** sessionId (steps CTE) - step (bucket) - sessionId (join) - kpi - the filter's own. */
+    private static Object[] distanceArgs(long sessionId, double stepMetres, String kpiName,
+                                         GlobalFilter.Scope scope) {
+        List<Object> out = new ArrayList<>(List.of(sessionId, stepMetres, sessionId, kpiName));
         out.addAll(GlobalFilter.params(scope));
         return out.toArray();
     }
