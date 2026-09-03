@@ -50,7 +50,12 @@ public class DataSeeder implements SmartInitializingSingleton {
             new Site(415, 633984, "n78", 7853, 65.0400, 25.4990,   40, 47),
             new Site(508, 633984, "n78", 7853, 65.0560, 25.5250,   40, 47),
             new Site(611, 633984, "n78", 7853, 65.0700, 25.5580,   55, 47),
-            new Site(714, 633984, "n78", 7853, 65.0830, 25.6100,   65, 47));
+            new Site(714, 633984, "n78", 7853, 65.0830, 25.6100,   65, 47),
+            // A site the route passes close to and never camps on. Physically ordinary -
+            // a cell from a neighbouring cluster whose relation to this stretch was never
+            // provisioned - and the reason MISSING_NEIGHBOUR has anything to detect. See
+            // DriveTestGenerator's `strandedPci`.
+            new Site(902, 633984, "n78", 7853, 65.0480, 25.5090,  200, 46));
 
     private final JdbcTemplate jdbc;
     private final SessionRepo sessions;
@@ -121,8 +126,11 @@ public class DataSeeder implements SmartInitializingSingleton {
 
         seedSession("Oulu highway northbound - build 1.5.0", "OnePlus 13R", "Operator A",
                 "5G NR SA", "Highway", "1.5.0", base.plus(3, ChronoUnit.DAYS), "Oulu, Finland",
-                new DriveTestGenerator(20260827L, HIGHWAY_SITES, HIGHWAY_ROUTE, 900, 0.0, 1.5, null),
-                "High speed run with sparse site density and frequent handovers.");
+                new DriveTestGenerator(20260827L, HIGHWAY_SITES, HIGHWAY_ROUTE, 900, 0.0, 1.5,
+                        null, null, -1, 12, 902),
+                "High speed run with sparse site density and frequent handovers. Carries a"
+                + " stretch where a handover is late: the terminal stays on the cell it"
+                + " had while a better one is measurable.");
 
         // A lab run injected at the O-RAN 7.2x fronthaul rather than over RF. The radio
         // side replays the recorded city route; the fronthaul counters are what only this

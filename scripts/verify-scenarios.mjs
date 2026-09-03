@@ -3162,6 +3162,76 @@ scenario('S26 · A control is offered only where something answers it')
   await page.waitForTimeout(2500)
 }
 
+// ─── S27 · The two causes a Nemo user looks for first ────────────────────────
+//
+// `Missing handover` and `Missing neighbour` are the reference's best-known verdicts, and
+// this project carried them for weeks on a reason that was wrong - "a missing neighbour is
+// the measured set minus the CONFIGURED list and we have no configured list". UC27 p404
+// judges from measurements alone: "if Ec/N0 1. best is better than Ec/N0 best active set,
+// the handover has not occurred".
+//
+// What actually blocked them was the seed. The generator picked the strongest cell as
+// serving at every sample, so "a neighbour stronger than serving" existed in 0 of 21,070
+// neighbour rows and both detectors would have found nothing while looking correct.
+scenario('S27 · The two causes a Nemo user looks for first')
+{
+  const hw = sessions.find((x) => x.name === HIGHWAY).id
+  const survey = await apiGet(`/api/sessions/${hw}/problem-survey`)
+  const mob = survey.instances.filter((i) => i.category.startsWith('MISSING_'))
+  const late = mob.filter((i) => i.category === 'MISSING_HANDOVER')
+  const norel = mob.filter((i) => i.category === 'MISSING_NEIGHBOUR')
+
+  step('the drive has late handovers, and each names the cell that was better',
+    late.length > 0 && late.every((i) => /PCI \d+ was up to [\d.]+ dB stronger/.test(i.detail)),
+    `${late.length} instances, e.g. "${late[0]?.detail?.slice(0, 72) ?? 'none'}"`)
+
+  // The margin is the whole judgement: below the hysteresis a real network is configured
+  // with, staying put is correct behaviour and reporting it would fill the pie with the
+  // ordinary flutter of two cells crossing over.
+  const margins = late.map((i) => Number(/up to ([\d.]+) dB/.exec(i.detail)?.[1]))
+  step('and every one of them clears the handover margin, not merely a crossover',
+    margins.length > 0 && margins.every((m) => m >= 3),
+    `margins ${margins.join(', ')} dB`)
+
+  // The two causes are told apart by whether the better cell EVER serves on this drive -
+  // an inference, so it has to be checkable against the samples rather than trusted.
+  const track = await apiGet(`/api/sessions/${hw}/track?kpi=RSRP`)
+  const everServes = new Set(track.map((p) => p.servingPci).filter((p) => p != null))
+  const latePcis = late.map((i) => Number(/PCI (\d+)/.exec(i.detail)?.[1]))
+  const norelPcis = norel.map((i) => Number(/PCI (\d+)/.exec(i.detail)?.[1]))
+  step('a LATE handover names a cell the drive really does camp on somewhere',
+    latePcis.length > 0 && latePcis.every((p) => everServes.has(p)),
+    `${latePcis.join(', ')} against serving set ${[...everServes].sort((a, b) => a - b).join(', ')}`)
+  step('and a MISSING RELATION names one it never camps on, anywhere',
+    norelPcis.length > 0 && norelPcis.every((p) => !everServes.has(p)),
+    `${norelPcis.join(', ')} never serve`)
+
+  // The distinction has to be visible, not only computed: the two faults want different
+  // work - retune a threshold, or provision a relation that does not exist.
+  const slices = survey.categories.map((c) => c.label)
+  step('both appear as their own slices, so the pie separates them',
+    slices.includes('Missing handover') && slices.includes('Missing neighbour'),
+    slices.join(' · '))
+
+  await selectSession(HIGHWAY)
+  await openWorkbook('Problem Survey')
+  await page.waitForTimeout(1800)
+  // Scoped to the causes panel. The case list under it carries the cause name in every
+  // row too, so an unscoped `table.grid tbody tr` counts one slice plus all its cases.
+  const rows = await page
+    .locator('.panel:has(header .title:text-is("Problem survey per category")) tbody tr')
+    .allTextContents()
+  const shown = rows.filter((r) => /Missing/.test(r))
+  step('and the screen shows them, with counts that match the survey',
+    shown.length === 2
+    && shown.some((r) => r.includes(String(late.length)))
+    && shown.some((r) => r.includes(String(norel.length))),
+    shown.map((r) => r.replace(/\s+/g, ' ').trim()).join(' | ').slice(0, 110))
+
+  await page.goto(BASE, { waitUntil: 'domcontentloaded' })
+  await page.waitForTimeout(2500)
+}
+
 // ─── wrap-up ─────────────────────────────────────────────────────────────────
 const appErrors = errors.filter((e) =>
   !/tile\.openstreetmap\.org|ERR_CONNECTION|Failed to load resource|ERR_TIMED_OUT/.test(e))
