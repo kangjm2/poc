@@ -88,8 +88,11 @@ sudo -u postgres createdb -O vdt vdt
 │ (KPI 트리)  │        워크북 패널 영역           │ Numerical Data│
 │            │                                 │ Events        │
 ├────────────┴─────────────────────────────────┴───────────────┤
-│ 워크북 탭: Overview · Radio Quality · Throughput · Fronthaul  │
-│            · Mobility · L3 Signalling · Degradation           │
+│ 워크북 탭(14): Overview · Radio Quality · Throughput ·        │
+│   Fronthaul · Cells · Monitored Set · Mobility ·              │
+│   L3 Signalling · Problem Survey · Degradation ·              │
+│   Coverage Issues · Statistics · Field-to-Lab ·               │
+│   Compare on the Ground   (+ 직접 만든 워크북)                 │
 │            · Coverage Issues · Statistics                     │
 ├───────────────────────────────────────────────────────────────┤
 │ 상태바: ▶ | START · END · CURRENT | ━━●━━ | seq | From/To here│
@@ -412,8 +415,8 @@ cell:101;kpi:RSRP:<:-100   둘 다 (세미콜론은 AND)
 적습니다 — 화면에서 멀리 떨어져 읽히는 산출물이라, 조건을 적지 않으면 전체 주행의 표와
 구별되지 않기 때문입니다.
 
-**무엇이 조건을 지키지 않는지도 화면이 말합니다.** 오른쪽 **Reach: 13 of 21**을 누르면
-지키는 13개와 **지키지 못하는 8개를 이유와 함께** 폅니다. 이벤트와 L3 메시지는 표본이
+**무엇이 조건을 지키지 않는지도 화면이 말합니다.** 오른쪽 **Reach: 14 of 22**을 누르면
+지키는 14개와 **지키지 못하는 8개를 이유와 함께** 폅니다. 이벤트와 L3 메시지는 표본이
 아니라 **시각**으로 매인 행이고, 모니터드 셋과 파일럿 오염은 구간 판정이라 가운데 표본을
 빼면 한 구간이 둘로 보고됩니다. 공간 차분과 비교는 주행이 둘입니다.
 
@@ -488,8 +491,12 @@ cell:101;kpi:RSRP:<:-100   둘 다 (세미콜론은 AND)
 
 ### 3.8 내보낸다
 
-툴바 **Export** — **CSV**(전 KPI 피벗, 한 행이 한 표본) 또는 **GeoJSON**(선택 KPI의
-지리 데이터, 플래닝 도구용).
+툴바 **Export** — 셋입니다. **CSV**(전 KPI 피벗, 한 행이 한 표본) · **GeoJSON**(선택 KPI의
+지리 데이터, 플래닝 도구용) · **Report**(인쇄용 세션 리포트 — §3.6-1이 조건 표기를 함께 설명합니다).
+
+세 링크 다 지금 걸린 전역 필터를 함께 나릅니다. 리포트는 어느 조건으로 뽑혔는지와 **어느 기준으로
+계산됐는지**를 표 안에 적습니다 — 화면에서 다른 기준을 골라 두었다면 숫자가 다를 수 있고, 리포트가
+그렇게 말합니다.
 
 ---
 

@@ -87,7 +87,7 @@ sudo -u postgres createdb -O vdt vdt
 ```bash
 # 세 검사기가 서로 다른 실패 계열을 담당합니다
 node scripts/verify-ui.mjs             # 개별 동작 125개
-node scripts/verify-scenarios.mjs      # 사용자 여정 226단계 / 23 시나리오
+node scripts/verify-scenarios.mjs      # 사용자 여정 249단계 / 24 시나리오
 node tools/uxtest/api-surface.mjs      # 로직은 있는데 뷰가 없는 격차
 (cd backend && mvn test)               # SQL을 조립하는 코드·색 램프·기하 — 89개
 node tools/uxtest/measure-signals.mjs  # (선택) 검증 신호별 비용 측정
@@ -154,8 +154,10 @@ node tools/uxtest/experiment.mjs   # 결함 주입 × 검출기 매트릭스
 파티션 프루닝이 걸립니다. 상세와 측정치는 `docs/architecture-and-scale.md`.
 
 **5. 집계는 전부 DB에서 수행합니다.** 분포·통계·열화 구간 모두 SQL로 계산하며, 응답은 서버에서
-데시메이션합니다. 200 device-hours(1,300만 KPI 행, 4 GB)에서 모든 분석 엔드포인트가 200 ms 이내이며
-최악은 `track` 193 ms입니다.
+데시메이션합니다. 200 device-hours(1,300만 KPI 행, 4 GB)에서 **단일 세션** 분석 엔드포인트가 모두 200 ms 이내이며
+최악은 `track` 193 ms입니다(`architecture-and-scale.md` §3.4). *다중 세션 집계인 `/cohorts`는
+그 표에 없습니다 — 아직 그 규모에서 재지 않았고, 재기 전에는 이 문장이 그것까지 말하지
+않습니다.*
 
 **6. UE 측과 네트워크(DU) 측 지표를 구분합니다.** 실제 DU가 피시험 대상이면 DU도 카운터를 냅니다.
 UE 측만 보면 "이 단말이 힘들다"와 "이 셀이 혼잡하다"를 구분할 수 없습니다. 프론트홀 주입 시에는
@@ -169,7 +171,10 @@ UE 측만 보면 "이 단말이 힘들다"와 "이 셀이 혼잡하다"를 구�
 - **아직 없는 것**: 벤더 바이너리 로그(DLF 등) 파싱, 3D 시각화, 리포트 템플릿 생성,
   세션 간 추세·대시보드. 전체 목록과 우선순위는 [`docs/gap-analysis.md`](docs/gap-analysis.md),
   다음 리서치 항목은 [`docs/research-agenda.md`](docs/research-agenda.md)에 있습니다.
-  (CSV 임포트, area binning, 랩 런 실행기, 파생 KPI 수식은 이후 구현되었습니다.)
+  (CSV 임포트, area binning, 파생 KPI 수식은 이후 구현되었습니다. **랩 런은 기록·브링업
+  시퀀스·판정까지이고 실제 장비를 구동하는 실행기는 아직 없습니다** — 2026-09-03 정정:
+  이 줄이 "랩 런 실행기"를 구현된 것으로 적어 `architecture-and-scale.md` §2.6과
+  어긋나 있었습니다.)
 - **레퍼런스 대비 워크벤치**(2026-09-02 갱신): ①`SOURCE_SAMPLE`(위경도·속도·서빙 PCI)과
   ②`SOURCE_EVENT`(최근접 표본으로 이벤트를 `seq` 척추에 올림)는 **구현됐습니다.**
   ③ **진짜 State Machine**과 **Previous·Current·Next 상관**도 구현됐고, ⓪ *그래프의 두 번째

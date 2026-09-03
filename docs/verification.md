@@ -6,8 +6,8 @@
 | 검사기 | 지금 | 최초 기록 시점 |
 |---|---|---|
 | `scripts/verify-ui.mjs` | **125/125** | 15 → 30 |
-| `scripts/verify-scenarios.mjs` | **226/226 단계 / 23 시나리오** | 75 / 8 |
-| `tools/uxtest/api-surface.mjs` | 격차 없음 (엔드포인트 67 · 클라이언트 67 · KPI 18/18 도달) | 엔드포인트 14 |
+| `scripts/verify-scenarios.mjs` | **249/249 단계 / 24 시나리오** | 49 / 8 |
+| `tools/uxtest/api-surface.mjs` | 격차 없음 (엔드포인트 67 · 클라이언트 68 · KPI 18/18 도달) | 엔드포인트 14 |
 | `mvn test` | **89개** (`KpiGraphTest` 46 · `CohortTest` 13 · `GlobalFilterTest` 11 · `ColourRampTest` 7 · `ComputedKpisTest` 6 · `ConvexHullTest` 6) | 없었음 |
 | Flyway 마이그레이션 | V1–V13 | V1–V3 |
 
@@ -36,7 +36,7 @@ Flyway 마이그레이션과 시드가 최초 기동 시 자동 적용됨을 확
 > `SmartInitializingSingleton`으로 옮겼습니다. 이제 시드가 끝난 뒤에야 웹 서버가
 > listen을 시작합니다. 근거와 순서는 [`architecture.md`](architecture.md) §7.3.
 
-## 2. API (당시 14개 엔드포인트 · 현재 43개)
+## 2. API (당시 14개 엔드포인트 · 현재 수치는 맨 위 표)
 
 전 엔드포인트 200 응답, 오류 경로도 의도대로 동작합니다.
 
@@ -58,7 +58,7 @@ CQI 1 (CRITICAL) · BLER 60% (CRITICAL) · TX power 21.5 dBm (WARNING)
 
 ## 3. 브라우저 검증 (`node scripts/verify-ui.mjs`)
 
-실제 Chromium을 구동합니다. 당시 15개 항목, **현재 86개** — 아래 표는 최초 15개입니다.
+실제 Chromium을 구동합니다. 당시 15개 항목 — 아래 표는 그 15개이고, 현재 수치는 맨 위 표입니다.
 
 이후 추가된 계열: 자동 스케일 · 임포트 왕복 · 랩 브링업(RACH 도크·서빙 셀 식별·게이지) ·
 모니터드 셋(도크·커서 막대·파일럿 오염·지도 연결선) · KPI Workbench(캔버스·검증 리포트·
@@ -127,6 +127,5 @@ CQI 1 (CRITICAL) · BLER 60% (CRITICAL) · TX power 21.5 dBm (WARNING)
 ## 8. 시나리오 단위 E2E 검증 (2026-08-30 추가)
 
 개별 동작 확인과 별개로, 사용자 시나리오를 여정 전체로 걷는 검증을 추가했습니다:
-`scripts/verify-scenarios.mjs`. 추가 당시 8개 시나리오 49단계, **현재 13개 시나리오
-95단계** 전부 통과. 시나리오 정의·결과·검증이 잡아낸 결함(결함 창-페이드 중첩, 커서
+`scripts/verify-scenarios.mjs`. 추가 당시 8개 시나리오, 현재 수치는 맨 위 표입니다. 전부 통과. 시나리오 정의·결과·검증이 잡아낸 결함(결함 창-페이드 중첩, 커서
 디시메이션 단절, 비교의 거짓 SAME 등)은 `docs/scenario-verification.md`에 기록했습니다.
