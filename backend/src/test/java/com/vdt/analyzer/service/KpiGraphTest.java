@@ -1,5 +1,6 @@
 package com.vdt.analyzer.service;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
@@ -499,15 +500,29 @@ class KpiGraphTest {
     }
 
     @Test
-    void theCanvasLayoutSurvivesTheRoundTripThroughTheCompilersOwnRecord() {
-        // The document that is STORED is this record, not the request body, so a field
-        // missing here is a field silently dropped on save. It was: a reopened graph put
-        // every node at translate(undefined undefined) and sized its canvas NaN, and the
-        // type that promised the round trip was the frontend's, which nothing checked.
-        var n = node(1, KpiGraph.Kind.SOURCE_KPI, "src",
-                Map.of("x", 123.0, "y", 456.0, "kpiName", "RSRP"));
-        assertEquals(123.0, n.x());
-        assertEquals(456.0, n.y());
+    void theCanvasLayoutSurvivesTheRoundTripThroughTheCompilersOwnRecord() throws Exception {
+        // Through Jackson, which is what "round trip" means here: the document that is
+        // STORED is this record, serialised, and a field missing from it is a field
+        // silently dropped on save. It was: a reopened graph put every node at
+        // translate(undefined undefined) and sized its canvas NaN, and the type that
+        // promised the round trip was the frontend's, which nothing checked.
+        //
+        // Constructing the record and reading its accessors back - which is what this test
+        // did - could not fail: it asserted that a constructor argument arrives at its own
+        // getter. The mapper is the part that dropped the fields.
+        var spec = new KpiGraph.Spec(1, List.of(
+                node(1, KpiGraph.Kind.SOURCE_KPI, "src",
+                        Map.of("x", 123.0, "y", 456.0, "kpiName", "RSRP"))),
+                List.of());
+        var mapper = new ObjectMapper();
+        var json = mapper.writeValueAsString(spec);
+        var back = mapper.readValue(json, KpiGraph.Spec.class);
+        var n = back.nodes().get(0);
+        assertAll(
+                () -> assertTrue(json.contains("\"x\":123.0"), json),
+                () -> assertEquals(123.0, n.x()),
+                () -> assertEquals(456.0, n.y()),
+                () -> assertEquals("RSRP", n.kpiName()));
     }
 
     @Test

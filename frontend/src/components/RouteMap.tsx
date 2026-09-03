@@ -492,10 +492,13 @@ export function RouteMap({
       L.polygon(f.hull as [number, number][], {
         color: `hsl(${hue} 55% 40%)`, weight: 1.5, opacity: 0.85,
         fillColor: `hsl(${hue} 55% 50%)`, fillOpacity: 0.10,
-        // Named so a hull is countable apart from the route: both are SVG paths in the
-        // same pane, and "how many footprints are drawn" is otherwise unanswerable
-        // without also counting the several hundred coloured route segments.
-        className: 'footprint-hull',
+        // Named so a hull is countable apart from the route - both are SVG paths in the
+        // same pane, and "how many footprints are drawn" is otherwise unanswerable without
+        // also counting the several hundred coloured route segments - and named PER CELL,
+        // so "which cells survived the filter" is answerable too. A count alone passes on
+        // any narrowing that removes the right NUMBER of hulls, including one that removed
+        // the wrong ones.
+        className: `footprint-hull pci-${f.pci}`,
       })
         // "covers", not "served": under the three-strongest basis these samples are ones the
         // cell was a contender on, which is a different claim. And an em dash for a cell with

@@ -20,12 +20,22 @@ import { paintBar } from '../view/paint'
  * area bins, and two different aggregations of the same route drawn the same way would
  * leave a user unable to tell which one they were reading.
  */
-export function DistanceProfile({ sessionId, kpiName, stepMeters, cursorSeq, isolate, onJump }: {
+export function DistanceProfile({
+  sessionId, kpiName, stepMeters, cursorSeq, isolate, filterSpec, onJump,
+}: {
   sessionId: number | null
   kpiName: string
   stepMeters: number
   cursorSeq: number
   isolate?: string | null
+  /**
+   * The global filter, taken as a prop and not read from a module, for the one reason it
+   * has to be here at all: it belongs in the dependency array. The endpoint honours the
+   * condition and the client attaches it, so the request narrowed correctly - and the
+   * effect never re-ran, so the panel went on drawing the answer from before the filter
+   * while every panel beside it narrowed.
+   */
+  filterSpec?: string | null
   onJump: (seq: number) => void
 }) {
   const [bins, setBins] = useState<DistanceBin[] | null>(null)
@@ -39,7 +49,7 @@ export function DistanceProfile({ sessionId, kpiName, stepMeters, cursorSeq, iso
       .then((b) => { if (live) setBins(b) })
       .catch((e) => { if (live) setError(e instanceof Error ? e.message : String(e)) })
     return () => { live = false }
-  }, [sessionId, kpiName, stepMeters])
+  }, [sessionId, kpiName, stepMeters, filterSpec])
 
   if (error) return <div className="error">{error}</div>
   if (!bins) return null

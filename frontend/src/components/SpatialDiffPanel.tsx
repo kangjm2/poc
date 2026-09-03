@@ -47,6 +47,13 @@ export function SpatialDiffPanel({ sessionId, sessions, kpi, cursorSeq, onPick }
     if (sessionId == null) return
     setOther((o) => (o != null && o !== sessionId ? o
       : sessions.find((s) => s.id !== sessionId)?.id ?? null))
+    // The measurement that just came into view cannot also be an EXTRA on either side -
+    // the service refuses a drive that appears on both, and a near side holding its own
+    // anchor twice is a group of one wearing a label that says two. Dropped rather than
+    // cleared: the rest of a deliberately built group is still the comparison the reader
+    // was making.
+    setWithA((v) => v.filter((x) => x !== sessionId))
+    setWithB((v) => v.filter((x) => x !== sessionId))
   }, [sessionId, sessions])
 
   useEffect(() => {
@@ -112,20 +119,26 @@ export function SpatialDiffPanel({ sessionId, sessions, kpi, cursorSeq, onPick }
             </select>
           </span>
         </header>
-        {withA.length > 0 && (
+        {/* Both banners name the group the SERVER pooled (`groupA`/`groupB` come back on
+            every answer), not the one this screen asked for. They are the same list until
+            they are not - a measurement added to a side and then opened in the toolbar had
+            the caption read "a group of 2: City A · City A" over tiles the service had
+            computed from one. The tiles were right and the sentence above them was not,
+            which is the harder failure to notice. */}
+        {data && data.groupA.length > 1 && (
           <div className="diff-group" style={{ padding: '4px 8px', color: '#444' }}>
-            Near side is a group of {withA.length + 1}, averaged together:{' '}
-            {[sessionId, ...withA].map((id) => sessions.find((s) => s.id === id)?.name ?? id)
+            Near side is a group of {data.groupA.length}, averaged together:{' '}
+            {data.groupA.map((id) => sessions.find((s) => s.id === id)?.name ?? id)
               .join(' · ')}
             <button style={{ marginLeft: 8 }} onClick={() => setWithA([])}>
               back to one measurement
             </button>
           </div>
         )}
-        {withB.length > 0 && (
+        {data && data.groupB.length > 1 && (
           <div className="diff-group" style={{ padding: '4px 8px', color: '#444' }}>
-            Far side is a group of {withB.length + 1}, averaged together:{' '}
-            {[other, ...withB].map((id) => sessions.find((s) => s.id === id)?.name ?? id)
+            Far side is a group of {data.groupB.length}, averaged together:{' '}
+            {data.groupB.map((id) => sessions.find((s) => s.id === id)?.name ?? id)
               .join(' · ')}
             <button style={{ marginLeft: 8 }} onClick={() => setWithB([])}>
               back to one measurement

@@ -357,9 +357,16 @@ export const api = {
   },
 
   /** The polygon travels as "lat,lon;lat,lon;..." - a question being asked, not a stored object. */
-  areaStatistics: (id: number, kpi: string, polygon: [number, number][]) =>
+  /**
+   * @param polygon the ring as `lat,lon;lat,lon;…` - the wire form, not a coordinate array.
+   *
+   * The caller already holds this string: it is what narrows the track fetch, so the shape
+   * on the map and the shape the statistics are about are one value. Taking an array here
+   * meant serialising it a second time, and the two copies were free to drift.
+   */
+  areaStatistics: (id: number, kpi: string, polygon: string) =>
     get<AreaStats>(`/sessions/${id}/area-statistics?kpi=${encodeURIComponent(kpi)}`
-      + `&polygon=${encodeURIComponent(polygon.map(([a, b]) => `${a},${b}`).join(';'))}`),
+      + `&polygon=${encodeURIComponent(polygon)}`),
 
   // `withB` adds measurements to the far side. Absent, the call is exactly what it was.
   /**

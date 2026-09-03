@@ -123,7 +123,7 @@ await page.waitForTimeout(2200)
 // two same-route sessions are compared against each other rather than against a
 // hardcoded number.
 const distOf = async (id) => {
-  const r = await page.request.get(`${API_BASE}/api/sessions/${id}/distance-bins?kpi=RSRP&stepMetres=250`)
+  const r = await page.request.get(`${API_BASE}/api/sessions/${id}/distance-bins?kpi=RSRP&stepMeters=250`)
   const bins = await r.json()
   return Math.max(...bins.map((b) => b.toMetres))
 }

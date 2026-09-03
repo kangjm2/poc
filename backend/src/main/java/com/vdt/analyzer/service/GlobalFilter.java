@@ -201,7 +201,16 @@ public final class GlobalFilter {
                         + " can now name a set of drives, so this is an unwired"
                         + " endpoint and not an impossibility"),
                 new Coverage("/api/compare", false,
-                        "Not built, for the same reason: no filter parameter yet"));
+                        "Not built, for the same reason: no filter parameter yet"),
+                new Coverage("/api/sessions/{id}/coverage-issues", false,
+                        "Not built: this endpoint takes no filter parameter. It classifies"
+                        + " individual samples, which is the shape /degradations honours,"
+                        + " so this is an unwired endpoint and not an impossibility"),
+                new Coverage("/api/sessions/{id}/problem-survey", false,
+                        "Not built, for the same reason. Its causes come from three"
+                        + " different detectors and one event stream, so wiring it means"
+                        + " deciding what the condition means for the event-sourced"
+                        + " causes - the same question /events is exempt for"));
     }
 
     /**
