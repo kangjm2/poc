@@ -159,15 +159,31 @@ export function MonitoredSetPage({ sessionId, set, onJump }: {
   const [spans, setSpans] = useState<PollutionSpan[] | null>(null)
   const [error, setError] = useState<string | null>(null)
 
+  /**
+   * What counts as competing, and how many competitors make it pollution.
+   *
+   * The reference asks for exactly these two by name before it draws the map (UC20 p173:
+   * `Polluter level window from the best active set` = -6, `Pilot count threshold` = 3),
+   * and our server has accepted both since the analytic was written. Only the screen never
+   * sent them, so every reader got 6 dB and 3 cells whether or not that suited the network
+   * they were looking at - and the caption below asserted "≥3" as a fact of the tool.
+   *
+   * Held HERE rather than in the two panels because ONE value has to reach both endpoints:
+   * a table counting contention at 6 dB beside a span list computed at 9 dB would be two
+   * answers to one question, printed side by side.
+   */
+  const [windowDb, setWindowDb] = useState(6)
+  const [minCells, setMinCells] = useState(3)
+
   // The two session-wide fetches are owned here and run once per session, so the table and
   // the pollution list cannot disagree about what they are showing.
   useEffect(() => {
     if (sessionId == null) return
     setData(null); setSpans(null); setError(null)
-    api.neighbourBreakdown(sessionId)
+    api.neighbourBreakdown(sessionId, null, null, windowDb)
       .then(setData).catch((e) => setError(String(e)))
-    api.pilotPollution(sessionId).then(setSpans).catch(() => setSpans([]))
-  }, [sessionId])
+    api.pilotPollution(sessionId, windowDb, minCells).then(setSpans).catch(() => setSpans([]))
+  }, [sessionId, windowDb, minCells])
 
   if (error) return <div className="error">{error}</div>
   if (!data) return <div className="loading">Loading…</div>
@@ -246,11 +262,30 @@ export function MonitoredSetPage({ sessionId, set, onJump }: {
             <span className="title">Pilot pollution</span>
             <span className="meta">{spans == null ? '…' : `${spans.length} stretches`}</span>
           </header>
+          {/* Both numbers read from the state that produced the answer. The cell count was
+              hardcoded as "≥3" beside a dB figure taken from the OTHER endpoint's response,
+              so a caption that looked like one statement was half assertion and half
+              measurement - and would have gone on saying 3 at any threshold. */}
           <div style={{ padding: '6px 10px', color: '#666', whiteSpace: 'normal' }}>
-            Stretches where {'≥'}3 cells sit within {data.strongWithinDb} dB of the
+            Stretches where {'≥'}{minCells} cells sit within {data.strongWithinDb} dB of the
             best, so the terminal has no clean choice. Computable only now that the
             monitored set is recorded &mdash; with one serving cell per sample there was
             nothing to count.
+          </div>
+          <div className="pollution-controls">
+            <label>Window&nbsp;
+              <input type="number" min={1} max={20} step={0.5} value={windowDb}
+                     aria-label="Pollution window dB"
+                     onChange={(e) => setWindowDb(Number(e.target.value))} /> dB
+            </label>
+            <label>Competing cells&nbsp;
+              <input type="number" min={2} max={8} value={minCells}
+                     aria-label="Pollution cell count"
+                     onChange={(e) => setMinCells(Number(e.target.value))} />
+            </label>
+            <span className="dim">
+              asked before the map is drawn in the reference too (UC20 p173)
+            </span>
           </div>
           {spans != null && spans.length === 0 && (
             <div style={{ padding: '0 10px 10px', color: '#666' }}>

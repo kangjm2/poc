@@ -542,6 +542,37 @@ step('both comparison screens offer it, not just Statistics',
 > 보이는 것은 서버 검사이지 배선 검사가 아닙니다 — 그리고 배선이야말로 이 부류의 작업에서
 > 유일하게 새로 생긴 것입니다.
 
+### 1.5.16 한 술어에 무조건 참인 가지가 있으면 그 검사는 검사가 아닙니다 (2026-09-03)
+
+푸트프린트 셀 필터를 검사하려고 이렇게 썼습니다.
+
+```js
+step('the cell filter narrows what is drawn, and the map says what it left out',
+  after < before && new RegExp(`${allCells.length - 2} .*fewer|2 of ${allCells.length}`)
+    .test(note) === false
+    ? after < before && /of \d+ cells/.test(note)
+    : true,                                   // ← 이 가지
+  …)
+```
+
+**세 겹의 결함이 한 줄에 있습니다.**
+
+1. 중첩 삼항의 `: true` 가지는 **아무것도 재지 않습니다.** 정규식이 맞기만 하면 그린 개수는
+   보지 않고 통과합니다.
+2. `after < before`는 **좁아졌다**만 말합니다. 다섯 중 둘을 남기라고 했는데 **엉뚱한 셋**을
+   지워도 참입니다.
+3. 그리고 실제로 이 검사는 **푸트프린트를 아예 그리지 않는 탭**(Overview)에서 돌고 있었고,
+   `path.leaflet-interactive`를 셌습니다 — 그 선택자에 걸린 229개는 전부 **경로 선분**이었습니다.
+   즉 켜지지도 않은 기능에 대해 상수 두 개를 비교하고 있었습니다.
+
+고친 형태는 정확히 셉니다. 껍질에 `className: 'footprint-hull'`을 주어 **경로와 따로 세지고**,
+술어는 `before - after === allCells.length - 2` — 다섯 중 둘을 남기면 **정확히 셋**이 사라져야
+합니다. 그리고 머리글이 `2 of 5 cells`라고 적는지 함께 봅니다.
+
+> **`<` 는 좁아졌다는 뜻이지 옳게 좁아졌다는 뜻이 아닙니다.** 그리고 화면 요소를 셀 때는
+> **기능이 그린 것만 세지는 선택자**가 필요합니다 — 없으면 만들어야 합니다. 셀 수 있게
+> 만드는 한 줄이, 세는 척하는 검사보다 쌉니다.
+
 ### 1.6 API 표면 커버리지 — "뷰 없는 로직"을 정면으로 겨냥
 
 타입 체크가 못 보는(타입은 정상) 그리고 E2E가 못 보는(없는 화면의 테스트를 아무도 안 씀) 영역입니다.

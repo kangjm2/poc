@@ -11,7 +11,7 @@ committing UI-affecting work; a change is not "verified" until all pass.
 | Checker | Catches | Cost |
 |---|---|---|
 | `node scripts/verify-ui.mjs` | Individual behaviour regressions (125 checks) | ~60s |
-| `node scripts/verify-scenarios.mjs` | Broken user journeys — steps carry state (249 steps, 24 scenarios) | ~90s |
+| `node scripts/verify-scenarios.mjs` | Broken user journeys — steps carry state (257 steps, 25 scenarios) | ~90s |
 | `node tools/uxtest/api-surface.mjs` | Logic-without-view: endpoints or client methods nothing renders | ~5s |
 
 ## Service lifecycle (required before browser checks)

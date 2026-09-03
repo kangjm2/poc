@@ -466,7 +466,7 @@ select·join·group by 하든 끼워 넣기만 하면 됩니다. 그래서 "이 
 | 검사기 | 잡는 것 | 규모 (2026-09-02) |
 |---|---|---|
 | `scripts/verify-ui.mjs` | 개별 동작 회귀 | 125개 |
-| `scripts/verify-scenarios.mjs` | 여정 회귀 — 단계 간 상태가 이어짐 | 249단계 / 24 시나리오 |
+| `scripts/verify-scenarios.mjs` | 여정 회귀 — 단계 간 상태가 이어짐 | 257단계 / 25 시나리오 |
 | `tools/uxtest/api-surface.mjs` | **로직은 있는데 뷰가 없는** 격차 | 엔드포인트 · 클라이언트 · KPI 도달성 |
 | `mvn test` | SQL을 조립하는 코드와 기하 | 89개 단위 테스트 |
 

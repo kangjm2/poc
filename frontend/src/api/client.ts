@@ -323,12 +323,38 @@ export const api = {
   monitoredSet: (id: number, seq: number) =>
     get<MonitoredSet>(`/sessions/${id}/monitored-set?seq=${seq}`),
 
-  neighbourBreakdown: (id: number, from?: number | null, to?: number | null) =>
-    get<NeighbourBreakdown>(`/sessions/${id}/neighbour-breakdown`
-      + (from == null ? '' : `?fromSeq=${from}`)
-      + (to == null ? '' : `${from == null ? '?' : '&'}toSeq=${to}`)),
+  /**
+   * @param windowDb how close to the strongest cell counts as competing. The reference asks
+   *                 for it by name - `Polluter level window from the best active set`, UC20
+   *                 p173 - and the server has always accepted it; only the screen could not
+   *                 send it, so every reader got the 6 dB default whether it suited their
+   *                 network or not.
+   *
+   * Built with URLSearchParams rather than by juggling `?` and `&`, which is how the two
+   * optional parameters were assembled and would not have survived a third.
+   */
+  neighbourBreakdown: (id: number, from?: number | null, to?: number | null,
+                       windowDb?: number) => {
+    const q = new URLSearchParams()
+    if (from != null) q.set('fromSeq', String(from))
+    if (to != null) q.set('toSeq', String(to))
+    if (windowDb != null) q.set('windowDb', String(windowDb))
+    return get<NeighbourBreakdown>(
+      `/sessions/${id}/neighbour-breakdown${q.toString() ? `?${q}` : ''}`)
+  },
 
-  pilotPollution: (id: number) => get<PollutionSpan[]>(`/sessions/${id}/pilot-pollution`),
+  /**
+   * @param windowDb  the same window as above - the two endpoints must be asked with one
+   *                  value or the table and the spans describe different competitions.
+   * @param minCells  the reference's `Pilot count threshold` (UC20 p173, default 3).
+   */
+  pilotPollution: (id: number, windowDb?: number, minCells?: number) => {
+    const q = new URLSearchParams()
+    if (windowDb != null) q.set('windowDb', String(windowDb))
+    if (minCells != null) q.set('minCells', String(minCells))
+    return get<PollutionSpan[]>(
+      `/sessions/${id}/pilot-pollution${q.toString() ? `?${q}` : ''}`)
+  },
 
   /** The polygon travels as "lat,lon;lat,lon;..." - a question being asked, not a stored object. */
   areaStatistics: (id: number, kpi: string, polygon: [number, number][]) =>
@@ -336,11 +362,22 @@ export const api = {
       + `&polygon=${encodeURIComponent(polygon.map(([a, b]) => `${a},${b}`).join(';'))}`),
 
   // `withB` adds measurements to the far side. Absent, the call is exactly what it was.
+  /**
+   * @param withA extra measurements on the NEAR side.
+   *
+   * The reference's delta plotting is symmetric - `Measurement Group 1` and
+   * `Measurement Group 2`, each with its own list (UC16 p158-162) - and so is
+   * `SpatialDiffService.diff(List, List, …)`. Only the client was asymmetric: `withA` was
+   * declared on the server, accepted by the controller, and reachable from nothing, so the
+   * near side was permanently one drive and "the evening runs against the morning runs"
+   * could only ever be asked half way round.
+   */
   spatialDiff: (id: number, other: number, kpi: string, sizeMeters: number,
-                withB?: number[]) =>
+                withB?: number[], withA?: number[]) =>
     get<SpatialDiff>(`/sessions/${id}/spatial-diff?other=${other}`
       + `&kpi=${encodeURIComponent(kpi)}&sizeMeters=${sizeMeters}`
-      + (withB && withB.length ? `&withB=${withB.join(',')}` : '')),
+      + (withB && withB.length ? `&withB=${withB.join(',')}` : '')
+      + (withA && withA.length ? `&withA=${withA.join(',')}` : '')),
 
   distanceBins: (id: number, kpi: string, stepMeters: number) =>
     get<DistanceBin[]>(`/sessions/${id}/distance-bins?kpi=${kpi}&stepMeters=${stepMeters}`),

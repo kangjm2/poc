@@ -14,6 +14,7 @@ import {
 } from './components/Panels'
 import { CompareView } from './components/CompareView'
 import { CohortView } from './components/CohortView'
+import { parsePciFilter } from './view/pciFilter'
 import { CellsPage } from './components/CellBarChart'
 import { MonitoredSetDock, MonitoredSetPage } from './components/MonitoredSetPanel'
 import { ComposedWorkbook } from './components/ComposedWorkbook'
@@ -185,6 +186,19 @@ export function App() {
   const [binStat, setBinStat] = useState('AVERAGE')
   /** Whether a footprint is where the cell served or where it was among the three best. */
   const [footprintBasis, setFootprintBasis] = useState('SERVING')
+  /**
+   * Which cells the footprint layer draws, in the reference's own filter syntax.
+   *
+   * UC1 p67 asks for this before it draws anything, and its dialog help gives the grammar:
+   * `3,10-30,42,100-`. The manual states the reason too - "Analysis will not work properly
+   * if there will be hundreds of pages in the results" - which is our reason as well: the
+   * hulls overlap, and overlapping every cell at once is how the layer stops answering.
+   *
+   * The server has taken `pcis` since P2-2. Narrowing is done HERE, on the drawn set,
+   * rather than by refetching: the parse has to produce the caption anyway, and a refetch
+   * per keystroke would make a typo cost a round trip.
+   */
+  const [footprintCells, setFootprintCells] = useState('')
   const [footprints, setFootprints] = useState<CellFootprint[] | null>(null)
   const [workbooks, setWorkbooks] = useState<Workbook[]>([])
   const [issues, setIssues] = useState<CoverageIssue[]>([])
@@ -452,6 +466,24 @@ export function App() {
       .catch(() => { if (live) setFootprints(null) })
     return () => { live = false }
   }, [sessionId, showFootprints, footprintBasis, filterSpec])
+
+  /**
+   * The footprints actually drawn, and what the caption has to say about the rest.
+   *
+   * One derivation feeding both the map and the notice: a screen that drew five hulls while
+   * saying it had narrowed to three would be the exact defect this project keeps finding,
+   * and two independent reads of one typed string is how that happens.
+   */
+  const footprintFilter = parsePciFilter(footprintCells)
+  const shownFootprints = footprints == null ? null
+    : (footprintFilter.match == null ? footprints
+       : footprints.filter((f) => footprintFilter.match!(f.pci)))
+  const footprintNote = !showFootprints || footprints == null ? null
+    : footprintFilter.error != null
+      ? `cell filter ignored: ${footprintFilter.error}`
+      : footprintFilter.match == null ? null
+        : `footprints for ${footprintFilter.terms.join(', ')}`
+          + ` (${shownFootprints!.length} of ${footprints.length} cells)`
 
   const reloadWorkbooks = useCallback(() => {
     api.workbooks().then(setWorkbooks).catch(() => setWorkbooks([]))
@@ -808,7 +840,8 @@ export function App() {
             <RouteMap track={track} cells={cells} cursorSeq={cursorSeq}
                       frameKey={String(sessionId)} refitToken={refitToken}
                       onCursorChange={moveCursor} kpiName={activeDef?.displayName ?? kpi}
-                      monitored={monitored?.cells ?? null} footprints={footprints}
+                      monitored={monitored?.cells ?? null} footprints={shownFootprints}
+                      footprintNote={footprintNote}
                       colorBy={colorBy} isolate={isolate}
                       events={events} eventTypes={eventTypes} />
             <div className="panel">
@@ -887,7 +920,7 @@ export function App() {
             <RouteMap track={track} cells={cells} cursorSeq={cursorSeq}
                       frameKey={String(sessionId)} refitToken={refitToken}
                       onCursorChange={moveCursor} kpiName={activeDef?.displayName ?? kpi}
-                      bins={bins} footprints={footprints}
+                      bins={bins} footprints={shownFootprints} footprintNote={footprintNote}
                       colorBy={colorBy} isolate={isolate}
                       events={events} eventTypes={eventTypes} />
             <div className="panel">
@@ -1045,6 +1078,13 @@ export function App() {
                   <option value="SERVING">where it served</option>
                   <option value="TOP3">where it was top 3</option>
                 </select>
+              )}
+              {showFootprints && (
+                <input className="footprint-cells" value={footprintCells}
+                       aria-label="Footprint cells"
+                       placeholder="all cells — try 3,10-30,42,100-"
+                       title="Comma-separated PCIs and ranges, the reference's own syntax (UC1 p67)"
+                       onChange={(e) => setFootprintCells(e.target.value)} />
               )}
             </div>
             <div className="group">

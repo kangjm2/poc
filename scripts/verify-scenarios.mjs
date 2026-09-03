@@ -2828,6 +2828,158 @@ scenario('S24 · The half-built things, finished')
   await page.waitForTimeout(2500)
 }
 
+// ─── S25 · Four things the manual asks for before it draws ───────────────────
+//
+// The only four items of this whole audit that are new capability rather than repair, and
+// the only four with a page number: each was confirmed verbatim against the transcription
+// before a line was written, because this project has been wrong about what the reference
+// has - dashboards, NPS and trend analysis all traced to a marketing flyer.
+//
+// Three of the four are questions the reference asks BEFORE it draws anything: which cells,
+// how close counts as competing, how many competitors. Ours drew first and answered with
+// defaults nobody chose.
+scenario('S25 · Four things the manual asks for before it draws')
+{
+  const cityA = sessions.find((x) => x.name === CITY_A).id
+
+  // ── UC20 p173. The filter dialog's own two rows: `Polluter level window from the best
+  //    active set` = -6 and `Pilot count threshold` = 3. Both were server parameters no
+  //    screen sent, so the caption asserted "≥3" as a property of the tool.
+  const pollution = async (qs) => (await apiGet(`/api/sessions/${cityA}/pilot-pollution${qs}`)).length
+  const atDefault = await pollution('')
+  const atWide = await pollution('?windowDb=12&minCells=2')
+  const atStrict = await pollution('?windowDb=3&minCells=5')
+  step('how close counts as competing, and how many competitors, change the verdict',
+    atWide > atDefault && atStrict < atDefault,
+    `${atStrict} stretches at 3 dB/5 cells, ${atDefault} at the default, ${atWide} at 12 dB/2 cells`)
+
+  await selectSession(CITY_A)
+  await openWorkbook('Monitored Set')
+  await page.waitForTimeout(1600)
+  const spanCount = () => page.locator('.panel:has(header .title:text-is("Pilot pollution")) header .meta')
+    .innerText()
+  const uiDefault = await spanCount()
+  await page.locator('input[aria-label="Pollution cell count"]').fill('2')
+  await page.locator('input[aria-label="Pollution window dB"]').fill('12')
+  await page.waitForTimeout(2000)
+  const uiWide = await spanCount()
+  const caption = await page.locator('.panel:has(header .title:text-is("Pilot pollution")) div')
+    .first().innerText()
+  step('the screen asks them too, and its caption reports what it asked',
+    uiDefault !== uiWide && /≥\s*2 cells/.test(caption) && /12 dB/.test(caption),
+    `${uiDefault} -> ${uiWide}; caption "${caption.split('\n')[0].slice(0, 70)}"`)
+
+  // ── UC1 p67. The dialog's own help gives the grammar: `3,10-30,42,100-`. The manual also
+  //    gives the reason - "Analysis will not work properly if there will be hundreds of
+  //    pages in the results" - which is ours too: overlapping every hull at once is how the
+  //    layer stops answering.
+  // Coverage Issues, not Overview: the footprint layer draws on the maps where cell
+  // identity is the question, and asking for hulls on a map that never draws them would
+  // have made this check pass on a route polyline count.
+  await openWorkbook('Coverage Issues')
+  await page.waitForTimeout(1200)
+  await page.locator('.toolbar .group:has(label:text("Footprints")) button').click()
+  await page.waitForTimeout(1800)
+  const hulls = () => page.locator('path.footprint-hull').count()
+  const allCells = (await apiGet(`/api/sessions/${cityA}/cell-footprints?basis=SERVING`))
+    .map((f) => f.pci).sort((a, b) => a - b)
+  const before = await hulls()
+  const keep = `${allCells[0]},${allCells[1]}`
+  await page.locator('input[aria-label="Footprint cells"]').fill(keep)
+  await page.waitForTimeout(1200)
+  const after = await hulls()
+  const note = await page.locator('.map-panel header .title').innerText()
+  // Exact, not "fewer": keeping two of N cells has to remove exactly N-2 hulls, and the
+  // header has to name both numbers. A `<` alone would pass on any narrowing at all,
+  // including one that dropped the wrong hulls.
+  const flat = note.replace(/\n/g, ' ')
+  step('the cell filter narrows what is drawn, and the map says what it left out',
+    before - after === allCells.length - 2
+    && new RegExp(`2 of ${allCells.length} cells`).test(flat),
+    `${before} shapes -> ${after} for "${keep}" of ${allCells.length} cells; header says`
+    + ` "${flat.slice(0, 90)}"`)
+
+  // A range and an open range, the two forms a bare list cannot express. `100-` is how an
+  // operator says "the small-cell layer" without knowing where it ends.
+  const lo = allCells[0]
+  const hi = allCells[allCells.length - 1]
+  await page.locator('input[aria-label="Footprint cells"]').fill(`${lo}-${lo}`)
+  await page.waitForTimeout(1000)
+  const single = await hulls()
+  await page.locator('input[aria-label="Footprint cells"]').fill(`${hi}-`)
+  await page.waitForTimeout(1000)
+  const openEnded = await hulls()
+  await page.locator('input[aria-label="Footprint cells"]').fill('not a cell')
+  await page.waitForTimeout(1000)
+  const badNote = await page.locator('.map-panel header .title').innerText()
+  step('ranges and open ranges parse, and a typo is refused rather than silently obeyed',
+    single < before && openEnded < before && /ignored/.test(badNote),
+    `${lo}-${lo} -> ${single}, ${hi}- -> ${openEnded}, typo -> `
+    + `"${badNote.replace(/\n/g, ' ').match(/ignored[^—]*/)?.[0]?.slice(0, 40) ?? 'no notice'}"`)
+  await page.locator('input[aria-label="Footprint cells"]').fill('')
+  await page.locator('.toolbar .group:has(label:text("Footprints")) button').click()
+  await page.waitForTimeout(800)
+
+  // ── UC16 p158-162. `Measurement Group 1` AND `Measurement Group 2`, each with its own
+  //    list. The service was symmetric from the first commit; only this screen was not, so
+  //    "the evening runs against the morning runs" could be asked one way round.
+  const others = sessions.filter((x) => x.id !== cityA).map((x) => x.id)
+  const oneSide = await apiGet(
+    `/api/sessions/${cityA}/spatial-diff?other=${others[0]}&kpi=RSRP&sizeMeters=150`)
+  const bothSides = await apiGet(
+    `/api/sessions/${cityA}/spatial-diff?other=${others[0]}&kpi=RSRP&sizeMeters=150`
+    + `&withA=${others[1]}`)
+  step('the NEAR side can be a group too, and adding to it changes the ground covered',
+    oneSide.groupA.length === 1 && bothSides.groupA.length === 2
+    && bothSides.tilesOnlyA > oneSide.tilesOnlyA,
+    `near side ${oneSide.groupA.length} -> ${bothSides.groupA.length} drives,`
+    + ` one-sided tiles ${oneSide.tilesOnlyA} -> ${bothSides.tilesOnlyA}`)
+
+  await openWorkbook('Compare on the Ground')
+  await page.waitForTimeout(1800)
+  const nearAdd = page.locator('select[aria-label="Add to the near side"]')
+  const nearOptions = await nearAdd.locator('option').count()
+  await nearAdd.selectOption({ index: 1 })
+  await page.waitForTimeout(2000)
+  const nearBanner = await page.locator('.diff-group').first().innerText()
+  step('and the screen offers it symmetrically, saying which drives each side holds',
+    nearOptions > 1 && /Near side is a group of 2/.test(nearBanner),
+    nearBanner.replace(/\n/g, ' ').slice(0, 90))
+
+  // ── p87, quoted verbatim in two of our own reference files: "Each drill-down from the
+  //    same chart will open a NEW TAB in the same window... with the colors of the
+  //    corresponding sectors." The workflow is holding two causes open at once; with one
+  //    slot, comparing them is done from memory.
+  await openWorkbook('Problem Survey')
+  await page.waitForTimeout(1800)
+  const causeRows = page.locator('.panels table.grid tbody tr')
+  const firstTwo = Math.min(2, await causeRows.count())
+  for (let i = 0; i < firstTwo; i++) {
+    await causeRows.nth(i).click()
+    await page.waitForTimeout(700)
+  }
+  const tabs = await page.locator('.cause-tabs button').count()
+  const swatches = await page.locator('.cause-tabs button .swatch')
+    .evaluateAll((els) => els.map((e) => getComputedStyle(e).backgroundColor))
+  step('two causes stay open at once, each tab in its own sector colour',
+    tabs === firstTwo && firstTwo === 2 && new Set(swatches).size === 2,
+    `${tabs} tabs, colours ${JSON.stringify(swatches)}`)
+
+  // The tab has to SELECT, not merely exist: switching must change the case grid under it.
+  const casesHeader = () => page.locator('.panels .panel:has(header .title:text("cases")) header .title')
+    .innerText()
+  const onSecond = await casesHeader()
+  await page.locator('.cause-tabs button').first().click()
+  await page.waitForTimeout(900)
+  const onFirst = await casesHeader()
+  step('and switching tabs changes the cases underneath, which is the point of keeping both',
+    onFirst !== onSecond && /cases/.test(onFirst),
+    `"${onSecond.trim()}" -> "${onFirst.trim()}"`)
+
+  await page.goto(BASE, { waitUntil: 'domcontentloaded' })
+  await page.waitForTimeout(2500)
+}
+
 // ─── wrap-up ─────────────────────────────────────────────────────────────────
 const appErrors = errors.filter((e) =>
   !/tile\.openstreetmap\.org|ERR_CONNECTION|Failed to load resource|ERR_TIMED_OUT/.test(e))
