@@ -504,7 +504,9 @@ export interface DistanceBin {
  */
 export interface CellFootprint {
   pci: number; arfcn: number | null; band: string | null
-  sampleCount: number; avgRsrp: number
+  sampleCount: number
+  /** Mean over the SAME samples sampleCount counted, or null when there is none. */
+  avgRsrp: number | null
   hull: Array<[number, number]>
 }
 

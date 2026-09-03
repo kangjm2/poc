@@ -48,8 +48,9 @@ public class AnalyticsController {
     @GetMapping("/distance-bins")
     public List<GeoAnalysisService.DistanceBin> distanceBins(
             @PathVariable long id, @RequestParam String kpi,
-            @RequestParam(defaultValue = "100") double stepMeters) {
-        return geo.distanceBins(id, kpi, stepMeters);
+            @RequestParam(defaultValue = "100") double stepMeters,
+            @RequestParam(required = false) String filter) {
+        return geo.distanceBins(id, kpi, stepMeters, filter);
     }
 
     /**

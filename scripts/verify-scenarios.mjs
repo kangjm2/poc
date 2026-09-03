@@ -679,6 +679,26 @@ scenario('S11 · Unknown columns become KPIs instead of being dropped')
     rejected.status() === 400 && failed?.status === 'FAILED' && /No column matched/.test(failed?.message ?? ''),
     `HTTP ${rejected.status()}, history: ${failed?.status ?? 'absent'}`)
 
+  // A real log need not carry a serving-cell column, and every seeded drive does - so this
+  // is the shape of defect no checker over the seed can see. `serving_pci` is nullable, the
+  // row mapper hands back a list whose first element is null, and `Stream.findFirst()` throws
+  // NPE on a null element rather than returning empty: 500 on every cursor move, and the
+  // Monitored Set and Mobility overlay simply blank with nothing on screen to say why.
+  const noPci = await page.request.post(`${API}/api/import/csv`, {
+    multipart: {
+      file: { name: 'S11 no-pci.csv', mimeType: 'text/csv',
+              buffer: Buffer.from('lat,lon,rsrp\n65.01,25.47,-88\n65.02,25.48,-91\n') },
+      sessionName: 'S11 no serving cell',
+    },
+  })
+  const noPciId = noPci.ok() ? (await noPci.json()).sessionId : null
+  const mon = noPciId == null ? null
+    : await page.request.get(`${API}/api/sessions/${noPciId}/monitored-set?seq=0`)
+  step('a drive with no serving-cell column still answers the neighbour panel',
+    noPci.ok() && mon?.ok() === true,
+    noPciId == null ? `import ${noPci.status()}` : `import 200, monitored-set ${mon.status()}`)
+  if (noPciId != null) await page.request.delete(`${API}/api/sessions/${noPciId}`)
+
   const off = await importFile('S11 dropped', false)
   step('by default an unrecognised column is reported as dropped',
     /Ignored columns\s+Beam SSB index, Custom margin \(dB\)/.test(off)
@@ -1811,6 +1831,64 @@ scenario('S20 · One condition, every screen')
     hitExempt.length > 0 && !hitExempt.some(carried),
     hitExempt.filter(carried).map((r) => r.path).join(', ') || `${hitExempt.length} exempt calls, none filtered`)
 
+  // ── the footprint tooltip must never render absence as a level. Under the three-strongest
+  //    basis a cell can shape a hull it never served, and its mean used to fall back to 0 -
+  //    a value about 80 dB above anything this catalogue can report, printed where "none"
+  //    belongs. Checked on the response rather than the pixel: the tooltip formats what
+  //    arrives, so a null here is what makes the em dash possible.
+  const serving = await apiGet(`/api/sessions/${sid}/cell-footprints?minSamples=10&basis=SERVING`)
+  const tops = await apiGet(`/api/sessions/${sid}/cell-footprints?minSamples=10&basis=TOP3`)
+  const servingBy = Object.fromEntries(serving.map((f) => [f.pci, f]))
+  // The count and the mean must describe ONE set. Under the three-strongest basis the count
+  // grew to the contended samples while the mean stayed the serving one, so the tooltip
+  // paired a number from each. It is also physically checkable: a cell is weaker where it
+  // merely competes than where it wins, so the wider set's mean must be the lower one.
+  const paired = tops.filter((f) => servingBy[f.pci])
+  const mismatched = paired.filter((f) =>
+    f.sampleCount <= servingBy[f.pci].sampleCount
+    || f.avgRsrp == null || f.avgRsrp >= servingBy[f.pci].avgRsrp)
+  step('a footprint\u2019s level is the mean of the samples it counted, not of another set',
+    paired.length > 0 && mismatched.length === 0
+    && !tops.some((f) => f.avgRsrp === 0),
+    paired.map((f) => `PCI ${f.pci}: ${f.sampleCount}@${f.avgRsrp} vs serving `
+      + `${servingBy[f.pci].sampleCount}@${servingBy[f.pci].avgRsrp}`).slice(0, 2).join(' \u00b7 '))
+
+  // ── the distance profile. It was in NEITHER list, which is the sharpest shape this
+  //    mechanism can fail in: S20 checks that honoured paths carry the filter and exempt
+  //    paths do not, so a path in neither list passes whatever it does. The reader saw the
+  //    whole drive's profile beside six filtered panels with no exemption note anywhere.
+  //
+  //    Two numbers, opposite directions: the VALUES narrow, and the AXIS does not - a
+  //    filtered profile that also shortened the road would make two profiles of one drive
+  //    incomparable, which is the reason the `travelled` CTE stays unfiltered.
+  const profile = async (amp) => {
+    const bins = await apiGet(`/api/sessions/${sid}/distance-bins?kpi=RSRP&stepMeters=250${amp}`)
+    return {
+      bins: bins.length,
+      samples: bins.reduce((a, b) => a + b.sampleCount, 0),
+      road: Math.max(...bins.map((b) => b.toMetres)),
+    }
+  }
+  const wholeRoad = await profile('')
+  const narrowedRoad = await profile(`&filter=${enc}`)
+  step('the distance profile joins the same one number the other nine agree on',
+    wholeRoad.samples === wholeSet[0] && narrowedRoad.samples === narrowSet[0],
+    `${wholeRoad.samples} whole (others ${wholeSet[0]}),`
+    + ` ${narrowedRoad.samples} filtered (others ${narrowSet[0]})`)
+  // The AXIS, not the bin list. A bin no longer holding a passing sample drops out of the
+  // result - it has nothing to plot - but every remaining bin keeps its true road distance,
+  // so the profile still runs the length of the drive and two profiles of it stay
+  // comparable. Narrowing the `travelled` CTE instead would shorten the road itself, which
+  // is the failure this distinguishes from.
+  step('and its axis still measures the whole road, so two profiles stay comparable',
+    narrowedRoad.road === wholeRoad.road && wholeRoad.road > 0
+    && narrowedRoad.bins <= wholeRoad.bins,
+    `${wholeRoad.road} m of road either way; `
+    + `${wholeRoad.bins} bins whole, ${narrowedRoad.bins} filtered`)
+  step('and the coverage list says so, so a later drift fails a check instead of a screen',
+    coverage.some((c) => c.path === '/api/sessions/{id}/distance-bins' && c.honoured),
+    coverage.find((c) => c.path.endsWith('/distance-bins'))?.note ?? 'not listed')
+
   // The downloads are links, not fetches, so they are checked as links.
   const hrefs = await page.locator('.toolbar .group:has(label:text("Export")) a')
     .evaluateAll((as) => as.map((a) => a.getAttribute('href')))
@@ -1976,6 +2054,31 @@ scenario('S21 · A state machine that measures time it actually measured')
     bDwell.length === bRlf.length && hDwell.length === hRlf.length && bDwell.length > 0
     && bDwell.every((q, i) => q === bRlf[i]) && hDwell.every((q, i) => q === hRlf[i]),
     `1.5.0 dwells [${bDwell}] vs RLF [${bRlf}]; highway [${hDwell}] vs [${hRlf}]`)
+
+  // ── the same rule, one screen over: a DEGRADATION must not count unlogged time either.
+  //
+  // The island key was `seq - row_number()` alone, so a bad stretch stayed one row however
+  // much of it was never recorded - and `avg(latitude)` then put the row's map marker inside
+  // the hole. The witness is arithmetic rather than a threshold: the stretches the list
+  // reports across the gap must sum to LESS wall clock than the span from the first to the
+  // last of their samples, and the shortfall must be exactly the unlogged seconds.
+  const cityDeg = (await apiGet(`/api/sessions/${cityA}/degradations?kpi=RSRP&minSamples=5`))
+    .sort((a, b) => a.startSeq - b.startSeq)
+  const gapTrack = await apiGet(`/api/sessions/${cityA}/track?kpi=RSRP&maxPoints=100000`)
+  const tsOf = Object.fromEntries(gapTrack.map((p) => [p.seq, Date.parse(p.ts) / 1000]))
+  // The pair either side of the drive's logger gap: consecutive rows whose seq are adjacent
+  // (one ends where the next begins) but which the list nevertheless reports separately.
+  const split = cityDeg.find((d, i) => i > 0 && cityDeg[i - 1].endSeq + 1 === d.startSeq)
+  const before = split ? cityDeg[cityDeg.indexOf(split) - 1] : null
+  const spanned = split ? tsOf[split.endSeq] - tsOf[before.startSeq] : 0
+  const reported = split ? before.durationSeconds + split.durationSeconds : 0
+  step('a bad stretch is cut where the log stops, not carried across the hole',
+    Boolean(split) && spanned > reported && spanned - reported >= 5,
+    split
+      ? `seq ${before.startSeq}-${split.endSeq} spans ${spanned}s, reported as`
+        + ` ${before.durationSeconds}s + ${split.durationSeconds}s = ${reported}s,`
+        + ` so ${spanned - reported}s of unlogged time is excluded`
+      : 'no adjacent pair found')
 
   // ── and the refusal, on the one drive that has a logger gap inside a fade.
   const aDwell = await dwellSeqs(cityA, 'S21_FADE_MS')
@@ -2448,6 +2551,35 @@ scenario('S23 · Is this build better, over every drive we have')
   step('and the link reopens on the same question rather than on the default one',
     await page.locator('select[aria-label="Group by"]').inputValue() === 'SCENARIO',
     await page.locator('select[aria-label="Group by"]').inputValue())
+
+  // ── C13. A group that measured NOTHING is still a group.
+  //
+  // The strip filtered those out, and the failure was invisible from inside the strip: the
+  // header above said "2 groups", the table below printed a row of em dashes, and the CDF
+  // legend named it - three surfaces disagreeing about how many groups there are, with the
+  // missing one being exactly the group whose emptiness is the answer. `FH_RX_LATE` is the
+  // witness because only the lab drive measures it, so the 1.4.2 build cohort has one drive
+  // and no values.
+  const sparse = await apiGet('/api/cohorts?kpi=FH_RX_LATE&holdConstant=NONE')
+  const valueless = sparse.cohorts.filter((c) => c.stats.mean == null)
+  step('a parameter one build never measured still gives that build a group',
+    sparse.cohorts.length > 1 && valueless.length === 1 && valueless[0].sampleCount === 0,
+    sparse.cohorts.map((c) => `${c.value}=${c.stats.mean ?? 'none'}`).join(', '))
+
+  await page.goto(`${BASE}?mode=compare&by=BUILD_LABEL&hold=NONE&kpi=FH_RX_LATE`,
+    { waitUntil: 'domcontentloaded' })
+  await page.waitForTimeout(3000)
+  const sparseRows = await page.locator('.cohort-strip .cohort-row').count()
+  const sparseTable = await page.locator('.cohort-table tbody tr').count()
+  const headerGroups = Number(
+    (await page.locator('.panels.cohorts .panel:has(.cohort-strip) header .meta').innerText())
+      .match(/(\d+)/)?.[1] ?? -1)
+  const noData = await page.locator('.cohort-strip .cohort-nodata').count()
+  step('and the strip, the table and the header all count it',
+    sparseRows === sparse.cohorts.length && sparseTable === sparse.cohorts.length
+    && headerGroups === sparse.cohorts.length && noData === valueless.length,
+    `${sparseRows} strip rows, ${sparseTable} table rows, header says ${headerGroups},`
+    + ` ${noData} marked as having no value`)
 
   await page.goto(`${BASE}?mode=compare&by=SCENARIO&hold=SCENARIO`,
     { waitUntil: 'domcontentloaded' })

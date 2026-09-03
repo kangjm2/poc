@@ -126,6 +126,10 @@ export function LabView({ onOpenSession }: { onOpenSession?: (id: number) => voi
                 ) : ' — no session attached'}
               </span>
             </header>
+            {/* Every configured input, not a selection of them. A lab result is only
+                reproducible if the screen that reports it names what produced it - path
+                loss, AWGN, transmit power and layer cap were seeded, carried and typed all
+                the way to the browser and then rendered nowhere. */}
             <div className="config-grid">
               <ConfigCard title="Channel model (emulated)" rows={run.channelModel ? [
                 ['Name', run.channelModel.name],
@@ -134,6 +138,8 @@ export function LabView({ onOpenSession }: { onOpenSession?: (id: number) => voi
                 ['Delay spread', fmt(run.channelModel.delaySpreadNs, 'ns')],
                 ['Max Doppler', fmt(run.channelModel.maxDopplerHz, 'Hz')],
                 ['MIMO correlation', run.channelModel.mimoCorrelation ?? '-'],
+                ['Path loss', fmt(run.channelModel.pathLossDb, 'dB')],
+                ['AWGN SNR', fmt(run.channelModel.awgnSnrDb, 'dB')],
                 ['Replay source', run.channelModel.sourceSessionId
                   ? `session ${run.channelModel.sourceSessionId}` : '-'],
               ] : []} />
@@ -146,6 +152,7 @@ export function LabView({ onOpenSession }: { onOpenSession?: (id: number) => voi
                   + (run.cellConfig.tddPattern ? ` (${run.cellConfig.tddPattern})` : '')],
                 ['MIMO layers', String(run.cellConfig.mimoLayers ?? '-')],
                 ['Antennas', `${run.cellConfig.txAntennas ?? '-'}T${run.cellConfig.rxAntennas ?? '-'}R`],
+                ['Max power', fmt(run.cellConfig.maxPowerDbm, 'dBm')],
               ] : []} />
               <ConfigCard title="UE profile (emulated)" rows={run.ueProfile ? [
                 ['Name', run.ueProfile.name],
@@ -154,6 +161,7 @@ export function LabView({ onOpenSession }: { onOpenSession?: (id: number) => voi
                 ['Traffic', run.ueProfile.trafficProfile],
                 ['Target rate', fmt(run.ueProfile.targetMbps, 'Mbps')],
                 ['Mobility', fmt(run.ueProfile.mobilityKmh, 'km/h')],
+                ['Max MIMO layers', String(run.ueProfile.maxMimoLayers ?? '-')],
               ] : []} />
               <ConfigCard title="DU under test (real)" rows={run.duEndpoint ? [
                 ['Name', run.duEndpoint.name],

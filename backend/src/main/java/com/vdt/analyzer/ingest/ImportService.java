@@ -6,6 +6,8 @@ import org.slf4j.LoggerFactory;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.BufferedReader;
@@ -62,6 +64,35 @@ public class ImportService {
                                   String buildLabel, String scenario, String locationName,
                                   char delimiter, boolean createUnknownColumns) {
         long jobId = jobLog.start(file.getOriginalFilename());
+
+        // A history row must never outlive its import as RUNNING.
+        //
+        // The catch blocks below only see exceptions raised INSIDE this method. A commit-time
+        // rollback does not raise one here: something nested marks the transaction
+        // rollback-only, this method runs to completion and calls succeeded(), and the
+        // interceptor then throws UnexpectedRollbackException on the way out - after the
+        // COMPLETED update has been rolled back with everything else. The caller gets a bare
+        // 500 and the Import history, the one screen a user opens to ask what happened to a
+        // file, shows the job still running and offers to cancel it. Reproduced with two
+        // concurrent imports of the same computed-KPI corpus.
+        //
+        // afterCompletion fires on every outcome including that one, and `failed` is
+        // REQUIRES_NEW so its write survives the rollback it is reporting.
+        if (TransactionSynchronizationManager.isSynchronizationActive()) {
+            TransactionSynchronizationManager.registerSynchronization(
+                    new TransactionSynchronization() {
+                        @Override
+                        public void afterCompletion(int status) {
+                            if (status == STATUS_ROLLED_BACK) {
+                                // Only if nothing more specific was recorded: a caught
+                                // exception knows the reason and has already written it,
+                                // and this generic sentence must not overwrite it.
+                                jobLog.failedIfStillRunning(jobId, "The import was rolled back"
+                                        + " before it committed. Nothing was loaded; try again.");
+                            }
+                        }
+                    });
+        }
         try (BufferedReader reader = new BufferedReader(
                 new InputStreamReader(file.getInputStream(), StandardCharsets.UTF_8))) {
 

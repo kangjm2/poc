@@ -485,8 +485,13 @@ export function RouteMap({
         color: `hsl(${hue} 55% 40%)`, weight: 1.5, opacity: 0.85,
         fillColor: `hsl(${hue} 55% 50%)`, fillOpacity: 0.10,
       })
-        .bindTooltip(`PCI ${f.pci}${f.band ? ` \u00b7 ${f.band}` : ''} \u2014 served `
-                     + `${f.sampleCount} samples, mean RSRP ${f.avgRsrp} dBm`)
+        // "covers", not "served": under the three-strongest basis these samples are ones the
+        // cell was a contender on, which is a different claim. And an em dash for a cell with
+        // no mean - a cell can reach the top three without ever winning a sample, and printing
+        // 0 dBm there put a level 80 dB above anything reportable where absence belongs.
+        .bindTooltip(`PCI ${f.pci}${f.band ? ` \u00b7 ${f.band}` : ''} \u2014 covers `
+                     + `${f.sampleCount} samples, mean RSRP `
+                     + `${f.avgRsrp == null ? '\u2014' : `${f.avgRsrp} dBm`}`)
         .addTo(layer)
     })
     layer.eachLayer((l) => (l as L.Polygon).bringToBack?.())

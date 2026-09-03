@@ -76,11 +76,20 @@ public class AreaStatsService {
                 (rs, i) -> new Pass(rs.getInt("a"), rs.getInt("b"), rs.getInt("n")),
                 args.toArray());
 
+        // Named rather than left to the 11-argument convenience constructor, which stamps
+        // weightedBy=SAMPLE and domain=NOT_APPLICABLE on everything. SAMPLE is true here;
+        // NOT_APPLICABLE is a claim that RSRP has no logarithmic domain, which is false, and
+        // a consumer keying off `domain !== 'NOT_APPLICABLE'` would conclude from this screen
+        // that the linear-mean question does not arise for a dBm parameter.
+        AggregationBasis basis = AggregationBasis.of(def,
+                AggregationBasis.BY_SAMPLE, AggregationBasis.AS_RECORDED);
+
         long total = passes.stream().mapToLong(Pass::sampleCount).sum();
         if (total == 0) {
             return new AreaStats(kpiName, def.getDisplayName(), def.getUnit(), 0, 0, List.of(),
                     new Statistics(kpiName, def.getDisplayName(), def.getUnit(), 0,
-                            null, null, null, null, null, null, List.of()));
+                            null, null, null, null, null, null, List.of(),
+                            basis.weightedBy(), basis.domain(), basis.label()));
         }
 
         List<Object> statArgs = new ArrayList<>();
@@ -108,7 +117,8 @@ public class AreaStatsService {
             return new AreaStats(kpiName, def.getDisplayName(), def.getUnit(), total,
                     passes.size(), passes,
                     new Statistics(kpiName, def.getDisplayName(), def.getUnit(), 0,
-                            null, null, null, null, null, null, List.of()));
+                            null, null, null, null, null, null, List.of(),
+                            basis.weightedBy(), basis.domain(), basis.label()));
         }
 
         Double[] curve = toDoubleArray(agg.get("curve"));
@@ -118,7 +128,8 @@ public class AreaStatsService {
         }
         Statistics stats = new Statistics(kpiName, def.getDisplayName(), def.getUnit(), n,
                 round(num(agg.get("lo"))), round(num(agg.get("hi"))), round(num(agg.get("mean"))),
-                round(curve[5]), round(curve[50]), round(curve[95]), cdf);
+                round(curve[5]), round(curve[50]), round(curve[95]), cdf,
+                basis.weightedBy(), basis.domain(), basis.label());
 
         return new AreaStats(kpiName, def.getDisplayName(), def.getUnit(),
                 total, passes.size(), passes, stats);
