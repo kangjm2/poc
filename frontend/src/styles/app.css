@@ -679,3 +679,17 @@ kbd {
   font-size: 11px;
   text-decoration: underline;
 }
+
+/* The KPI workbench's run-time variables (p398). One row under the validation strip,
+   because a variable belongs to the graph rather than to any node in it. */
+.graph-vars {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  padding: 5px 10px;
+  border-top: 1px solid #e0e0e6;
+  font-size: 11px;
+}
+.graph-vars input { width: 90px; font-size: 11px; }
+.graph-vars .dim { color: #888; }

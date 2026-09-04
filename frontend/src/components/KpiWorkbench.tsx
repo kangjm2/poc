@@ -360,6 +360,15 @@ export function KpiWorkbench({ defs, onChanged, eventTypes = [], sessionId = nul
   const [wiringFrom, setWiringFrom] = useState<number | null>(null)
   const [pointer, setPointer] = useState<{ x: number; y: number } | null>(null)
   const [validation, setValidation] = useState<GraphValidation | null>(null)
+  /**
+   * Answers to the graph's `{?name}` questions (p398), for this run only.
+   *
+   * Not part of the document and deliberately not saved with it. A graph that asks
+   * "{?threshold}" is one question; storing a threshold beside it would make it two things
+   * that can disagree, which is the state cloning the graph already produces and this
+   * feature exists to avoid.
+   */
+  const [vars, setVars] = useState<Record<string, string>>({})
   const [stored, setStored] = useState<StoredGraph[]>([])
   const [preview, setPreview] = useState<GraphNodePreview | null>(null)
   const [previewError, setPreviewError] = useState<string | null>(null)
@@ -393,12 +402,12 @@ export function KpiWorkbench({ defs, onChanged, eventTypes = [], sessionId = nul
     if (nodes.length === 0) { setValidation(null); return }
     let live = true
     const t = setTimeout(() => {
-      api.validateKpiGraph({ name: kpiName, output: null, spec })
+      api.validateKpiGraph({ name: kpiName, output: null, spec, vars })
         .then((v) => { if (live) setValidation(v) })
         .catch(() => { if (live) setValidation(null) })
     }, 200)
     return () => { live = false; clearTimeout(t) }
-  }, [spec, nodes.length, kpiName])
+  }, [spec, nodes.length, kpiName, vars])
 
   const addNode = (kind: GraphNodeKind) => {
     const id = freshId(nodes)
@@ -507,7 +516,7 @@ export function KpiWorkbench({ defs, onChanged, eventTypes = [], sessionId = nul
   const recompute = async (g: StoredGraph) => {
     setBusy(true); setSaveError(null)
     try {
-      const r = await api.recomputeKpiGraph(g.id)
+      const r = await api.recomputeKpiGraph(g.id, vars)
       setResult(`${g.outputKpiName}: ${r.valuesComputed} values computed`)
       reloadStored(); onChanged()
     } catch (e) {
@@ -649,6 +658,27 @@ export function KpiWorkbench({ defs, onChanged, eventTypes = [], sessionId = nul
               </span>
             ) : <span style={{ color: '#b00020' }}>{validation.error}</span>}
         </div>
+        {/* The questions the graph leaves for the run (p398).
+            Beside the status rather than in the node editor, because a variable belongs to
+            the WHOLE graph - the same `{?threshold}` written into two conditions is one
+            question, and a form per node would ask it twice. */}
+        {validation != null && validation.variables.length > 0 && (
+          <div className="graph-vars">
+            <span className="dim">asked at run time:</span>
+            {validation.variables.map((v) => (
+              <label key={v}>
+                {v}&nbsp;
+                <input type="number" step="any" value={vars[v] ?? ''}
+                       aria-label={`Variable ${v}`}
+                       placeholder="number"
+                       onChange={(e) => setVars((p) => ({ ...p, [v]: e.target.value }))} />
+              </label>
+            ))}
+            <span className="dim">
+              &mdash; the graph keeps the question, each run answers it
+            </span>
+          </div>
+        )}
       </div>
 
       <div className="panels">
@@ -721,6 +751,7 @@ export function KpiWorkbench({ defs, onChanged, eventTypes = [], sessionId = nul
               {(sel.kind === 'EXPRESSION' || sel.kind === 'FILTER') && (
                 <label>{sel.kind === 'FILTER' ? 'Condition' : 'Formula'}<br />
                   <input value={sel.expression ?? ''}
+                         aria-label={sel.kind === 'FILTER' ? 'Condition' : 'Formula'}
                          onChange={(e) => patch(sel.id, { expression: e.target.value })}
                          placeholder={sel.kind === 'FILTER'
                            ? 'RSRP >= -110 AND SINR > 0' : 'RSRP - SINR'}
@@ -747,6 +778,7 @@ export function KpiWorkbench({ defs, onChanged, eventTypes = [], sessionId = nul
                   setPreviewing(true); setPreviewError(null); setPreview(null)
                   try {
                     setPreview(await api.previewGraphNode({
+                      vars,
                       name: displayName || kpiName,
                       output: {
                         name: kpiName, displayName: displayName || kpiName, unit,

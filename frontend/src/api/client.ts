@@ -435,9 +435,19 @@ export const api = {
     return res.json()
   },
 
-  /** Recompute one stored graph's KPI. The values are a snapshot; this refreshes it. */
-  recomputeKpiGraph: async (id: number): Promise<{ valuesComputed: number }> => {
-    const res = await fetch(`${BASE}/kpi-definitions/graphs/${id}/recompute`, { method: 'POST' })
+  /**
+   * Recompute one stored graph's KPI. The values are a snapshot; this refreshes it.
+   *
+   * @param vars values for the graph's `{?name}` variables, when it has any. Sent on
+   *             every run because they are not stored with the graph - that is what makes
+   *             re-running at a different threshold a run rather than a new document.
+   */
+  recomputeKpiGraph: async (id: number, vars?: Record<string, string>):
+      Promise<{ valuesComputed: number }> => {
+    const res = await fetch(`${BASE}/kpi-definitions/graphs/${id}/recompute`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: null, output: null, spec: null, vars: vars ?? {} }),
+    })
     if (!res.ok) throw new Error((await res.text()) || res.statusText)
     return res.json()
   },

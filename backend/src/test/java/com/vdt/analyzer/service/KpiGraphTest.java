@@ -10,6 +10,7 @@ import java.util.Set;
 import static org.junit.jupiter.api.Assertions.assertAll;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -497,6 +498,52 @@ class KpiGraphTest {
         String sql = KpiGraph.compile(spec, KNOWN).sql();
         assertEquals(1, sql.split("\\Qn_2 AS (SELECT session_id, seq, ts, \"RSRP\"\\E", -1).length - 1,
                 sql);
+    }
+
+    @Test
+    void aRunTimeVariableIsFoundAndFilledWithTheNumberGivenForIt() {
+        var spec = new KpiGraph.Spec(1, List.of(
+                node(1, KpiGraph.Kind.SOURCE_KPI, "src", Map.of("kpiName", "RSRP")),
+                node(2, KpiGraph.Kind.FILTER, "weak",
+                        Map.of("expression", "RSRP < {?threshold}")),
+                output(3, "RSRP")),
+                List.of(new KpiGraph.Edge(1, 2), new KpiGraph.Edge(2, 3)));
+        assertEquals(Set.of("threshold"), KpiGraph.variables(spec));
+        var bound = KpiGraph.bind(spec, Map.of("threshold", -100));
+        assertAll(
+                () -> assertEquals("RSRP < -100.0", bound.nodes().get(1).expression()),
+                // The document is untouched - the question survives the run that answered
+                // it, which is the whole reason this is not a clone-the-graph feature.
+                () -> assertEquals("RSRP < {?threshold}", spec.nodes().get(1).expression()),
+                // Behaviour, not spelling: the expression compiler re-emits numbers in its
+                // own format, so asserting a literal string would be a test of formatting.
+                // Two values reaching the query differently is what matters.
+                () -> assertNotEquals(
+                        KpiGraph.compile(bound, KNOWN).sql(),
+                        KpiGraph.compile(KpiGraph.bind(spec, Map.of("threshold", -110)),
+                                KNOWN).sql()));
+    }
+
+    @Test
+    void aVariableThatIsNotANumberIsRefusedRatherThanQuotedIntoTheQuery() {
+        var spec = new KpiGraph.Spec(1, List.of(
+                node(1, KpiGraph.Kind.SOURCE_KPI, "src", Map.of("kpiName", "RSRP")),
+                node(2, KpiGraph.Kind.FILTER, "weak",
+                        Map.of("expression", "RSRP < {?threshold}"))),
+                List.of(new KpiGraph.Edge(1, 2)));
+        // The compiler's safety argument is that no span of user input reaches the SQL. A
+        // variable is the one place a caller hands over a value to put INSIDE an
+        // expression, so it has to be a number or nothing - escaping would be the start of
+        // a quoting scheme, and this file exists because those go wrong.
+        assertAll(
+                () -> assertThrows(IllegalArgumentException.class,
+                        () -> KpiGraph.bind(spec, Map.of("threshold", "0 OR 1=1"))),
+                () -> assertThrows(IllegalArgumentException.class,
+                        () -> KpiGraph.bind(spec, Map.of("threshold", "-100; DROP TABLE"))),
+                () -> assertThrows(IllegalArgumentException.class,
+                        () -> KpiGraph.bind(spec, Map.of())),
+                () -> assertThrows(IllegalArgumentException.class,
+                        () -> KpiGraph.bind(spec, null)));
     }
 
     @Test

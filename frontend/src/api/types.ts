@@ -473,6 +473,8 @@ export interface GraphValidation {
    */
   columnsByNode: Record<string, string[]>
   sql: string | null
+  /** The `{?name}` values this graph asks for before it runs (p398). */
+  variables: string[]
 }
 
 export interface StoredGraph {
@@ -499,6 +501,13 @@ export interface GraphRequest {
   name: string
   output: KpiOutputRequest | null
   spec: GraphSpec
+  /**
+   * Values for the graph's `{?name}` variables (p398), when it has any.
+   *
+   * On the request, not the document: the graph stores the question and each run answers
+   * it, which is what lets one graph be re-run at another threshold instead of cloned.
+   */
+  vars?: Record<string, string>
 }
 
 // ------------------------------------------------- distance bins & cell footprints

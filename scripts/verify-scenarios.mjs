@@ -3329,6 +3329,95 @@ scenario('S28 · Where the cells really are, and whether the record agrees')
   await page.waitForTimeout(2500)
 }
 
+// ─── S29 · A graph that asks its question at run time ────────────────────────
+//
+// p398: writing `{?threshold}` where a number goes makes a KPI ask for one every time it
+// runs. Our model materialises a published graph into `sample_kpi` under ONE name, so two
+// thresholds cannot both be stored - and the obvious workaround, cloning the graph, leaves
+// two documents that drift. The variable keeps one document and moves the question to the
+// run.
+scenario('S29 · A graph that asks its question at run time')
+{
+  const cityA = sessions.find((x) => x.name === CITY_A).id
+  const askingSpec = {
+    version: 1,
+    nodes: [
+      { id: 1, kind: 'SOURCE_KPI', x: 40, y: 24, kpiName: 'RSRP' },
+      { id: 2, kind: 'FILTER', x: 40, y: 126, expression: 'RSRP < {?threshold}' },
+      { id: 3, kind: 'OUTPUT', x: 40, y: 228, column: 'RSRP' },
+    ],
+    edges: [{ from: 1, to: 2 }, { from: 2, to: 3 }],
+  }
+  const post = (path, body) => page.request.post(`${API}${path}`, { data: body })
+
+  // Reported even without values, so the editor can put the form up rather than answer
+  // "a condition is required" at someone who was never asked.
+  const shape = await (await post('/api/kpi-definitions/graphs/validate',
+    { name: 'x', output: null, spec: askingSpec })).json()
+  step('the graph names the value it wants, and still compiles without one',
+    shape.ok === true && shape.variables?.length === 1 && shape.variables[0] === 'threshold',
+    `variables ${JSON.stringify(shape.variables)}, ok ${shape.ok}`)
+
+  // The point of the whole feature: ONE document, two answers.
+  const rowsAt = async (v) => {
+    const r = await post(
+      `/api/kpi-definitions/graphs/preview?nodeId=2&sessionId=${cityA}&limit=1`,
+      { name: 'x', output: null, vars: { threshold: String(v) }, spec: askingSpec })
+    return (await r.json()).rowCount
+  }
+  const at100 = await rowsAt(-100)
+  const at110 = await rowsAt(-110)
+  step('one graph answers differently for two values, without being cloned',
+    at100 > at110 && at110 > 0,
+    `${at100} samples below -100 dBm, ${at110} below -110`)
+
+  // The compiler's safety rule is that no span of user input reaches the SQL. A variable
+  // is the one place a caller hands over something to put INSIDE an expression, so it has
+  // to be a number or nothing - refused, not quoted.
+  const injected = await post(
+    `/api/kpi-definitions/graphs/preview?nodeId=2&sessionId=${cityA}&limit=1`,
+    { name: 'x', output: null, vars: { threshold: '0 OR 1=1' }, spec: askingSpec })
+  const missing = await post(
+    `/api/kpi-definitions/graphs/preview?nodeId=2&sessionId=${cityA}&limit=1`,
+    { name: 'x', output: null, spec: askingSpec })
+  step('a value that is not a number is refused rather than quoted into the query',
+    injected.status() === 400 && missing.status() === 400
+    && /number/i.test(JSON.stringify(await injected.json())),
+    `injection ${injected.status()}, missing value ${missing.status()}`)
+
+  // ── and the screen asks. Driven, not counted: the form has to appear because the
+  //    EXPRESSION contains a variable, and filling it has to change what the graph says.
+  // The workbench lives on the Import screen, beside the other things that DEFINE data
+  // rather than read it - not on a workbook tab.
+  await openMode('Import')
+  await page.waitForTimeout(1600)
+  const varRow = page.locator('.graph-vars')
+  step('a graph with no variables asks nothing',
+    (await varRow.count()) === 0, `${await varRow.count()} variable rows on an empty canvas`)
+
+  // A round trip, not a presence count: the form exists because the SERVER parsed the
+  // condition this typing produced and reported the name back. Typing a different name has
+  // to move the form with it, which a rendered-from-a-constant form could not do.
+  await page.locator('.wb-palette button').filter({ hasText: 'Filter' }).first().click()
+  await page.waitForTimeout(600)
+  await page.locator('input[aria-label="Condition"]').fill('RSRP < {?threshold}')
+  await page.waitForTimeout(1400)
+  const asked = await page.locator('.graph-vars input').getAttribute('aria-label')
+  step('typing a variable into a condition makes the screen ask for it, by name',
+    asked === 'Variable threshold', `the form offers "${asked}"`)
+
+  await page.locator('input[aria-label="Condition"]').fill('RSRP < {?floor} AND SINR > {?snr}')
+  await page.waitForTimeout(1400)
+  const both = await page.locator('.graph-vars input')
+    .evaluateAll((els) => els.map((e) => e.getAttribute('aria-label')))
+  step('and renaming them moves the form, because the server is reading what was typed',
+    both.length === 2 && both.join(',') === 'Variable floor,Variable snr',
+    `now asks ${JSON.stringify(both)}`)
+
+  await page.goto(BASE, { waitUntil: 'domcontentloaded' })
+  await page.waitForTimeout(2500)
+}
+
 // ─── wrap-up ─────────────────────────────────────────────────────────────────
 const appErrors = errors.filter((e) =>
   !/tile\.openstreetmap\.org|ERR_CONNECTION|Failed to load resource|ERR_TIMED_OUT/.test(e))
