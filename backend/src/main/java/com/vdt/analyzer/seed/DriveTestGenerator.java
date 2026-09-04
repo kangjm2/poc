@@ -83,6 +83,8 @@ public class DriveTestGenerator {
     private final int[] tunnel;
     private final int[] gpsOutage;
     private final int gpsGlitchAt;
+    private final int handoverLagSamples;
+    private final int strandedPci;
 
     /**
      * @param rsrpBias dB applied to every cell alike, so it shifts coverage without
@@ -93,7 +95,14 @@ public class DriveTestGenerator {
      */
     public DriveTestGenerator(long seed, List<Site> sites, List<double[]> waypoints,
                               int sampleCount, double rsrpBias, double sinrBias, int[] tunnel) {
-        this(seed, sites, waypoints, sampleCount, rsrpBias, sinrBias, tunnel, null, -1);
+        this(seed, sites, waypoints, sampleCount, rsrpBias, sinrBias, tunnel, null, -1, 0, 0);
+    }
+
+    public DriveTestGenerator(long seed, List<Site> sites, List<double[]> waypoints,
+                              int sampleCount, double rsrpBias, double sinrBias, int[] tunnel,
+                              int[] gpsOutage, int gpsGlitchAt) {
+        this(seed, sites, waypoints, sampleCount, rsrpBias, sinrBias, tunnel,
+                gpsOutage, gpsGlitchAt, 0, 0);
     }
 
     /**
@@ -106,9 +115,59 @@ public class DriveTestGenerator {
      *                    other way route data lies: the line darts out and back, and the
      *                    excursion silently joins the distance travelled.
      */
+    /**
+     * @param handoverLagSamples how many samples the terminal keeps its current cell after
+     *                    another has become stronger. 0 is the old behaviour, where the
+     *                    serving cell is the strongest at every sample.
+     *
+     *                    A DURATION, not a stretch of the route. The first version of this
+     *                    took {startIndex, endIndex} and it was the wrong parameter twice
+     *                    over: which indices contain a crossover depends on the route and
+     *                    the seed, so a hand-picked window silently produced 62 lagging
+     *                    samples on one and none on the next, and holding for a fixed span
+     *                    rather than a fixed lateness let the margin reach 43 dB - a
+     *                    terminal camped on a cell it can no longer hear, which is not a
+     *                    late handover but a broken one. A lag in samples self-limits: it
+     *                    fires at every crossover the drive really has, and the margin can
+     *                    only grow as far as the cells diverge in that many seconds.
+     *
+     * @param strandedPci a cell the terminal never camps on however strong it gets, or 0.
+     *
+     *                    The other mobility fault, and a different one: a late handover is
+     *                    a relation the network HAS and used slowly, and this is a relation
+     *                    it does not have at all - the cell is measurable, often the
+     *                    strongest, and no handover to it is ever possible. It stays in the
+     *                    monitored set throughout, which is what makes it detectable and
+     *                    what makes the distinction readable: it is stronger than serving
+     *                    and it never serves anywhere on the drive.
+     *
+     *                    Without it MISSING_NEIGHBOUR would be a detector that cannot fire
+     *                    and a pie slice that is always absent - implemented, untested, and
+     *                    indistinguishable from a working one.
+     *
+     *                    This is the one place the generator DELIBERATELY breaks the
+     *                    invariant the tunnel comment defends ("the serving cell stays the
+     *                    strongest by construction"), and breaking it is the point: a
+     *                    handover that did not happen IS a neighbour stronger than the
+     *                    serving cell, which is exactly how UC27 (p404) detects one -
+     *                    "if Ec/N0 1. best is better than Ec/N0 best active set, the
+     *                    handover has not occurred".
+     *
+     *                    Nothing else is faked. The serving level becomes the held cell's
+     *                    own, so SINR falls out of the existing signal-over-interference
+     *                    calculation, BLER rises from SINR, and the monitored set shows
+     *                    the better cell sitting above the one in use - four consequences
+     *                    from one held index, none of them written by hand. Before this,
+     *                    a "neighbour stronger than serving" sample did not exist in any
+     *                    seeded drive, so the two causes the reference is best known for
+     *                    could be implemented and would have found nothing.
+     */
     public DriveTestGenerator(long seed, List<Site> sites, List<double[]> waypoints,
                               int sampleCount, double rsrpBias, double sinrBias, int[] tunnel,
-                              int[] gpsOutage, int gpsGlitchAt) {
+                              int[] gpsOutage, int gpsGlitchAt, int handoverLagSamples,
+                              int strandedPci) {
+        this.handoverLagSamples = handoverLagSamples;
+        this.strandedPci = strandedPci;
         this.random = new Random(seed);
         this.sites = sites;
         this.rsrpBias = rsrpBias;
@@ -125,13 +184,17 @@ public class DriveTestGenerator {
         List<Point> out = new ArrayList<>(route.size());
         double shadow = 0;
         double throughputState = 200;
+        // Which cell the terminal is camped on, as an index into `sites`, and how many
+        // samples it has already stayed there after a better one appeared.
+        int heldIdx = -1;
+        int lagLeft = 0;
         for (int i = 0; i < route.size(); i++) {
             double[] pos = route.get(i);
             // Correlated shadow fading: a random walk, not independent noise per sample.
             shadow = 0.85 * shadow + 0.53 * random.nextGaussian() * 6.0;
 
             double bestRsrp = -Double.MAX_VALUE;
-            int bestPci = sites.get(0).pci();
+            int bestIdx = 0;
             double interferenceMw = 0;
             // Every site's level at this sample, kept rather than discarded: the monitored
             // set is built from these below, so it is the same calculation the serving cell
@@ -146,7 +209,9 @@ public class DriveTestGenerator {
                 double lobe = azimuthLoss(pos, s);
                 double rsrp = s.eirpDbm() + rsrpBias - pathLoss - lobe + shadow;
                 siteRsrp[k] = rsrp;
-                if (rsrp > bestRsrp) { bestRsrp = rsrp; bestPci = s.pci(); }
+                // The stranded cell is measured like any other and simply is not a
+                // candidate to camp on, which is what "no neighbour relation" means.
+                if (rsrp > bestRsrp && s.pci() != strandedPci) { bestRsrp = rsrp; bestIdx = k; }
                 interferenceMw += Math.pow(10, rsrp / 10.0);
             }
 
@@ -162,7 +227,23 @@ public class DriveTestGenerator {
                 depth = 22 + 6 * Math.sin(Math.PI * (i - tunnel[0]) / (double) (tunnel[1] - tunnel[0] + 1));
             }
 
-            double rsrp = clamp(bestRsrp - depth, -125, -55);
+            // The terminal keeps the cell it has for `handoverLagSamples` samples after
+            // another becomes stronger, then moves. With a lag of 0 this is exactly the
+            // old behaviour - serving is the strongest at every sample.
+            if (heldIdx < 0) heldIdx = bestIdx;
+            if (bestIdx != heldIdx && lagLeft < handoverLagSamples) {
+                lagLeft++;
+            } else {
+                heldIdx = bestIdx;
+                lagLeft = 0;
+            }
+            int servingIdx = heldIdx;
+            int servingPci = sites.get(servingIdx).pci();
+
+            // The SERVING cell's own level, not the best one's. Everything downstream -
+            // SINR against total received power, BLER from SINR, the monitored set's
+            // ordering - follows from this one substitution.
+            double rsrp = clamp(siteRsrp[servingIdx] - depth, -125, -55);
 
             double servingMw = Math.pow(10, rsrp / 10.0);
             double othersMw = Math.max(0, interferenceMw - servingMw);
@@ -205,7 +286,7 @@ public class DriveTestGenerator {
             double noiseMw = Math.pow(10, NOISE_DBM / 10.0);
             for (int k = 0; k < sites.size(); k++) {
                 Site s = sites.get(k);
-                if (s.pci() == bestPci) {
+                if (s.pci() == servingPci) {
                     monitored.add(new Neighbour(s.pci(), s.arfcn(), round(rsrp, 1), round(rsrq, 1)));
                     continue;
                 }
@@ -250,7 +331,7 @@ public class DriveTestGenerator {
                 lon += 0.08;
             }
 
-            out.add(new Point(out.size(), i, lat, lon, round(clamp(speed, 0, 120), 1), bestPci,
+            out.add(new Point(out.size(), i, lat, lon, round(clamp(speed, 0, 120), 1), servingPci,
                     round(rsrp, 1), round(rsrq, 1), round(sinr, 1), round(dl, 1), round(ul, 1),
                     round(bler, 2), cqi, mcs, rank, round(tx, 1),
                     round(prb, 1), activeUes, round(harq, 2), List.copyOf(monitored)));

@@ -183,6 +183,101 @@ public final class KpiGraph {
      */
     public record Spec(Integer version, List<Node> nodes, List<Edge> edges) {}
 
+    /**
+     * `{?name}` - a value the author leaves for the moment the KPI is run (p398).
+     *
+     * The reference puts this in a Filter condition's `Value` and in a state machine's
+     * transitions: write `{?threshold}` instead of a number and every run asks for one. It
+     * is the difference between a graph that answers "where is RSRP below -100" and one
+     * that answers "where is RSRP below whatever I am investigating today".
+     *
+     * It earns its place here for a reason particular to our model rather than the
+     * reference's. A published graph MATERIALISES into `sample_kpi` under one name, so two
+     * thresholds cannot both be stored at once and the obvious workaround - clone the
+     * graph - leaves two documents that drift. A variable keeps one document and moves the
+     * question to the run.
+     */
+    private static final java.util.regex.Pattern VARIABLE =
+            java.util.regex.Pattern.compile("\\{\\?([A-Za-z][A-Za-z0-9_]*)\\}");
+
+    /** Every variable this graph leaves open, in a stable order for the form that asks. */
+    public static java.util.SortedSet<String> variables(Spec spec) {
+        java.util.SortedSet<String> out = new java.util.TreeSet<>();
+        if (spec == null || spec.nodes() == null) return out;
+        for (Node n : spec.nodes()) {
+            for (String text : textsOf(n)) {
+                var m = VARIABLE.matcher(text);
+                while (m.find()) out.add(m.group(1));
+            }
+        }
+        return out;
+    }
+
+    /**
+     * The graph with every `{?name}` replaced by the number given for it.
+     *
+     * NUMBERS ONLY, checked here before substitution. Everything downstream of this is the
+     * expression compiler, whose safety argument is that no span of user input reaches the
+     * SQL - it re-emits from a parse tree. Substituting a bare number keeps that true: the
+     * compiler parses it as a numeric literal and writes its own. Substituting anything
+     * else would hand it a span to copy, so a value that is not a finite number is refused
+     * rather than quoted or escaped.
+     */
+    public static Spec bind(Spec spec, java.util.Map<String, ?> values) {
+        java.util.SortedSet<String> needed = variables(spec);
+        if (needed.isEmpty()) return spec;
+        java.util.Map<String, String> literals = new java.util.HashMap<>();
+        for (String name : needed) {
+            Object raw = values == null ? null : values.get(name);
+            if (raw == null || String.valueOf(raw).isBlank()) {
+                throw new IllegalArgumentException("This graph asks for a value: " + name);
+            }
+            double v;
+            try {
+                v = Double.parseDouble(String.valueOf(raw).trim());
+            } catch (NumberFormatException e) {
+                throw new IllegalArgumentException(
+                        "\"" + name + "\" has to be a number, got: " + raw);
+            }
+            if (!Double.isFinite(v)) {
+                throw new IllegalArgumentException("\"" + name + "\" has to be a number");
+            }
+            literals.put(name, String.valueOf(v));
+        }
+        List<Node> bound = new ArrayList<>(spec.nodes().size());
+        for (Node n : spec.nodes()) bound.add(substitute(n, literals));
+        return new Spec(spec.version(), bound, spec.edges());
+    }
+
+    /** The author-written text of a node - the places a variable may appear. */
+    private static List<String> textsOf(Node n) {
+        List<String> out = new ArrayList<>(2);
+        if (n.expression() != null) out.add(n.expression());
+        if (n.states() != null) {
+            for (StateRule st : n.states()) if (st.condition() != null) out.add(st.condition());
+        }
+        return out;
+    }
+
+    private static String fill(String text, java.util.Map<String, String> literals) {
+        if (text == null) return null;
+        var m = VARIABLE.matcher(text);
+        StringBuilder sb = new StringBuilder();
+        while (m.find()) m.appendReplacement(sb, literals.get(m.group(1)));
+        m.appendTail(sb);
+        return sb.toString();
+    }
+
+    private static Node substitute(Node n, java.util.Map<String, String> literals) {
+        List<StateRule> states = n.states() == null ? null : n.states().stream()
+                .map((st) -> new StateRule(st.state(), fill(st.condition(), literals)))
+                .toList();
+        return new Node(n.id(), n.kind(), n.label(), n.x(), n.y(),
+                n.kpiName(), n.rank(), n.metric(), n.excludeServing(), n.field(),
+                n.eventType(), fill(n.expression(), literals), n.as(),
+                states, n.primary(), n.correlation(), n.withinMs(), n.column());
+    }
+
     /** A compiled graph: the SQL, what it reads, and what each node produces. */
     /**
      * A compiled graph: the CTE chain, and the final SELECT that publishes one column.

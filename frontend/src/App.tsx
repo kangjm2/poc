@@ -16,6 +16,7 @@ import { CompareView } from './components/CompareView'
 import { CohortView } from './components/CohortView'
 import { parsePciFilter } from './view/pciFilter'
 import { CellsPage } from './components/CellBarChart'
+import { CellLocatorPanel, useCellEstimates } from './components/CellLocatorPanel'
 import { MonitoredSetDock, MonitoredSetPage } from './components/MonitoredSetPanel'
 import { ComposedWorkbook } from './components/ComposedWorkbook'
 import { DistanceProfile } from './components/DistanceProfile'
@@ -213,6 +214,14 @@ export function App() {
    * per keystroke would make a typo cost a round trip.
    */
   const [footprintCells, setFootprintCells] = useState('')
+  /**
+   * The cell the Cells page is framing, and the reference's own minimum accuracy score.
+   *
+   * `focusPci` is state rather than a call into the map because the map is a child: the
+   * grid row names a cell, this holds which one, and RouteMap frames it. UC18 p171.
+   */
+  const [focusPci, setFocusPci] = useState<number | null>(null)
+  const [locatorScore, setLocatorScore] = useState(0)
   const [footprints, setFootprints] = useState<CellFootprint[] | null>(null)
   const [workbooks, setWorkbooks] = useState<Workbook[]>([])
   const [issues, setIssues] = useState<CoverageIssue[]>([])
@@ -287,6 +296,32 @@ export function App() {
     api.setGlobalFilter(spec)
     setFilterSpec(spec)
   }, [])
+
+  /**
+   * The map's entry point into the global filter (UC14 p149).
+   *
+   * Goes through `applyFilter` like the bar does, so the condition, the address bar and
+   * the reach list are the same ones - a second path that set the filter its own way is
+   * how two screens end up disagreeing about what is in force.
+   */
+  const filterToCell = useCallback((pci: number) => {
+    applyFilter(`cell:${pci}`)
+  }, [applyFilter])
+
+  /**
+   * Drop one event type from the statistics (`Exclude Events`, p94).
+   *
+   * ADDED to whatever is already in force rather than replacing it: excluding two kinds
+   * of measurement failure is the ordinary case, and a second click that silently undid
+   * the first would be a control that cannot express the thing it exists for. Already
+   * excluded, and it is a no-op rather than a duplicate clause.
+   */
+  const excludeEventType = useCallback((eventType: string) => {
+    const term = `notevent:${eventType}`
+    const parts = (filterSpec ?? '').split(';').map((p) => p.trim()).filter(Boolean)
+    if (parts.includes(term)) return
+    applyFilter([...parts, term].join(';'))
+  }, [applyFilter, filterSpec])
 
   // A spec off a link is a claim like any other and gets the same treatment: checked
   // against the server, and reported rather than silently kept if it does not parse.
@@ -604,6 +639,9 @@ export function App() {
   ]
   const mapLayers = mapContents ? describeLayers(mapContents, layersOff) : []
 
+  // Fetched here rather than inside the panel so the map and the table read one answer.
+  const cellEstimates = useCellEstimates(workbook === 'cells' ? sessionId : null, locatorScore)
+
   /**
    * Whether the screen on show consumes a toolbar group. One lookup, so a control is
    * offered exactly where something answers it.
@@ -822,6 +860,7 @@ export function App() {
     return s ? (
       <TimeSeriesChart key={name} series={s} cursorSeq={cursorSeq}
                        onCursorChange={moveCursor} filled={filled}
+                       thresholds={defs.find((d) => d.name === name)?.thresholds ?? []}
                        events={events} eventTypes={eventTypes} />
     ) : null
   }
@@ -829,6 +868,7 @@ export function App() {
   const chartOf = (s: Series, filled = false) => (
     <TimeSeriesChart key={s.kpi} series={s} cursorSeq={cursorSeq}
                      onCursorChange={moveCursor} filled={filled}
+                     thresholds={defs.find((d) => d.name === s.kpi)?.thresholds ?? []}
                      events={events} eventTypes={eventTypes} />
   )
 
@@ -869,6 +909,7 @@ export function App() {
             <RouteMap {...mapContents!} footprintNote={footprintNote} cursorSeq={cursorSeq}
                       frameKey={String(sessionId)} refitToken={refitToken}
                       onCursorChange={moveCursor} kpiName={activeDef?.displayName ?? kpi}
+                      onFilterCell={filterToCell}
                       colorBy={colorBy} isolate={isolate}
                       drawingArea={drawingArea} onAreaDrawn={askAboutArea}
                       eventTypes={eventTypes} />
@@ -923,6 +964,7 @@ export function App() {
             <RouteMap {...mapContents!} footprintNote={footprintNote} cursorSeq={cursorSeq}
                       frameKey={String(sessionId)} refitToken={refitToken}
                       onCursorChange={moveCursor} kpiName={activeDef?.displayName ?? kpi}
+                      onFilterCell={filterToCell}
                       colorBy={colorBy} isolate={isolate}
                       eventTypes={eventTypes} />
             <div className="panel">
@@ -956,7 +998,8 @@ export function App() {
               <header><span className="title">Events</span>
                 <span className="meta">{events.length}</span></header>
               <div style={{ maxHeight: 260, overflow: 'auto' }}>
-                <EventList events={events} types={eventTypes} onPick={jumpToSeq} />
+                <EventList events={events} types={eventTypes} onPick={jumpToSeq}
+                           onExclude={excludeEventType} />
               </div>
             </div>
           </>
@@ -980,15 +1023,36 @@ export function App() {
         return <FieldToLabPanel sessionId={sessionId} />
       case 'problems':
         return <ProblemSurveyPanel sessionId={sessionId} onPick={moveCursor}
+                                rsrpThresholds={
+                                  defs.find((d) => d.name === 'RSRP')?.thresholds ?? []}
                                 events={events} eventTypes={eventTypes} />
       case 'neighbours':
         return <MonitoredSetPage sessionId={sessionId} set={monitored}
                                  onJump={moveCursor} />
       case 'cells':
         return (
-          <CellsPage sessionId={sessionId} kpi={kpi} range={range}
-                     scaleVersion={scaleVersion} isolate={isolate}
-                     filterSpec={filterSpec} />
+          <>
+            {/* The map UC18 needs and UC21 draws on, in one place: a grid row frames a
+                cell here, and the locator's estimates sit beside the recorded positions.
+                Before this the Cells page had no map at all, which is why the row click
+                and the estimate overlay were both blocked on the same missing thing.
+                `isolate` is passed because this tab is marked isolates:true for its bar
+                chart - without it the legend's claim would be half true on the one tab
+                that now shows both a chart and a map. */}
+            <RouteMap track={track} cells={cells} cursorSeq={cursorSeq}
+                      frameKey={String(sessionId)} refitToken={refitToken}
+                      onCursorChange={moveCursor} kpiName={activeDef?.displayName ?? kpi}
+                      estimates={cellEstimates} focusPci={focusPci}
+                      onFilterCell={filterToCell}
+                      isolate={isolate}
+                      eventTypes={eventTypes} />
+            <CellLocatorPanel sessionId={sessionId} estimates={cellEstimates}
+                              onPick={setFocusPci}
+                              minScore={locatorScore} onMinScore={setLocatorScore} />
+            <CellsPage sessionId={sessionId} kpi={kpi} range={range}
+                       scaleVersion={scaleVersion} isolate={isolate}
+                       filterSpec={filterSpec} onPickCell={setFocusPci} />
+          </>
         )
       case 'statistics':
         return (
@@ -1001,6 +1065,7 @@ export function App() {
             <RouteMap {...mapContents!} footprintNote={footprintNote} cursorSeq={cursorSeq}
                       frameKey={String(sessionId)} refitToken={refitToken}
                       onCursorChange={moveCursor} kpiName={activeDef?.displayName ?? kpi}
+                      onFilterCell={filterToCell}
                       colorBy={colorBy} isolate={isolate}
                       eventTypes={eventTypes} />
             <div className="panel">
@@ -1432,7 +1497,8 @@ export function App() {
                           return next
                         })} />
                     )
-                    : <EventList events={events} types={eventTypes} onPick={jumpToSeq} />}
+                    : <EventList events={events} types={eventTypes} onPick={jumpToSeq}
+                           onExclude={excludeEventType} />}
                 </div>
               </div>
             </div>

@@ -18,14 +18,17 @@ public class AnalyticsController {
     private final ExportService export;
     private final com.vdt.analyzer.service.KpiCatalog catalog;
     private final com.vdt.analyzer.service.ReportService reports;
+    private final com.vdt.analyzer.service.CellLocatorService locator;
 
     public AnalyticsController(GeoAnalysisService geo, ExportService export,
                                com.vdt.analyzer.service.KpiCatalog catalog,
-                               com.vdt.analyzer.service.ReportService reports) {
+                               com.vdt.analyzer.service.ReportService reports,
+                               com.vdt.analyzer.service.CellLocatorService locator) {
         this.geo = geo;
         this.export = export;
         this.catalog = catalog;
         this.reports = reports;
+        this.locator = locator;
     }
 
     /** Averages the route into fixed-size tiles so a long drive stays readable. */
@@ -69,6 +72,25 @@ public class AnalyticsController {
             @RequestParam(required = false) List<Integer> pcis,
             @RequestParam(required = false) String filter) {
         return geo.cellFootprints(id, minSamples, basis, pcis, filter);
+    }
+
+    /**
+     * Where each cell is, estimated from this drive's own measurements (UC21 p174-176).
+     *
+     * The three inputs are the reference's own dialog: a minimum accuracy score, a carrier,
+     * and a received-power floor that exists because terminals report ghost cells down
+     * near the noise. Each estimate carries the reference's confidence 1-10 and, where
+     * `cell_ref` has a record, how far the estimate lands from it - which is the number
+     * the whole analysis is for. The reference's own example figure (p175) draws the real
+     * site and the estimated one on the same map for exactly that comparison.
+     */
+    @GetMapping("/cell-locator")
+    public List<com.vdt.analyzer.service.CellLocatorService.CellEstimate> cellLocator(
+            @PathVariable long id,
+            @RequestParam(required = false) Integer minScore,
+            @RequestParam(required = false) Integer carrier,
+            @RequestParam(required = false) Double minRsrp) {
+        return locator.locate(id, minScore, carrier, minRsrp);
     }
 
     @GetMapping("/coverage-issues")

@@ -42,8 +42,16 @@ public class KpiController {
     // ------------------------------------------------------------------ KPI Workbench
 
     /** What the editor sends: the graph document plus the KPI it should define. */
+    /**
+     * @param vars values for the graph's `{?name}` variables (p398), when it has any.
+     *
+     * On the request rather than the document because they belong to the RUN: the graph
+     * stores the question and each call answers it, which is what lets one document be
+     * re-run at a different threshold instead of being cloned.
+     */
     public record GraphRequest(String name, KpiDefinitionDto output,
-                               com.vdt.analyzer.service.KpiGraph.Spec spec) {}
+                               com.vdt.analyzer.service.KpiGraph.Spec spec,
+                               java.util.Map<String, Object> vars) {}
 
     @GetMapping("/graphs")
     public List<com.vdt.analyzer.service.KpiGraphService.StoredGraph> graphs() {
@@ -61,7 +69,7 @@ public class KpiController {
     public com.vdt.analyzer.service.KpiGraphService.Validation validateGraph(
             @RequestBody GraphRequest body) {
         return graphs.validate(body.spec(),
-                body.output() == null ? null : body.output().name());
+                body.output() == null ? null : body.output().name(), body.vars());
     }
 
     /**
@@ -77,7 +85,9 @@ public class KpiController {
             @RequestParam int nodeId,
             @RequestParam(required = false) Long sessionId,
             @RequestParam(defaultValue = "8") int limit) {
-        return graphs.previewNode(body.spec(), nodeId, sessionId,
+        return graphs.previewNode(
+                com.vdt.analyzer.service.KpiGraph.bind(body.spec(), body.vars()),
+                nodeId, sessionId,
                 body.output() == null ? null : body.output().name(), limit);
     }
 
@@ -122,8 +132,11 @@ public class KpiController {
     }
 
     @PostMapping("/graphs/{id}/recompute")
-    public java.util.Map<String, Object> recomputeGraph(@PathVariable long id) {
-        return java.util.Map.of("valuesComputed", graphs.recompute(id));
+    public java.util.Map<String, Object> recomputeGraph(
+            @PathVariable long id,
+            @RequestBody(required = false) GraphRequest body) {
+        return java.util.Map.of("valuesComputed",
+                graphs.recompute(id, body == null ? null : body.vars()));
     }
 
     @DeleteMapping("/graphs/{id}")

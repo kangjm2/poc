@@ -26,14 +26,15 @@ import java.util.List;
  * enumerates the ones that must, so forgetting is a failing check rather than a screen
  * that quietly disagrees with the one beside it.
  *
- * Two conditions, both from UC5:
+ * Three conditions, all from UC5:
  *   `kpi:NAME:OP:VALUE`  a secondary-parameter threshold, the manual's own example
  *   `cell:PCI`           "Create Global Filter From Cell ID", the map's right-click
+ *   `notevent:TYPE`      `Exclude Events` (p94) - drop the samples an event disturbed
  *
- * Event exclusion (also UC5) is NOT here: `network_event` carries a timestamp and no seq,
- * so excluding one means resolving it to a sample first, and that resolution already
- * exists in AnalysisService for a different purpose. Doing it here would put the rule in
- * two places, so it waits until the two can share one.
+ * Event exclusion used to say here that it was waiting, because `network_event` carries a
+ * timestamp and no seq: excluding one means resolving it to a sample, and that resolution
+ * already existed in AnalysisService for a different purpose. It waited "until the two can
+ * share one", and they do - `EventOnSample` holds the rule and both bind it.
  */
 public final class GlobalFilter {
 
@@ -109,6 +110,20 @@ public final class GlobalFilter {
                 params.addAll(set.params());
                 params.add(name);
                 params.add(value);
+                continue;
+            }
+            if (part.startsWith("notevent:")) {
+                String type = part.substring(9).trim();
+                // The type is bound, never interpolated - it reaches SQL as a parameter
+                // like every other user string here. An unknown type is not an error: it
+                // selects nothing to exclude, which is what "there were none of those on
+                // this drive" should do rather than a 400 on a well-formed condition.
+                if (type.isEmpty()) {
+                    throw new IllegalArgumentException("Expected notevent:TYPE, got: " + part);
+                }
+                clauses.add(key + EventOnSample.keepSql(set));
+                params.addAll(set.params());
+                params.add(type);
                 continue;
             }
             throw new IllegalArgumentException("Unknown filter clause: " + part);
@@ -241,6 +256,13 @@ public final class GlobalFilter {
             if (part.isEmpty()) continue;
             if (part.startsWith("cell:")) {
                 out.add("serving cell " + part.substring(5).trim());
+            } else if (part.startsWith("notevent:")) {
+                // The window is named in the sentence, not left in the code: it is OUR
+                // number (see EventOnSample.WINDOW_SAMPLES) rather than the reference's,
+                // and a reader dropping eleven samples per event should be told so by the
+                // bar that says what is in force.
+                out.add("excluding " + part.substring(9).trim() + " \u00b1"
+                        + EventOnSample.WINDOW_SAMPLES + " samples");
             } else if (part.startsWith("kpi:")) {
                 String[] b = part.substring(4).split(":", 3);
                 out.add(b.length == 3 ? b[0] + " " + b[1] + " " + b[2] : part);

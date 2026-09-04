@@ -49,7 +49,14 @@ public class KpiGraphService {
                               * control is being used to fix it.
                               */
                              Map<Integer, List<String>> columnsByNode,
-                             String sql) {}
+                             String sql,
+                             /**
+                              * The `{?name}` values this graph will ask for before it runs
+                              * (p398). Reported even when the graph does not compile, so
+                              * the editor can put the form up beside the error rather than
+                              * after it - a missing threshold IS the error, often enough.
+                              */
+                             List<String> variables) {}
 
     private final JdbcTemplate jdbc;
     private final KpiDefinitionRepo defs;
@@ -78,15 +85,44 @@ public class KpiGraphService {
      * the last edge is drawn - and a stream of 400s for that is noise, not information.
      */
     public Validation validate(KpiGraph.Spec spec, String excludingKpi) {
+        return validate(spec, excludingKpi, null);
+    }
+
+    /**
+     * @param vars values for the graph's `{?name}` variables, or null to check the shape.
+     *
+     * With no values given every variable is substituted with 1, so the editor can still
+     * say whether the graph COMPILES before anyone has been asked for a threshold.
+     * Answering "a condition is required" at someone who has not been shown the form yet
+     * would be blaming them for a question nobody put to them.
+     */
+    public Validation validate(KpiGraph.Spec spec, String excludingKpi,
+                               java.util.Map<String, ?> vars) {
+        java.util.SortedSet<String> asks = KpiGraph.variables(spec);
+        KpiGraph.Spec bound;
         try {
-            KpiGraph.Compiled c = KpiGraph.compile(spec, knownNames(excludingKpi));
-            return new Validation(true, null, List.copyOf(c.referencedKpis()),
-                    c.readsNeighbours(), c.outputColumn(), c.outputIsDuration(),
-                    c.columnsByNode(), c.sql());
+            bound = asks.isEmpty() ? spec
+                    : KpiGraph.bind(spec, vars != null ? vars : placeholders(asks));
         } catch (RuntimeException e) {
             return new Validation(false, e.getMessage(), List.of(), false, null, false,
-                    KpiGraph.columnsOf(spec, knownNames(excludingKpi)), null);
+                    java.util.Map.of(), null, List.copyOf(asks));
         }
+        try {
+            KpiGraph.Compiled c = KpiGraph.compile(bound, knownNames(excludingKpi));
+            return new Validation(true, null, List.copyOf(c.referencedKpis()),
+                    c.readsNeighbours(), c.outputColumn(), c.outputIsDuration(),
+                    c.columnsByNode(), c.sql(), List.copyOf(asks));
+        } catch (RuntimeException e) {
+            return new Validation(false, e.getMessage(), List.of(), false, null, false,
+                    KpiGraph.columnsOf(bound, knownNames(excludingKpi)), null,
+                    List.copyOf(asks));
+        }
+    }
+
+    private static java.util.Map<String, Object> placeholders(java.util.Set<String> asks) {
+        java.util.Map<String, Object> m = new java.util.HashMap<>();
+        for (String a : asks) m.put(a, 1);
+        return m;
     }
 
     /**
@@ -156,8 +192,20 @@ public class KpiGraphService {
      */
     @Transactional
     public long recompute(long graphId) {
+        return recompute(graphId, null);
+    }
+
+    /**
+     * @param vars values for the graph's `{?name}` variables (p398).
+     *
+     * The values are NOT stored with the graph, and that is the point: the document keeps
+     * the question and each run answers it, so one graph can be run at -100 and then at
+     * -110 without becoming two documents that drift apart.
+     */
+    public long recompute(long graphId, java.util.Map<String, ?> vars) {
         StoredGraph g = get(graphId);
-        KpiGraph.Compiled c = KpiGraph.compile(g.spec(), knownNames(g.outputKpiName()));
+        KpiGraph.Spec spec = KpiGraph.bind(g.spec(), vars);
+        KpiGraph.Compiled c = KpiGraph.compile(spec, knownNames(g.outputKpiName()));
 
         jdbc.update("DELETE FROM sample_kpi WHERE kpi_name = ?", g.outputKpiName());
 

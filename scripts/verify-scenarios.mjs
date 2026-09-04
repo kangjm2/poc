@@ -3162,6 +3162,266 @@ scenario('S26 · A control is offered only where something answers it')
   await page.waitForTimeout(2500)
 }
 
+// ─── S27 · The two causes a Nemo user looks for first ────────────────────────
+//
+// `Missing handover` and `Missing neighbour` are the reference's best-known verdicts, and
+// this project carried them for weeks on a reason that was wrong - "a missing neighbour is
+// the measured set minus the CONFIGURED list and we have no configured list". UC27 p404
+// judges from measurements alone: "if Ec/N0 1. best is better than Ec/N0 best active set,
+// the handover has not occurred".
+//
+// What actually blocked them was the seed. The generator picked the strongest cell as
+// serving at every sample, so "a neighbour stronger than serving" existed in 0 of 21,070
+// neighbour rows and both detectors would have found nothing while looking correct.
+scenario('S27 · The two causes a Nemo user looks for first')
+{
+  const hw = sessions.find((x) => x.name === HIGHWAY).id
+  const survey = await apiGet(`/api/sessions/${hw}/problem-survey`)
+  const mob = survey.instances.filter((i) => i.category.startsWith('MISSING_'))
+  const late = mob.filter((i) => i.category === 'MISSING_HANDOVER')
+  const norel = mob.filter((i) => i.category === 'MISSING_NEIGHBOUR')
+
+  step('the drive has late handovers, and each names the cell that was better',
+    late.length > 0 && late.every((i) => /PCI \d+ was up to [\d.]+ dB stronger/.test(i.detail)),
+    `${late.length} instances, e.g. "${late[0]?.detail?.slice(0, 72) ?? 'none'}"`)
+
+  // The margin is the whole judgement: below the hysteresis a real network is configured
+  // with, staying put is correct behaviour and reporting it would fill the pie with the
+  // ordinary flutter of two cells crossing over.
+  const margins = late.map((i) => Number(/up to ([\d.]+) dB/.exec(i.detail)?.[1]))
+  step('and every one of them clears the handover margin, not merely a crossover',
+    margins.length > 0 && margins.every((m) => m >= 3),
+    `margins ${margins.join(', ')} dB`)
+
+  // The two causes are told apart by whether the better cell EVER serves on this drive -
+  // an inference, so it has to be checkable against the samples rather than trusted.
+  const track = await apiGet(`/api/sessions/${hw}/track?kpi=RSRP`)
+  const everServes = new Set(track.map((p) => p.servingPci).filter((p) => p != null))
+  const latePcis = late.map((i) => Number(/PCI (\d+)/.exec(i.detail)?.[1]))
+  const norelPcis = norel.map((i) => Number(/PCI (\d+)/.exec(i.detail)?.[1]))
+  step('a LATE handover names a cell the drive really does camp on somewhere',
+    latePcis.length > 0 && latePcis.every((p) => everServes.has(p)),
+    `${latePcis.join(', ')} against serving set ${[...everServes].sort((a, b) => a - b).join(', ')}`)
+  step('and a MISSING RELATION names one it never camps on, anywhere',
+    norelPcis.length > 0 && norelPcis.every((p) => !everServes.has(p)),
+    `${norelPcis.join(', ')} never serve`)
+
+  // The distinction has to be visible, not only computed: the two faults want different
+  // work - retune a threshold, or provision a relation that does not exist.
+  const slices = survey.categories.map((c) => c.label)
+  step('both appear as their own slices, so the pie separates them',
+    slices.includes('Missing handover') && slices.includes('Missing neighbour'),
+    slices.join(' · '))
+
+  await selectSession(HIGHWAY)
+  await openWorkbook('Problem Survey')
+  await page.waitForTimeout(1800)
+  // Scoped to the causes panel. The case list under it carries the cause name in every
+  // row too, so an unscoped `table.grid tbody tr` counts one slice plus all its cases.
+  const rows = await page
+    .locator('.panel:has(header .title:text-is("Problem survey per category")) tbody tr')
+    .allTextContents()
+  const shown = rows.filter((r) => /Missing/.test(r))
+  step('and the screen shows them, with counts that match the survey',
+    shown.length === 2
+    && shown.some((r) => r.includes(String(late.length)))
+    && shown.some((r) => r.includes(String(norel.length))),
+    shown.map((r) => r.replace(/\s+/g, ' ').trim()).join(' | ').slice(0, 110))
+
+  await page.goto(BASE, { waitUntil: 'domcontentloaded' })
+  await page.waitForTimeout(2500)
+}
+
+// ─── S28 · Where the cells really are, and whether the record agrees ─────────
+//
+// UC21 p174-176. The first scoping of this called it a demo - we hold `cell_ref`, so
+// estimating a position we already know looked like arithmetic with the answer alongside.
+// The manual's own figure settles it the other way: p175 draws the REAL site in green and
+// the ESTIMATED one in purple on one map, because having the record is the CONDITION for
+// using this. What an operator is asking is whether the record is still true.
+scenario('S28 · Where the cells really are, and whether the record agrees')
+{
+  const cityA = sessions.find((x) => x.name === CITY_A).id
+  const est = await apiGet(`/api/sessions/${cityA}/cell-locator`)
+  const withRef = est.filter((e) => e.errorMetres != null)
+
+  step('every cell the drive measured gets a position estimated from measurement alone',
+    est.length > 0 && est.every((e) =>
+      Number.isFinite(e.latitude) && Number.isFinite(e.longitude) && e.samplesUsed > 0),
+    `${est.length} cells, ${withRef.length} with a record to compare against`)
+
+  // The reference attaches "<100 m" to a score, so ours has to mean the same thing or the
+  // column is decoration. This is the assertion the confidence formula must satisfy - if a
+  // future drive puts a high-confidence estimate past 100 m, the weights were wrong.
+  // It has already caught exactly that: the weights were chosen on three drives and this
+  // step went red on the fourth (198 m at 6). See ui-testing/README.md 1.5.19 - a check
+  // that restated the formula would have stayed green, because the formula had not
+  // changed; what broke was what the formula PROMISED.
+  const good = withRef.filter((e) => e.confidence >= 6)
+  const worst = good.length ? Math.max(...good.map((e) => e.errorMetres)) : null
+  step('and a confidence of 6 or more means inside 100 m, the accuracy the manual claims',
+    good.length > 0 && worst < 100,
+    `${good.length} of ${withRef.length} at 6+, worst ${worst?.toFixed(0)} m`)
+
+  // A number that does not track the thing it describes is worse than no number: it is
+  // read as a judgement. Low-confidence estimates have to be measurably worse.
+  const poor = withRef.filter((e) => e.confidence < 6)
+  const medianOf = (a) => a.length ? [...a].sort((x, y) => x - y)[Math.floor(a.length / 2)] : null
+  const gm = medianOf(good.map((e) => e.errorMetres))
+  step('and the number is honest: the low-confidence ones really are further out',
+    poor.length === 0 || medianOf(poor.map((e) => e.errorMetres)) > gm,
+    poor.length === 0 ? `every cell scored 6+ on this drive (median ${gm?.toFixed(0)} m)`
+      : `median ${gm?.toFixed(0)} m at 6+ against `
+        + `${medianOf(poor.map((e) => e.errorMetres))?.toFixed(0)} m below`)
+
+  // The reference's `Minimum accuracy score` - and its own warning that a high one can
+  // filter everything out.
+  const strict = await apiGet(`/api/sessions/${cityA}/cell-locator?minScore=10`)
+  step('the minimum accuracy score drops the estimates that do not reach it',
+    strict.length < est.length && strict.every((e) => e.confidence >= 10),
+    `${est.length} cells at any score, ${strict.length} at 10`)
+
+  await selectSession(CITY_A)
+  await openWorkbook('Cells')
+  await page.waitForTimeout(2200)
+
+  // Both positions on one map, which is the reference's own picture.
+  const drawn = await page.locator('path.cell-estimate').count()
+  step('the screen draws the estimate beside the recorded position, as the manual does',
+    drawn === est.length && drawn > 0,
+    `${drawn} estimated positions drawn against ${est.length} estimated`)
+
+  const rows = await page
+    .locator('.panel:has(header .title:text-is("Cell locator")) tbody tr').count()
+  const firstRow = await page
+    .locator('.panel:has(header .title:text-is("Cell locator")) tbody tr').first().innerText()
+  step('and the table gives the distance, because a line on a map has no scale to read',
+    rows === est.length && /\d+ m/.test(firstRow),
+    `${rows} rows, first "${firstRow.replace(/\s+/g, ' ').trim().slice(0, 60)}"`)
+
+  // ── UC18 p171: "the map zooms to the cell chosen in the grid". The Cells page had no
+  //    map until now, which is why this row click had nothing to do.
+  // What framing has to put in the middle is the PAIR, not one of them: the two points are
+  // hundreds of metres apart, so centring either one pushes the other toward the edge, and
+  // the gap between them is the thing this screen is for.
+  const mapBox = await page.locator('.map').first().boundingBox()
+  const mapCentre = { x: mapBox.x + mapBox.width / 2, y: mapBox.y + mapBox.height / 2 }
+  const midOf = async (pci) => {
+    const a = await page.locator(`path.cell-estimate.pci-${pci}`).first().boundingBox()
+    const b = await page.locator(`path.cell-site.pci-${pci}`).first().boundingBox()
+    if (!a || !b) return null
+    return { x: (a.x + a.width / 2 + b.x + b.width / 2) / 2,
+             y: (a.y + a.height / 2 + b.y + b.height / 2) / 2 }
+  }
+  const distTo = (p) => (p == null ? Infinity : Math.hypot(p.x - mapCentre.x, p.y - mapCentre.y))
+  const far = [...est].sort((a, b) => (b.errorMetres ?? 0) - (a.errorMetres ?? 0))[0].pci
+  const beforePos = await midOf(far)
+  await page.locator('.panel:has(header .title:text-is("Serving cell breakdown")) tbody tr')
+    .filter({ hasText: String(far) }).first().click()
+  await page.waitForTimeout(1600)
+  const afterPos = await midOf(far)
+  // The attribute says the row reached the map; the geometry says the map then acted on
+  // it. Two failures that look the same from outside and want different fixes.
+  const asked = await page.locator('.map').first().getAttribute('data-focus-pci')
+  step('picking a cell in the grid frames that cell and its estimate together',
+    asked === String(far) && distTo(afterPos) < distTo(beforePos)
+    && distTo(afterPos) < mapBox.width * 0.12,
+    `PCI ${far}: map asked for "${asked}", pair was ${distTo(beforePos).toFixed(0)} px from`
+    + ` centre, now ${distTo(afterPos).toFixed(0)} px (map ${mapBox.width.toFixed(0)} px)`)
+
+  await page.goto(BASE, { waitUntil: 'domcontentloaded' })
+  await page.waitForTimeout(2500)
+}
+
+// ─── S29 · A graph that asks its question at run time ────────────────────────
+//
+// p398: writing `{?threshold}` where a number goes makes a KPI ask for one every time it
+// runs. Our model materialises a published graph into `sample_kpi` under ONE name, so two
+// thresholds cannot both be stored - and the obvious workaround, cloning the graph, leaves
+// two documents that drift. The variable keeps one document and moves the question to the
+// run.
+scenario('S29 · A graph that asks its question at run time')
+{
+  const cityA = sessions.find((x) => x.name === CITY_A).id
+  const askingSpec = {
+    version: 1,
+    nodes: [
+      { id: 1, kind: 'SOURCE_KPI', x: 40, y: 24, kpiName: 'RSRP' },
+      { id: 2, kind: 'FILTER', x: 40, y: 126, expression: 'RSRP < {?threshold}' },
+      { id: 3, kind: 'OUTPUT', x: 40, y: 228, column: 'RSRP' },
+    ],
+    edges: [{ from: 1, to: 2 }, { from: 2, to: 3 }],
+  }
+  const post = (path, body) => page.request.post(`${API}${path}`, { data: body })
+
+  // Reported even without values, so the editor can put the form up rather than answer
+  // "a condition is required" at someone who was never asked.
+  const shape = await (await post('/api/kpi-definitions/graphs/validate',
+    { name: 'x', output: null, spec: askingSpec })).json()
+  step('the graph names the value it wants, and still compiles without one',
+    shape.ok === true && shape.variables?.length === 1 && shape.variables[0] === 'threshold',
+    `variables ${JSON.stringify(shape.variables)}, ok ${shape.ok}`)
+
+  // The point of the whole feature: ONE document, two answers.
+  const rowsAt = async (v) => {
+    const r = await post(
+      `/api/kpi-definitions/graphs/preview?nodeId=2&sessionId=${cityA}&limit=1`,
+      { name: 'x', output: null, vars: { threshold: String(v) }, spec: askingSpec })
+    return (await r.json()).rowCount
+  }
+  const at100 = await rowsAt(-100)
+  const at110 = await rowsAt(-110)
+  step('one graph answers differently for two values, without being cloned',
+    at100 > at110 && at110 > 0,
+    `${at100} samples below -100 dBm, ${at110} below -110`)
+
+  // The compiler's safety rule is that no span of user input reaches the SQL. A variable
+  // is the one place a caller hands over something to put INSIDE an expression, so it has
+  // to be a number or nothing - refused, not quoted.
+  const injected = await post(
+    `/api/kpi-definitions/graphs/preview?nodeId=2&sessionId=${cityA}&limit=1`,
+    { name: 'x', output: null, vars: { threshold: '0 OR 1=1' }, spec: askingSpec })
+  const missing = await post(
+    `/api/kpi-definitions/graphs/preview?nodeId=2&sessionId=${cityA}&limit=1`,
+    { name: 'x', output: null, spec: askingSpec })
+  step('a value that is not a number is refused rather than quoted into the query',
+    injected.status() === 400 && missing.status() === 400
+    && /number/i.test(JSON.stringify(await injected.json())),
+    `injection ${injected.status()}, missing value ${missing.status()}`)
+
+  // ── and the screen asks. Driven, not counted: the form has to appear because the
+  //    EXPRESSION contains a variable, and filling it has to change what the graph says.
+  // The workbench lives on the Import screen, beside the other things that DEFINE data
+  // rather than read it - not on a workbook tab.
+  await openMode('Import')
+  await page.waitForTimeout(1600)
+  const varRow = page.locator('.graph-vars')
+  step('a graph with no variables asks nothing',
+    (await varRow.count()) === 0, `${await varRow.count()} variable rows on an empty canvas`)
+
+  // A round trip, not a presence count: the form exists because the SERVER parsed the
+  // condition this typing produced and reported the name back. Typing a different name has
+  // to move the form with it, which a rendered-from-a-constant form could not do.
+  await page.locator('.wb-palette button').filter({ hasText: 'Filter' }).first().click()
+  await page.waitForTimeout(600)
+  await page.locator('input[aria-label="Condition"]').fill('RSRP < {?threshold}')
+  await page.waitForTimeout(1400)
+  const asked = await page.locator('.graph-vars input').getAttribute('aria-label')
+  step('typing a variable into a condition makes the screen ask for it, by name',
+    asked === 'Variable threshold', `the form offers "${asked}"`)
+
+  await page.locator('input[aria-label="Condition"]').fill('RSRP < {?floor} AND SINR > {?snr}')
+  await page.waitForTimeout(1400)
+  const both = await page.locator('.graph-vars input')
+    .evaluateAll((els) => els.map((e) => e.getAttribute('aria-label')))
+  step('and renaming them moves the form, because the server is reading what was typed',
+    both.length === 2 && both.join(',') === 'Variable floor,Variable snr',
+    `now asks ${JSON.stringify(both)}`)
+
+  await page.goto(BASE, { waitUntil: 'domcontentloaded' })
+  await page.waitForTimeout(2500)
+}
+
 // ─── wrap-up ─────────────────────────────────────────────────────────────────
 const appErrors = errors.filter((e) =>
   !/tile\.openstreetmap\.org|ERR_CONNECTION|Failed to load resource|ERR_TIMED_OUT/.test(e))

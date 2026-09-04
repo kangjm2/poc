@@ -9,6 +9,7 @@ import type {
   GraphRequest, GraphValidation, StoredGraph,
   DistanceBin, CellFootprint, Workbook, WorkbookLimits, WorkbookRequest, EventType,
   FilterCoverage, CohortSet,
+  CellEstimate,
 } from './types'
 
 const BASE = '/api'
@@ -364,6 +365,19 @@ export const api = {
    * on the map and the shape the statistics are about are one value. Taking an array here
    * meant serialising it a second time, and the two copies were free to drift.
    */
+  /**
+   * @param minScore the reference's `Minimum accuracy score (0-10)` - drop estimates below
+   *                 it. Its own dialog offers this because a low score means the drive did
+   *                 not see the site well enough to place it.
+   */
+  cellLocator: (id: number, minScore?: number, minRsrp?: number) => {
+    const q = new URLSearchParams()
+    if (minScore != null) q.set('minScore', String(minScore))
+    if (minRsrp != null) q.set('minRsrp', String(minRsrp))
+    const qs = q.toString()
+    return get<CellEstimate[]>(`/sessions/${id}/cell-locator${qs ? `?${qs}` : ''}`)
+  },
+
   areaStatistics: (id: number, kpi: string, polygon: string) =>
     get<AreaStats>(`/sessions/${id}/area-statistics?kpi=${encodeURIComponent(kpi)}`
       + `&polygon=${encodeURIComponent(polygon)}`),
@@ -421,9 +435,19 @@ export const api = {
     return res.json()
   },
 
-  /** Recompute one stored graph's KPI. The values are a snapshot; this refreshes it. */
-  recomputeKpiGraph: async (id: number): Promise<{ valuesComputed: number }> => {
-    const res = await fetch(`${BASE}/kpi-definitions/graphs/${id}/recompute`, { method: 'POST' })
+  /**
+   * Recompute one stored graph's KPI. The values are a snapshot; this refreshes it.
+   *
+   * @param vars values for the graph's `{?name}` variables, when it has any. Sent on
+   *             every run because they are not stored with the graph - that is what makes
+   *             re-running at a different threshold a run rather than a new document.
+   */
+  recomputeKpiGraph: async (id: number, vars?: Record<string, string>):
+      Promise<{ valuesComputed: number }> => {
+    const res = await fetch(`${BASE}/kpi-definitions/graphs/${id}/recompute`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: null, output: null, spec: null, vars: vars ?? {} }),
+    })
     if (!res.ok) throw new Error((await res.text()) || res.statusText)
     return res.json()
   },

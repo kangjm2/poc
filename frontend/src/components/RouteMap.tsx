@@ -4,6 +4,7 @@ import 'leaflet/dist/leaflet.css'
 import type {
   AreaBin, CellFootprint, CellRef, DiffBin, EventType, MonitoredCell, NetworkEvent,
   TrackPoint,
+  CellEstimate,
 } from '../api/types'
 import type { ColorBy } from '../view/paint'
 import { buildPciColors, paint } from '../view/paint'
@@ -37,6 +38,34 @@ interface Props {
    * the same string - the map could then draw five hulls under a caption claiming three.
    */
   footprintNote?: string | null
+  /**
+   * Apply a global filter naming one cell, from the map.
+   *
+   * UC14 p149: right-click a base station and the popup offers `Create Global Filter From
+   * Cell ID`. The condition itself and the `cell:PCI` grammar have existed since P3-2 -
+   * what was missing was this entry point, so narrowing to a cell meant reading its PCI
+   * off a tooltip and typing it into the bar by hand. The two other items in the
+   * reference's popup (highlight same-channel sectors, highlight neighbours) are not
+   * offered: neither has a counterpart here, and a menu that lists what it cannot do is
+   * worse than a short one.
+   */
+  onFilterCell?: (pci: number) => void
+  /**
+   * Estimated cell positions, drawn beside the recorded ones (UC21 p174-176).
+   *
+   * The reference's own example figure puts the real site and the estimated site on one
+   * map - green and purple at p175 - and a line between a pair is the thing being read:
+   * its length is the disagreement between the drive and the cell database, which is what
+   * the analysis is for.
+   */
+  estimates?: CellEstimate[] | null
+  /**
+   * Frame the map on one cell (UC18 p171: "the map zooms to the cell chosen in the grid").
+   *
+   * A number that CHANGES is what moves the map, so re-picking the same row does nothing
+   * and picking another moves it - the map is not otherwise following anything here.
+   */
+  focusPci?: number | null
   /**
    * Events the network reported, each already placed on a sample by the server. Drawn as
    * per-type symbols on the route: "were all six link failures on the same street" is a
@@ -92,6 +121,7 @@ interface Props {
  */
 export function RouteMap({
   track, cells, cursorSeq, onCursorChange, kpiName, bins, showServingLine = true,
+  onFilterCell, estimates = null, focusPci = null,
   monitored = null, footprints = null, footprintNote = null, events = [], eventTypes,
   frameKey = '', refitToken = 0, colorBy = 'kpi', isolate = null,
   drawingArea = false, onAreaDrawn, diffBins = null,
@@ -115,6 +145,7 @@ export function RouteMap({
   const [basemapFailed, setBasemapFailed] = useState(false)
   const drawLayer = useRef<L.LayerGroup | null>(null)
   const diffLayer = useRef<L.LayerGroup | null>(null)
+  const estimateLayer = useRef<L.LayerGroup | null>(null)
   /** Vertices of the shape being drawn, in click order. */
   const [ring, setRing] = useState<[number, number][]>([])
   /**
@@ -151,6 +182,17 @@ export function RouteMap({
     tiles.on('tileerror', () => setBasemapFailed(true))
     tiles.addTo(map)
     map.setView([65.012, 25.465], 13)
+    // Cell sites get a pane of their own, above the route.
+    //
+    // Everything else shares Leaflet's default overlay pane, where stacking is DOM order
+    // and therefore "whichever effect ran last". That was harmless while a site marker
+    // was only a tooltip - it is not now that right-clicking one opens the filter menu,
+    // because the route redraws on every KPI, colour and isolate change and lands on top,
+    // so the click that should reach a site hits a route segment instead. A pane fixes
+    // the order once rather than each effect racing to call bringToFront.
+    map.createPane('cellSites')
+    const sitePane = map.getPane('cellSites')
+    if (sitePane) sitePane.style.zIndex = '450'
     routeLayer.current = L.layerGroup().addTo(map)
     binLayer.current = L.layerGroup().addTo(map)
     cellLayer.current = L.layerGroup().addTo(map)
@@ -456,11 +498,32 @@ export function RouteMap({
     layer.clearLayers()
     for (const c of cells) {
       if (c.latitude == null || c.longitude == null) continue
-      L.circleMarker([c.latitude, c.longitude], {
+      const marker = L.circleMarker([c.latitude, c.longitude], {
         radius: 6, color: '#1f2528', weight: 2, fillColor: '#30578d', fillOpacity: 0.9,
+        pane: 'cellSites', className: `cell-site pci-${c.pci}`,
       })
         .bindTooltip(`PCI ${c.pci} / ${c.band ?? ''} / az ${c.azimuthDeg ?? '-'}°`)
         .addTo(layer)
+      if (onFilterCell) {
+        // A popup with one button rather than acting on the right-click itself: the
+        // filter re-scopes every screen in the application, and a gesture that does that
+        // without asking is one a reader fires by accident on a crowded map.
+        const menu = document.createElement('div')
+        menu.className = 'cell-menu'
+        const btn = document.createElement('button')
+        btn.type = 'button'
+        btn.setAttribute('aria-label', `Filter to cell ${c.pci}`)
+        btn.textContent = `Filter to PCI ${c.pci}`
+        btn.onclick = () => { marker.closePopup(); onFilterCell(c.pci) }
+        menu.appendChild(btn)
+        marker.bindPopup(menu, { closeButton: false, offset: [0, -4] })
+        marker.on('contextmenu', (e) => {
+          // Leaflet's own contextmenu fires on the browser one; stopping it keeps the
+          // page menu from opening over ours.
+          L.DomEvent.preventDefault(e as unknown as Event)
+          marker.openPopup()
+        })
+      }
       // Short spoke showing sector azimuth, so orientation is visible on the map.
       if (c.azimuthDeg != null) {
         const rad = (c.azimuthDeg * Math.PI) / 180
@@ -469,11 +532,68 @@ export function RouteMap({
             [c.latitude, c.longitude],
             [c.latitude + 0.0032 * Math.cos(rad), c.longitude + 0.0075 * Math.sin(rad)],
           ],
-          { color: '#30578d', weight: 3, opacity: 0.85 },
+          // Decoration, so it takes no pointer events: it starts at the site's centre and
+          // was swallowing the hover that shows the PCI tooltip and the right-click that
+          // opens the filter menu - the marker was unreachable at its own middle.
+          {
+            color: '#30578d', weight: 3, opacity: 0.85, pane: 'cellSites',
+            interactive: false,
+          },
         ).addTo(layer)
       }
     }
-  }, [cells])
+  }, [cells, onFilterCell])
+
+  // Estimated cell positions, and the line to the record each one disagrees with.
+  useEffect(() => {
+    const map = mapRef.current
+    if (!map) return
+    if (estimateLayer.current) { estimateLayer.current.remove(); estimateLayer.current = null }
+    if (!estimates || estimates.length === 0) return
+    const layer = L.layerGroup().addTo(map)
+    estimateLayer.current = layer
+    for (const e of estimates) {
+      L.circleMarker([e.latitude, e.longitude], {
+        radius: 6, color: '#5b3fa8', weight: 2, fillColor: '#8f7ad0', fillOpacity: 0.9,
+        pane: 'cellSites', className: `cell-estimate pci-${e.pci}`,
+      })
+        .bindTooltip(`PCI ${e.pci} estimated \u00b7 confidence ${e.confidence}/10`
+                     + (e.errorMetres == null ? '' : `<br/>${e.errorMetres} m from the record`))
+        .addTo(layer)
+      if (e.refLatitude != null && e.refLongitude != null) {
+        // Dashed, because it is not a thing on the ground - it is the size of a
+        // disagreement between two claims about where this cell is.
+        L.polyline([[e.latitude, e.longitude], [e.refLatitude, e.refLongitude]], {
+          color: '#5b3fa8', weight: 1.5, opacity: 0.8, dashArray: '4 4',
+          pane: 'cellSites', interactive: false,
+        }).addTo(layer)
+      }
+    }
+  }, [estimates])
+
+  // Framing on one cell, for a grid row that names it.
+  //
+  // Both points when there is an estimate, not just the record: the gap between them is
+  // the thing this screen exists to show, and centring on one of the pair can leave the
+  // other outside the frame - at 232 m apart it lands a third of the way to the edge.
+  useEffect(() => {
+    const map = mapRef.current
+    if (!map || focusPci == null) return
+    const c = cells.find((x) => x.pci === focusPci)
+    const e = estimates?.find((x) => x.pci === focusPci)
+    const pts: [number, number][] = []
+    if (c?.latitude != null && c.longitude != null) pts.push([c.latitude, c.longitude])
+    if (e) pts.push([e.latitude, e.longitude])
+    if (pts.length === 0) return
+    if (pts.length === 1) {
+      map.setView(pts[0], Math.max(map.getZoom(), 15), { animate: true })
+    } else {
+      // Pixel padding, not `pad()`. `pad(1.2)` reads like 12 percent and means 120, so
+      // the frame came out four times the size of the thing it was framing and the map
+      // barely moved.
+      map.fitBounds(L.latLngBounds(pts), { animate: true, maxZoom: 16, padding: [60, 60] })
+    }
+  }, [focusPci, cells, estimates])
 
   // Cell footprints, on their own effect so toggling them does not redraw the route.
   //
@@ -638,6 +758,10 @@ export function RouteMap({
       <div
         ref={hostRef}
         className={`map${basemapFailed ? ' no-basemap' : ''}${drawingArea ? ' drawing' : ''}`}
+        // Which cell the map has been asked to frame, on the element itself. A check can
+        // see that a grid row reached the map, separately from whether the map then moved -
+        // two failures that look identical from the outside and need different fixes.
+        data-focus-pci={focusPci ?? ''}
         style={{ flex: 1 }}
         tabIndex={0}
         // The pan Leaflet's own handler used to give, handed back on the two keys the

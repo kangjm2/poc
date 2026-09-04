@@ -646,3 +646,50 @@ kbd {
 .cause-tabs .dim { color: var(--text-dim); font-variant-numeric: tabular-nums; }
 .cause-tabs .close { color: var(--text-dim); padding: 0 2px; }
 .cause-tabs .close:hover { color: #c40024; }
+
+/* The map's cell popup (UC14 p149). One action, so it is sized to the action rather
+   than laid out as a menu - a single item in a bordered list reads as a list with the
+   rest missing. */
+.cell-menu button {
+  font-size: 12px;
+  padding: 3px 8px;
+  white-space: nowrap;
+}
+
+/* The chart's zoom tool (p97). In the header beside the readout, because it is about
+   what the chart is showing rather than about the drive. */
+.chart-panel .chart-tools {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  color: #666;
+}
+.chart-panel .chart-tools button { font-size: 11px; padding: 1px 7px; }
+.chart-panel .chart-tools button.on { font-weight: 600; }
+
+/* An action inside a table row that is itself clickable: reads as a link so it does not
+   compete with the row, and stops the row's own handler (see EventList). */
+.grid .link-btn {
+  background: none;
+  border: none;
+  padding: 0;
+  color: #30578d;
+  cursor: pointer;
+  font-size: 11px;
+  text-decoration: underline;
+}
+
+/* The KPI workbench's run-time variables (p398). One row under the validation strip,
+   because a variable belongs to the graph rather than to any node in it. */
+.graph-vars {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  padding: 5px 10px;
+  border-top: 1px solid #e0e0e6;
+  font-size: 11px;
+}
+.graph-vars input { width: 90px; font-size: 11px; }
+.graph-vars .dim { color: #888; }

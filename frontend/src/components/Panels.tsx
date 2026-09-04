@@ -252,15 +252,27 @@ export function EventColourEditor({
 }
 
 export function EventList({
-  events, types, onPick,
+  events, types, onPick, onExclude,
 }: {
   events: NetworkEvent[]
   types: Map<string, EventType>
   onPick: (seq: number) => void
+  /**
+   * Take every event of this type, and the samples around it, out of the statistics.
+   *
+   * `Exclude Events` in the reference (p94) is reached from the measurement, and its
+   * stated use is dropping a call that failed because the measurement system failed - one
+   * bad call otherwise sits in the mean, the percentiles, the CDF and the printed report.
+   * Offered here rather than only as filter text, because this list is where a reader is
+   * looking when they decide an event is not the network's fault.
+   */
+  onExclude?: (eventType: string) => void
 }) {
   return (
     <table className="grid">
-      <thead><tr><th>Time</th><th>Event</th><th>Detail</th></tr></thead>
+      <thead>
+        <tr><th>Time</th><th>Event</th><th>Detail</th>{onExclude && <th />}</tr>
+      </thead>
       <tbody>
         {events.map((e) => {
           // Same glyph and same words as the map marker, the chart tick and the pie
@@ -278,6 +290,19 @@ export function EventList({
                 {t?.displayName ?? e.eventType}
               </td>
               <td style={{ whiteSpace: 'normal' }}>{e.detail}</td>
+              {onExclude && (
+                <td className="num">
+                  {/* Stops the row's own click: excluding a type and jumping to one
+                      instance of it are different intentions. */}
+                  <button className="link-btn"
+                          aria-label={`Exclude ${e.eventType} from statistics`}
+                          title="Drop every event of this type, and the samples around
+                                 it, from the statistics"
+                          onClick={(ev) => { ev.stopPropagation(); onExclude(e.eventType) }}>
+                    exclude
+                  </button>
+                </td>
+              )}
             </tr>
           )
         })}
