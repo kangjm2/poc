@@ -264,8 +264,11 @@ export function RouteMap({
     if (!diffBins || diffBins.length === 0) return
     const frame: [number, number][] = []
     for (const b of diffBins) {
-      const dLat = b.sizeMeters / 111_320
-      const dLon = b.sizeMeters / (111_320 * Math.cos((b.centerLat * Math.PI) / 180))
+      // From the server, which is where the grid was cut. Recomputed here twice until
+      // 2026-09-04, from each tile's own latitude and with no floor on the cosine, while
+      // the server cut on the session centre with one - so the drawn tiles overlapped or
+      // left slivers, and neither picture was the grid the numbers came from.
+      const { latSpan: dLat, lonSpan: dLon } = b
       const oneSided = b.deltaValue == null
       const corners: [[number, number], [number, number]] = [
         [b.centerLat - dLat / 2, b.centerLon - dLon / 2],
@@ -297,8 +300,7 @@ export function RouteMap({
     layer.clearLayers()
     if (!bins || bins.length === 0) return
     for (const b of bins) {
-      const dLat = b.sizeMeters / 111_320
-      const dLon = b.sizeMeters / (111_320 * Math.cos((b.centerLat * Math.PI) / 180))
+      const { latSpan: dLat, lonSpan: dLon } = b
       L.rectangle(
         [[b.centerLat - dLat / 2, b.centerLon - dLon / 2],
          [b.centerLat + dLat / 2, b.centerLon + dLon / 2]],

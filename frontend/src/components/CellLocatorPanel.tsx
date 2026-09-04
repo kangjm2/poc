@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { api } from '../api/client'
+import { ExportLinks } from './Panels'
 import type { CellEstimate } from '../api/types'
 
 /**
@@ -22,6 +23,12 @@ export function CellLocatorPanel({ sessionId, estimates, onPick, minScore, onMin
   minScore: number
   onMinScore: (v: number) => void
 }) {
+  /*
+   * The reference reaches this result two ways (p176): from the layer, as .kml or .tab, and
+   * through `Open in | Grid` to the grid's own `Export Data To`. So do we - the geometry
+   * from the Layers dock, this table from the table. They are one build behind the two
+   * writers, so the file and the map cannot say different numbers.
+   */
   if (sessionId == null) return null
   const withRef = (estimates ?? []).filter((e) => e.errorMetres != null)
   const errs = withRef.map((e) => e.errorMetres as number).sort((a, b) => a - b)
@@ -43,6 +50,11 @@ export function CellLocatorPanel({ sessionId, estimates, onPick, minScore, onMin
           {estimates == null ? '…'
             : `${estimates.length} cells`
               + (median == null ? '' : ` · median ${median.toFixed(0)} m from the record`)}
+          {sessionId != null && estimates != null && estimates.length > 0 && (
+            <ExportLinks what="this table"
+                         csv={api.exportUrl(sessionId, 'csv',
+                           { result: 'cell-locator', minScore })} />
+          )}
         </span>
       </header>
       {estimates != null && estimates.length === 0 && (

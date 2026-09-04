@@ -653,6 +653,38 @@ export function App() {
   const mapLayers = mapContents ? describeLayers(mapContents, layersOff) : []
 
   /**
+   * Where each drawn layer can be taken out of the tool.
+   *
+   * Built here because this is where the on-screen parameters live: the KPI being shown,
+   * the tile size, the statistic painting them. The link has to carry what the reader is
+   * LOOKING at - a link built from defaults hands over a file of a different analysis and
+   * nothing about it says so. The global filter is added by `api.exportUrl` itself.
+   *
+   * Layers with no result behind them - the route, cell sites, event pins, the drawn shape -
+   * get nothing. Their data is the sample export, which the toolbar already offers.
+   */
+  const exportFor = (layerId: string) => {
+    if (sessionId == null) return null
+    if (layerId === 'bins') {
+      return {
+        csv: api.exportUrl(sessionId, 'csv',
+          { result: 'bins', kpi, sizeMeters: binSize, statistic: binStat }),
+        geojson: api.exportUrl(sessionId, 'geojson',
+          { result: 'bins', kpi, sizeMeters: binSize, statistic: binStat }),
+        what: 'these tiles',
+      }
+    }
+    if (layerId === 'locator') {
+      return {
+        geojson: api.exportUrl(sessionId, 'geojson',
+          { result: 'cell-locator', minScore: locatorScore }),
+        what: 'the estimated positions and their distance from the record',
+      }
+    }
+    return null
+  }
+
+  /**
    * Whether the screen on show consumes a toolbar group. One lookup, so a control is
    * offered exactly where something answers it.
    */
@@ -1260,7 +1292,7 @@ export function App() {
               {sessionId != null && (
                 <>
                   <a href={api.exportUrl(sessionId, 'csv')} download>CSV</a>
-                  <a href={api.exportUrl(sessionId, 'geojson', kpi)} download>GeoJSON</a>
+                  <a href={api.exportUrl(sessionId, 'geojson', { kpi })} download>GeoJSON</a>
                   <a href={api.reportUrl(sessionId)} target="_blank" rel="noreferrer"
                      title="Printable session report">Report</a>
                 </>
@@ -1437,7 +1469,8 @@ export function App() {
                 <div className="dock-section" style={{ maxHeight: 200 }}>
                   <h3>Layers ({mapLayers.length})</h3>
                   <div className="content" style={{ maxHeight: 170 }}>
-                    <MapLayerDock layers={mapLayers} onToggle={toggleLayer} />
+                    <MapLayerDock layers={mapLayers} onToggle={toggleLayer}
+                                  exportFor={exportFor} />
                   </div>
                 </div>
               )}
@@ -1455,7 +1488,10 @@ export function App() {
                                  onEdit={activeDef ? () => setEditingScale(true) : undefined}
                                  isolate={isolate}
                                  onIsolate={tabIsolates ? setIsolate : undefined}
-                                 weightedBy={legendBasis} onWeightedBy={setLegendBasis} />
+                                 weightedBy={legendBasis} onWeightedBy={setLegendBasis}
+                                 exportCsv={sessionId == null ? undefined
+                                   : api.exportUrl(sessionId, 'csv',
+                                       { result: 'distribution', kpi, weightedBy: legendBasis })} />
                   )}
                 </div>
               </div>

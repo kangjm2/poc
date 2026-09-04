@@ -39,7 +39,22 @@ public class GeoAnalysisService {
             double centerLat, double centerLon, double sizeMeters, long sampleCount,
             double avgValue, double minValue, double maxValue, String color, String binLabel,
             /** The statistic this tile's colour was chosen from. See BinStatistic. */
-            String statistic, String statisticLabel, double value) {}
+            String statistic, String statisticLabel, double value,
+            /**
+             * The tile's own size in degrees - what the grid was actually cut on.
+             *
+             * Carried rather than recomputed, because it was being recomputed in three
+             * places that did not agree. The grid here is cut on the SESSION's centre
+             * latitude with a floor on the cosine; the browser drew every tile from its
+             * OWN latitude with no floor (RouteMap, twice). On a drive that spans any
+             * latitude those are different rectangles, so the tiles the user saw did not
+             * tile - they overlapped or left slivers - and an exported polygon would have
+             * been a third answer again.
+             *
+             * One place now: the method that cuts the grid says how wide a tile is, and
+             * everything that draws or exports one reads it.
+             */
+            double latSpan, double lonSpan) {}
 
     /**
      * Averages samples into a fixed-size geographic grid.
@@ -108,7 +123,7 @@ public class GeoAnalysisService {
                     round2(avg), round2(rs.getDouble("min_v")), round2(rs.getDouble("max_v")),
                     colour != null ? colour : bin.map(KpiThreshold::getColor).orElse("#999999"),
                     bin.map(KpiThreshold::getLabel).orElse("no data"),
-                    stat.name(), stat.bracket(), round2(painted));
+                    stat.name(), stat.bracket(), round2(painted), dLat, dLon);
         }, binArgs(dLat, dLon, sessionId, kpiName, scope));
 
         return bins;

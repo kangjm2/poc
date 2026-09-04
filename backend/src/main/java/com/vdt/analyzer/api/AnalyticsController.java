@@ -5,8 +5,11 @@ import com.vdt.analyzer.service.GeoAnalysisService;
 import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.web.bind.annotation.*;
 
+import com.vdt.analyzer.service.ResultExports;
+
 import java.io.IOException;
 import java.util.List;
+import java.util.Map;
 
 /** Spatial analysis and export. */
 @RestController
@@ -20,18 +23,21 @@ public class AnalyticsController {
     private final com.vdt.analyzer.service.ReportService reports;
     private final com.vdt.analyzer.service.CellLocatorService locator;
     private final com.vdt.analyzer.service.AnalysisService analysis;
+    private final ResultExports results;
 
     public AnalyticsController(GeoAnalysisService geo, ExportService export,
                                com.vdt.analyzer.service.KpiCatalog catalog,
                                com.vdt.analyzer.service.ReportService reports,
                                com.vdt.analyzer.service.CellLocatorService locator,
-                               com.vdt.analyzer.service.AnalysisService analysis) {
+                               com.vdt.analyzer.service.AnalysisService analysis,
+                               ResultExports results) {
         this.geo = geo;
         this.export = export;
         this.catalog = catalog;
         this.reports = reports;
         this.locator = locator;
         this.analysis = analysis;
+        this.results = results;
     }
 
     /** Averages the route into fixed-size tiles so a long drive stays readable. */
@@ -128,30 +134,84 @@ public class AnalyticsController {
      * through the same lookup and has always answered 404. The lookup also supplies the
      * name the file is called after, so the two needs are one call.
      */
+    /**
+     * `?result=` selects WHICH analysis leaves, on the two paths that already existed.
+     *
+     * Not `/results/{name}.csv`. The client attaches the global filter by testing the path
+     * against a list of filtered paths, split at the query string - so `?result=bins` is
+     * covered by the `/export.csv` entry already there, with nothing to add. A new path per
+     * result would need a line in that list per result, and a list of paths maintained by
+     * hand beside the code that uses them is how /distance-bins came to be exempt from the
+     * global filter without anyone deciding it should be.
+     *
+     * Absent, it is the sample export, which is what these two paths have always meant.
+     */
     @GetMapping("/export.csv")
     public void exportCsv(@PathVariable long id,
+                          @RequestParam(required = false) String result,
                           @RequestParam(required = false) String filter,
+                          @RequestParam Map<String, String> params,
                           HttpServletResponse response) throws IOException {
         String name = analysis.getSession(id).name();
+        String which = result == null || result.isBlank() ? "samples" : result;
+        ResultExports.Kind kind = ResultExports.kind(which);
+        ResultExports.checkParams(kind, false, params);
+
         response.setContentType("text/csv; charset=UTF-8");
         response.setHeader("Content-Disposition",
-                "attachment; filename=\"" + fileName(id, name, null, "csv") + "\"");
-        export.exportCsv(id, response.getOutputStream(), filter, label(id, name));
+                "attachment; filename=\"" + fileName(id, name, suffix(which, params), "csv") + "\"");
+        if ("samples".equals(which)) {
+            export.exportCsv(id, response.getOutputStream(), filter, label(id, name));
+        } else {
+            export.writeTableCsv(
+                    results.build(which, id, label(id, name), params, filter),
+                    response.getOutputStream());
+        }
     }
 
     @GetMapping("/export.geojson")
-    public void exportGeoJson(@PathVariable long id, @RequestParam String kpi,
+    public void exportGeoJson(@PathVariable long id,
+                              @RequestParam(required = false) String result,
+                              @RequestParam(required = false) String kpi,
                               @RequestParam(required = false) String filter,
+                              @RequestParam Map<String, String> params,
                               HttpServletResponse response) throws IOException {
+        String name = analysis.getSession(id).name();
+        String which = result == null || result.isBlank() ? "samples" : result;
+        ResultExports.Kind kind = ResultExports.kind(which);
+        ResultExports.checkParams(kind, true, params);
         // Every other KPI-taking endpoint rejects an unknown name with 400. Without
         // this one the export answered 200 with a null-valued property on every
         // feature, so a typo produced a plausible-looking file full of nulls.
-        catalog.require(kpi);
-        String name = analysis.getSession(id).name();
+        if (kpi != null) catalog.require(kpi);
+
         response.setContentType("application/geo+json; charset=UTF-8");
-        response.setHeader("Content-Disposition",
-                "attachment; filename=\"" + fileName(id, name, kpi, "geojson") + "\"");
-        export.exportGeoJson(id, kpi, response.getOutputStream(), filter, label(id, name));
+        response.setHeader("Content-Disposition", "attachment; filename=\""
+                + fileName(id, name, suffix(which, params), "geojson") + "\"");
+        if ("samples".equals(which)) {
+            if (kpi == null) {
+                throw new IllegalArgumentException(
+                        "The sample export needs a kpi: one point per sample OF something.");
+            }
+            export.exportGeoJson(id, kpi, response.getOutputStream(), filter, label(id, name));
+        } else {
+            export.writeTableGeoJson(
+                    results.build(which, id, label(id, name), params, filter),
+                    response.getOutputStream());
+        }
+    }
+
+    /**
+     * What distinguishes one file of a drive from another on disk.
+     *
+     * The result, and the KPI when the result has one: two exports of the same drive
+     * differing only in KPI used to arrive as one filename and overwrite each other.
+     */
+    private static String suffix(String which, Map<String, String> params) {
+        String base = "samples".equals(which) ? "" : which;
+        String kpi = params.get("kpi");
+        if (kpi == null || kpi.isBlank()) return base;
+        return base.isEmpty() ? kpi : base + "-" + kpi;
     }
 
     /** What the file says it is inside: the id AND the name, since neither alone is enough. */

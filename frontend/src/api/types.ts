@@ -242,6 +242,14 @@ export interface AreaBin {
   avgValue: number; minValue: number; maxValue: number; color: string; binLabel: string
   /** Which statistic the colour came from, and the words for it. See BinStatistic. */
   statistic: string; statisticLabel: string; value: number
+  /**
+   * The tile's size in degrees, as the server cut the grid.
+   *
+   * Drawn from this rather than recomputed from `sizeMeters`. The two answers differed:
+   * the server cuts on the session's centre latitude with a floor on the cosine, the two
+   * copies here used each tile's own latitude with none, so the drawn tiles did not tile.
+   */
+  latSpan: number; lonSpan: number
 }
 
 export interface CoverageIssue {
@@ -586,6 +594,8 @@ export interface DiffBin {
   /** null where only one drive visited the tile - deliberately not 0. */
   deltaValue: number | null
   color: string; label: string
+  /** The tile's size in degrees, as the server cut it. Same reason as AreaBin.latSpan. */
+  latSpan: number; lonSpan: number
 }
 
 export interface SpatialDiff {

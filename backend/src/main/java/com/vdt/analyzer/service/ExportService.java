@@ -221,6 +221,87 @@ public class ExportService {
     }
 
     /**
+     * A built result as CSV: the provenance, the header, the rows, and the scope columns
+     * repeated on every one.
+     *
+     * The scope columns come last rather than first so the result's own data reads from the
+     * left, the way a person scans a table. They are still on every row, which is the part
+     * that matters when forty of them are pasted somewhere else.
+     */
+    public void writeTableCsv(ResultExports.Table t, OutputStream out) throws IOException {
+        Writer w = new OutputStreamWriter(out, StandardCharsets.UTF_8);
+        w.write(t.scope().csvPreamble());
+
+        List<String> header = new ArrayList<>(t.columns());
+        for (ExportScope.Entry e : t.scope().perRowEntries()) header.add(Csv.field(e.key()));
+        Csv.row(w, header);
+
+        List<String> tail = t.scope().perRowEntries().stream()
+                .map(e -> Csv.field(e.value())).toList();
+        for (ResultExports.Row r : t.rows()) {
+            List<String> cells = new ArrayList<>(r.cells());
+            cells.addAll(tail);
+            Csv.row(w, cells);
+        }
+        w.flush();
+    }
+
+    /**
+     * The same table as GeoJSON: one feature per geometry, all of a row's features carrying
+     * that row's attributes.
+     *
+     * A row can produce more than one - a cell estimate is a point AND the line to where
+     * the record puts the cell - so `kind` says which of them a feature is. Without it the
+     * two are indistinguishable in an attribute table, and a reader styling the layer would
+     * have to guess from the geometry type.
+     */
+    public void writeTableGeoJson(ResultExports.Table t, OutputStream out) throws IOException {
+        Writer w = new OutputStreamWriter(out, StandardCharsets.UTF_8);
+        w.write("{\"type\":\"FeatureCollection\",\"vdt\":");
+        w.write(t.scope().jsonObject());
+        w.write(",\"features\":[");
+
+        StringBuilder rowScope = new StringBuilder();
+        for (ExportScope.Entry e : t.scope().perRowEntries()) {
+            rowScope.append(',').append(Csv.json(e.key())).append(':')
+                    .append(Csv.json(e.value()));
+        }
+
+        boolean first = true;
+        for (ResultExports.Row r : t.rows()) {
+            for (ResultExports.Geom g : r.geometry()) {
+                if (!first) w.write(',');
+                first = false;
+                w.write("{\"type\":\"Feature\",\"geometry\":");
+                w.write(g.json());
+                w.write(",\"properties\":{\"kind\":");
+                w.write(Csv.json(g.kind()));
+                for (int i = 0; i < t.columns().size(); i++) {
+                    // Written as strings, all of them. A GIS reads the attribute table as
+                    // text anyway, and mixing typed and quoted values here would mean
+                    // deciding per column which is which - a rule with no home.
+                    w.write(",");
+                    w.write(Csv.json(t.columns().get(i)));
+                    w.write(":");
+                    w.write(Csv.json(unquote(r.cells().get(i))));
+                }
+                w.write(rowScope.toString());
+                w.write("}}");
+            }
+        }
+        w.write("]}");
+        w.flush();
+    }
+
+    /** Cells arrive CSV-escaped; JSON does its own escaping and must not see the first. */
+    private static String unquote(String cell) {
+        if (cell.length() >= 2 && cell.charAt(0) == '"' && cell.endsWith("\"")) {
+            return cell.substring(1, cell.length() - 1).replace("\"\"", "\"");
+        }
+        return cell;
+    }
+
+    /**
      * Whether the colours rank this value against a configured ladder or against this
      * drive's own quartiles.
      *

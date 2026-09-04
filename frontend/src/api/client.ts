@@ -524,8 +524,36 @@ export const api = {
   // Built through the same `filtered` as every fetch, so a report or a spreadsheet
   // cannot be the one artefact that silently holds the whole drive.
   reportUrl: (id: number) => `${BASE}${filtered(`/sessions/${id}/report.html`)}`,
-  exportUrl: (id: number, kind: 'csv' | 'geojson', kpi?: string) =>
-    `${BASE}${filtered(kind === 'csv'
-      ? `/sessions/${id}/export.csv`
-      : `/sessions/${id}/export.geojson?kpi=${kpi}`)}`,
+  /**
+   * One builder for every export link, whichever result and whichever format.
+   *
+   * `result` rides as a query parameter on the two paths that already exist, so `filtered`
+   * covers it with no new entry: it splits at the '?' before matching, and `/export.csv` is
+   * already in the list. A path per result would need a line per result in FILTERED_PATHS,
+   * and that list going stale is how /distance-bins shipped without the condition.
+   *
+   * The parameters are the ones ON SCREEN when the link is built - the KPI being shown, the
+   * tile size, the statistic painting them. A link that carried the defaults instead would
+   * hand over a file of a different analysis from the one the reader is looking at.
+   */
+  exportUrl: (
+    id: number,
+    kind: 'csv' | 'geojson',
+    params: Record<string, string | number | undefined | null> = {},
+  ) => {
+    const qs = Object.entries(params)
+      .filter(([, v]) => v !== undefined && v !== null && v !== '')
+      .map(([k, v]) => `${k}=${encodeURIComponent(String(v))}`)
+      .join('&')
+    // Both paths written out rather than composed from `kind`. They are two endpoints, and
+    // api-surface.mjs matches a server path against the literal the client holds - so
+    // `export.${kind}` made both of them look uncalled. That is the reachability check
+    // going blind, not the client getting shorter, and the same reason `${BASE}` is named
+    // above the two literals rather than below them: the checker reads backwards from a
+    // path to decide it is a URL builder.
+    const url = (path: string) => `${BASE}${filtered(`${path}${qs ? `?${qs}` : ''}`)}`
+    return kind === 'csv'
+      ? url(`/sessions/${id}/export.csv`)
+      : url(`/sessions/${id}/export.geojson`)
+  },
 }

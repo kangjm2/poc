@@ -35,7 +35,9 @@ public class SpatialDiffService {
      */
     public record DiffBin(double centerLat, double centerLon, double sizeMeters,
                           Long countA, Long countB, Double avgA, Double avgB,
-                          Double deltaValue, String color, String label) {}
+                          Double deltaValue, String color, String label,
+                          /** The tile's size in degrees. Same reason as AreaBin.latSpan. */
+                          double latSpan, double lonSpan) {}
 
     public record SpatialDiff(String kpi, String displayName, String unit,
                               long sessionA, long sessionB,
@@ -156,7 +158,8 @@ public class SpatialDiffService {
             Double delta = (aV == null || bV == null) ? null
                     : Math.round((bV - aV) * 100.0) / 100.0;
             return new DiffBin(round6(lat), round6(lon), sizeMeters, nA, nB,
-                    round2(aV), round2(bV), delta, verdict(delta, dir).color, verdict(delta, dir).label);
+                    round2(aV), round2(bV), delta, verdict(delta, dir).color,
+                    verdict(delta, dir).label, dLat, dLon);
         }, args(groupA, dLat, dLon, all, kpiName));
 
         int both = 0, onlyA = 0, onlyB = 0;
