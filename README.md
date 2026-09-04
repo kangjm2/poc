@@ -26,7 +26,7 @@ VDT 장비·소프트웨어 자체는 별도 저장소에서 개발되었으며,
 | [`docs/ui-ux-backlog.md`](docs/ui-ux-backlog.md) | **UI/UX 백로그.** 격차 중 화면에 닿는 것만, 코드 대조로 확인하고 세 사용자 관점의 독립 순위로 순서를 매긴 실행 계획 |
 | [`docs/gap-analysis.md`](docs/gap-analysis.md) | Keysight 매뉴얼 및 경쟁 솔루션(VIAVI 등) 대비 기능 격차와 우선순위 |
 | [`docs/verification.md`](docs/verification.md) | 검증 기록 |
-| [`docs/scenario-verification.md`](docs/scenario-verification.md) | 시나리오 단위 E2E 검증 — 30개 사용자 여정 297단계와 검증이 잡아낸 결함들 |
+| [`docs/scenario-verification.md`](docs/scenario-verification.md) | 시나리오 단위 E2E 검증 — 30개 사용자 여정 299단계와 검증이 잡아낸 결함들 |
 | [`docs/research-agenda.md`](docs/research-agenda.md) | 다음 리서치 항목 (제품 A1–A21 + 방법론 B1–B9) |
 | [`docs/ui-testing/README.md`](docs/ui-testing/README.md) | **(별도 주제)** UI 검증 기법 리서치 — 신호별 토큰 비용 실측, 결함 주입 매트릭스, UX-driven development 근거 검토 |
 | [`docs/assets/NOTICE.md`](docs/assets/NOTICE.md) | 저작권 고지 및 구현 시 복제 금지 항목 |
@@ -87,7 +87,7 @@ sudo -u postgres createdb -O vdt vdt
 ```bash
 # 세 검사기가 서로 다른 실패 계열을 담당합니다
 node scripts/verify-ui.mjs             # 개별 동작 125개
-node scripts/verify-scenarios.mjs      # 사용자 여정 297단계 / 30 시나리오
+node scripts/verify-scenarios.mjs      # 사용자 여정 299단계 / 30 시나리오
 node tools/uxtest/api-surface.mjs      # 로직은 있는데 뷰가 없는 격차
 (cd backend && mvn test)               # SQL을 조립하는 코드·색 램프·기하·내보내기 서식 — 99개
 node tools/uxtest/measure-signals.mjs  # (선택) 검증 신호별 비용 측정
@@ -138,7 +138,7 @@ node tools/uxtest/experiment.mjs   # 결함 주입 × 검출기 매트릭스
 
 주요 엔드포인트 표는 [`docs/architecture.md`](docs/architecture.md) §5에 있습니다 — 그 절이
 스스로 적듯 **선택된 것들**이고, 전체 목록은 `node tools/uxtest/api-surface.mjs`가 코드에서
-세어 인쇄합니다(현재 69개). 계열만 적으면:
+세어 인쇄합니다(현재 71개). 계열만 적으면:
 
 | 계열 | 예 |
 |---|---|

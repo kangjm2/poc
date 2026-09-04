@@ -400,9 +400,9 @@
 
 | 범주 | 개수 | 우리에게 | 왜 |
 |---|---|---|---|
-| **Freeze frame** | 3 | ⛔ 불필요 | 스키마에 관계가 없는 테이블을 시간으로 잇는 우회로입니다. 우리는 `(session_id, seq)` 키 조인입니다. **다만 `Correlation type (-1, 0, 1)`이 곧 Previous / Current / Next** 이고, `0`의 정의가 *"parent query timestamp is within the time range of the subquery row's time interval"* 라는 점은 우리가 그 노드를 만들 때 쓸 정의입니다 |
+| **Freeze frame** | 3 | ⛔ 불필요 | 스키마에 관계가 없는 테이블을 시간으로 잇는 우회로입니다. 우리는 `(session_id, seq)` 키 조인입니다. **다만 `Correlation type (-1, 0, 1)`이 곧 Previous / Current / Next** 이고 *(2026-09-04: 그 노드는 P4-2에서 `CORRELATE`로 만들었습니다 — 셋에 더해 `PREVIOUS_OR_CURRENT`·`NEXT_OR_CURRENT`까지, `CURRENT`는 같은 seq의 값입니다)*, `0`의 정의가 *"parent query timestamp is within the time range of the subquery row's time interval"* 라는 점은 우리가 그 노드를 만들 때 쓸 정의입니다 |
 | **Time · Binary Time · Binary Time Interval · SQL Time** | 18 | ⛔ 불필요 | 전부 **binary time**이라는 그들 고유 표현을 다루는 함수입니다(`T_*`는 binary time, `TI_*`는 interval, `TIME_*`는 SQL timestamp). 우리는 `TIMESTAMPTZ` 하나뿐이라 변환할 표현이 없습니다. `T_FORMAT`의 21개 서식 코드도 마찬가지 |
-| **Translator** | 2 | ⚠ **필요** | `VAL_TO_STRING` / `STRING_TO_VAL` — 숫자 코드와 사람이 읽는 라벨 사이의 **코드북**입니다. 우리 `STATE_MACHINE`은 상태를 **맨 정수**로 내보내고 이름은 그래프 JSON에만 있습니다. 값 도메인을 1급으로 만들 자리 |
+| **Translator** | 2 | ⚠ **필요** | `VAL_TO_STRING` / `STRING_TO_VAL` — 숫자 코드와 사람이 읽는 라벨 사이의 **코드북**입니다. 우리 `CLASSIFIER`는 상태를 **맨 정수**로 내보내고 이름은 그래프 JSON에만 있습니다. *(2026-09-04 정정: `STATE_MACHINE`이라 적혀 있었는데 그 이름은 V13에서 사다리형 상태 기계로 옮겨 갔고, 그쪽은 ms를 냅니다. 코드북 논지는 그대로 유효하고, 적용 대상만 `CLASSIFIER`입니다.)* 값 도메인을 1급으로 만들 자리 |
 | **Datatype** | 5 | ◐ 일부 | `IS_FLOAT_EQUAL`이 **정밀도 인자를 받는** 점이 눈에 띕니다. 우리 `FILTER`는 `double`에 맨 `=`를 허용합니다 — 부동소수 동등 비교라 사실상 항상 거짓일 수 있습니다 |
 | **Decoder** | 13 | ⛔ 데이터 없음 | 시그널링 메시지 **본문**을 질의로 끌어들이는 함수들입니다. 우리 `signaling_message`는 본문이 구조화돼 있지 않아 시작점이 없습니다 |
 | **Connection** | 2 | ❓ 결정 필요 | `CONN_IS_SHARED` / `CONN_IS_TYPE`은 **호(connection)라는 개체**와 그 부모-자식 관계를 전제합니다. 우리 계층은 세션(주행 전체) → 표본(1초)뿐이고 **중간 구간 개체가 없습니다** |

@@ -23,7 +23,7 @@
 | Organizing measurement data into subsets | ◐ | 세션 단위만. 명명된 collection/폴더는 여전히 없습니다. **2026-09-01(⑧)**: 대신 **찾기**가 생겼습니다 — 이름·기간·장비·사업자·기술로 좁히고, 선택지는 데이터에서 옵니다(아무것도 맞지 않는 값을 고를 수 없음). 폴더는 "정리"이고 찾기는 "도달"인데, 세션이 늘 때 먼저 막히는 쪽은 도달이었습니다 |
 | Joining separate measurement files into a joined measurement | ⛔ | 여러 세션을 **하나의 측정으로 합치지는** 않습니다. **2026-09-03(P4-3)**: 이 기능의 분석적 목적 — 여러 파일에 걸친 통계 — 은 합치지 않고 답합니다. 코호트는 주행 속성으로 묶어 **풀링된** 통계 하나를 내며(가중 CDF까지), 각 주행은 자기 자신으로 남습니다. 합쳐 놓으면 되돌릴 수 없고 "어느 주행이 이것을 끌어내렸나"를 물을 수 없습니다 |
 | Database filtering (technology, time, operator) | ◐ | **2026-09-01(⑧) 해소 — 측정 선택 범위 안에서.** 이 세 축 그대로(+장비·이름) 서버가 필터링합니다 — 새 엔드포인트가 아니라 **기존 `GET /api/sessions`에 붙은 선택 파라미터**라, 아무것도 넘기지 않으면 예전 그대로의 목록입니다. 선택지는 `GET /api/sessions/facets`가 데이터에서 만들어 줍니다. 남은 차이는 **적용 범위**입니다 — 레퍼런스는 DB 전체에 걸리는 필터이고 우리 것은 측정 파일을 고르는 자리에만 걸립니다. 전역 필터는 §3.1과 백로그의 미해결 항목으로 남습니다 |
-| Advanced data filtering and global filters | ✅ | **2026-09-02(P3-2) 해소.** `kpi:NAME:OP:VALUE`와 `cell:PCI`를 창 맨 위 한 줄에 걸면 **14개 분석 엔드포인트**가 그 조건으로 답합니다. 지키지 못하는 8개는 `GET /api/global-filter/coverage`에 **이유와 함께** 실려 화면(Reach 14 of 22)에서 읽힙니다 — 조용히 무시하는 화면이 없다는 것이 이 항목의 요구입니다. **2026-09-03(P4-3)**: 조건의 키가 `(session_id, seq)` 쌍이라 여러 주행에도 걸립니다 |
+| Advanced data filtering and global filters | ✅ | **2026-09-02(P3-2) 해소.** `kpi:NAME:OP:VALUE` · `cell:PCI` · `notevent:TYPE`을 창 맨 위 한 줄에 걸면 **15개 분석 엔드포인트**가 그 조건으로 답합니다. 지키지 못하는 14개는 `GET /api/global-filter/coverage`에 **이유와 함께** 실려 화면(Reach 15 of 29 — 2026-09-04 기준)에서 읽힙니다 — 조용히 무시하는 화면이 없다는 것이 이 항목의 요구입니다. **2026-09-03(P4-3)**: 조건의 키가 `(session_id, seq)` 쌍이라 여러 주행에도 걸립니다 |
 | Custom SQL queries | ◐ | REST API만. 사용자 SQL 창구 없음 |
 | ODBC connectivity to third-party databases | ⛔ | |
 | Log file manager (원본 로그 검색·회수) | ⛔ | 원본 파일 보관 안 함 |
@@ -61,7 +61,7 @@
 | Parameter statistics and benchmarking | ✅ | min/max/avg/p05/p50/p95 + CDF |
 | 세션 간 벤치마킹 비교 | ✅ | 판정(BETTER/WORSE) 포함. **2026-09-03(P4-3)**: 주행 **둘**만이 아니라 빌드·시나리오·단말 같은 속성으로 묶은 **그룹**끼리도 비교합니다(Compare 탭의 Cohorts). 그룹 통계는 풀링이라 가중 CDF까지 실물이고, 두 번째 차원을 고정하지 않으면 델타만 내고 **판정을 보류합니다** |
 | **KPI Workbench (SQL 없이 커스텀 KPI 생성)** | ✅ | **해소.** 노드 그래프 편집기 구현(`Import` 화면). 노드: KPI 소스 · **이웃 셀 소스**(N번째 강한 셀) · Combine · Expression · Filter · State machine · Output. 각 노드는 CTE 하나로 컴파일되며 결과는 `sample_kpi`에 실체화되어 다른 KPI와 완전히 동일하게 취급됩니다. **정렬 노드는 의도적으로 없음** — 우리 행 집합은 `seq` 키라 항상 정렬돼 있고, 아무 일도 하지 않는 컨트롤은 없느니만 못합니다. 매뉴얼이 **이 판단은 근거까지 확인**해 줬습니다 — 정렬이 필요한 이유가 Union이 순서를 파괴하기 때문이고(p359) 우리는 Union이 없습니다. 반면 **State machine과 Combine은 레퍼런스와 의미가 다릅니다**: [briefs ③](briefs/03-kpi-workbench.html) |
-| Automated problem survey with drill-down | ✅ | **원인 분류 7종 → 파이 → 사례 그리드 → 시각 이동** 3단 연쇄 구현. 원인은 전부 기존 검출기에서 유도하며 근거 없는 원인은 만들지 않음 |
+| Automated problem survey with drill-down | ✅ | **원인 분류 9종**(2026-09-04: `Missing handover`·`Missing neighbour`가 ④e에서 더해져 일곱에서 아홉) **→ 파이 → 사례 그리드 → 시각 이동** 3단 연쇄 구현. 원인은 전부 기존 검출기에서 유도하며 근거 없는 원인은 만들지 않음 |
 | Automated detection of common GSM/UMTS/LTE/5G NR problems | ◐ | weak coverage / interference / overshoot 3종 |
 | 5G Advanced Analytics (pilot pollution, overspilling, weak coverage, bad quality, NSA neighbor list) | ◐ | weak coverage + bad quality + **pilot pollution**(경합 셀 구간 검출) + **overspilling 단서**(검출률 대비 서빙률이 낮은 셀). NSA neighbor list는 아직. **단 '설정된 이웃 목록이 없어 원천 불가'라는 기존 설명은 틀렸습니다** — 레퍼런스도 측정값만으로 판정합니다(UC27, p404). [`ui-gap-vs-reference.md` §6(a)](ui-gap-vs-reference.md) 참조 |
 | Trend analysis | ⛔ | **근거 재평가 (2026-09-03).** 위 Dashboards와 같습니다 — 사용자 가이드가 아니라 플라이어의 말입니다. **2026-09-03(P4-3)**: 세션 간 **집계**는 생겼으나(코호트) 그것은 추세가 아닙니다. 코호트의 세로축은 **순서일 뿐 시간이 아니고**, 차트가 그렇게 적습니다 — 시간축 위의 추세선을 그리려면 그 사실이 바뀌어야 하는데, 지금 데이터로는 빌드당 주행이 한둘이라 선이 아니라 점입니다 |
@@ -104,9 +104,9 @@
 | **다중 벤더 로그 임포트·정규화** | R&S CM360, Spirent Live2Lab, Accuver XCAP, Infovista TEMS Cloud, Keysight Nemo Analyze | ⛔ **가장 중요한 격차** |
 | **크로스 패널 시각 동기화** | R&S, Accuver, Anritsu | ✅ |
 | **L3 프로토콜 전체 디코드 + 메시지별 상세 창** | R&S, Anritsu, Accuver, Infovista | ◐ 목록 + 펼침 상세 있음, 실제 ASN.1 디코드 없음 |
-| **전 필드 필터링 + 활성 필터 상태 표시** | R&S SmartAnalytics, Accuver, Infovista | ⛔ |
+| ~~**전 필드 필터링 + 활성 필터 상태 표시**~~ | R&S SmartAnalytics, Accuver, Infovista | ✅ P3-2 — *2026-09-04 정정: 이 줄이 ⛔로 남아 있었는데, 같은 문서의 P0 줄은 같은 이름의 항목을 완료로 긋고 있었습니다.* 전역 필터 바와 활성 조건 칩이 창 맨 위에 있고, 무엇이 그 조건을 지키는지는 Reach 목록이 답합니다 |
 | **표준 KPI 라이브러리 + 사용자 정의 KPI** | R&S, Accuver, Infovista | ◐ 라이브러리만 |
-| **실패 KPI 우선 드릴다운** | R&S CM360이 "primary use case"로 문서화 | ◐ 열화/이슈 목록 → 커서 이동 → L3 로그가 커서 추종. 자동 원인 지목은 없음 |
+| **실패 KPI 우선 드릴다운** | R&S CM360이 "primary use case"로 문서화 | ◐ 열화/이슈 목록 → 커서 이동 → L3 로그가 커서 추종. *2026-09-04 정정: **자동 원인 지목은 있습니다** — Problem Survey가 사례마다 이름 붙은 원인으로 분류하고 어느 검출기가 냈는지까지 적습니다(같은 문서 1.3이 그것을 ✅로 셉니다). ◐로 남는 것은 원인에서 **조치**로 잇는 절반입니다* |
 | 자동 근본원인 분석 | Infovista, Accuver, R&S | ⛔ |
 | 리포트 템플릿·대시보드·추세 분석 | Accuver, Infovista, R&S | ⛔ |
 | **지도 기반 지리 시각화** | Accuver, R&S ROMES, Infovista TEMS | ✅ |
@@ -189,7 +189,7 @@ VDT 장비·소프트웨어의 영역입니다.
 | 항목 | 이유 |
 |---|---|
 | **다중 벤더 로그 임포트** | 조사 결론: *"이 파싱 계층이 반복되는 해자다. 모든 상용 제품이 갖고 있고 오픈소스는 없다."* 현실적 진입점은 **DLF**(Qualcomm Diag 원시 덤프, QCSuper가 읽고 씀). ISF는 벤더 변환 필요. Nemo `.nmf`는 **1차 출처로 확인 실패** — 추측으로 구현하지 말 것 |
-| ~~**전역 필터 + 활성 필터 표시**~~ | **2026-09-02(P3-2) 완료** — §1.1의 같은 항목 참조. 14개 엔드포인트가 지키고 8개가 이유와 함께 면제이며, 화면이 `Reach: n of m`으로 그 목록을 폅니다. 원래 근거: 전 벤더 공통. R&S는 이것이 가능한 이유를 "로그를 파일이 아니라 쿼리 가능한 DB에 담기 때문"이라고 명시 — 우리 구조는 이미 그러함 |
+| ~~**전역 필터 + 활성 필터 표시**~~ | **2026-09-02(P3-2) 완료** — §1.1의 같은 항목 참조. 15개 엔드포인트가 지키고 14개가 이유와 함께 면제이며(2026-09-04 기준), 화면이 `Reach: n of m`으로 그 목록을 폅니다. 원래 근거: 전 벤더 공통. R&S는 이것이 가능한 이유를 "로그를 파일이 아니라 쿼리 가능한 DB에 담기 때문"이라고 명시 — 우리 구조는 이미 그러함 |
 | **사용자 정의 KPI (수식 기반)** | Nemo의 KPI Workbench 대응. KPI 4,000개를 따라가는 유일한 현실적 방법 |
 
 ### 3.2 P1 — 실무 워크플로 완성

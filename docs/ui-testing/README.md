@@ -894,7 +894,7 @@ node tools/uxtest/measure-signals.mjs
 node tools/uxtest/experiment.mjs
 node tools/uxtest/experiment.mjs D2-legend-stats-dropped   # 특정 건만
 
-# 행위 단언 스위트 (30개 체크)
+# 행위 단언 스위트 (2026-09-04 현재 125개 체크)
 node scripts/verify-ui.mjs
 ```
 

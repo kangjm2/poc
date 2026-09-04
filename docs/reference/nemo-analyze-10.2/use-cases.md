@@ -39,13 +39,13 @@ UC27은 p403–426입니다.
 
 | UC | p | 장·절 | 제목 | 근거 | 우리 ([대조표](../../use-case-coverage.md)) |
 |---|---|---|---|---|---|
-| 1 | 66–68 | 8 · 지도 | Viewing cell footprints, RSCP footprints, and LTE footprints | ● | ✅ |
+| 1 | 66–68 | 8 · 지도 | Viewing cell footprints, RSCP footprints, and LTE footprints | ● | ◐ |
 | 2 | 68–69 | 8 · 지도 | Viewing uplink voice quality server data | ● | ✕ 범위 밖 |
 | 3 | 69–72 | 8 · 지도 | Viewing IP/UDP packet trace data | ● | ✕ 범위 밖 |
 | 4 | 72–74 | 8 · 지도 | Viewing Binary Log Data | ● | ✕ 범위 밖 |
 | 5 | 77–82 | 8 · 필터 | Global parameter filtering based on a secondary parameter | ● | ◐ |
-| 6 | 108–109 | 8 · 그래프 | Multiple graph layers | ● | ✅ |
-| 7 | 110 | 8 · 그래프 | Notification icons in graphs | ● | ✅ |
+| 6 | 108–109 | 8 · 그래프 | Multiple graph layers | ● | ◐ |
+| 7 | 110 | 8 · 그래프 | Notification icons in graphs | ● | ◐ |
 | 8 | 110–112 | 8 · 그래프 | Correlating parameters using color grids and surface graphs | ● | ✕ 미룸 |
 | 9 | 112 | 8 · 그래프 | Viewing 5G measurement results in 3D Visualizer (optional) | ● | ✕ 범위 밖 |
 | 10 | 118–120 | 8 · 그리드 | Color sets in grids | ● | ◐ |
@@ -53,20 +53,20 @@ UC27은 p403–426입니다.
 | 12 | 121–122 | 8 · 그리드 | Using L3 and RRC message search parameters | ● | ◐ |
 | 13 | 147–148 | 8 · MapX/BTS | Adding map layers and saving layer combinations as geosets | ● | ◐ |
 | 14 | 148–149 | 8 · MapX/BTS | Coloring routes based on BTS coverage | ● | ✅ |
-| 15 | 150–157 | 8 · MapX/BTS | Performing area binning (+ Distance-based binning) | ● | ✅ |
-| 16 | 158–162 | 8 · MapX/BTS | Comparing two groups of measurements from the same route on map | ● | ✅ |
+| 15 | 150–157 | 8 · MapX/BTS | Performing area binning (+ Distance-based binning) | ● | ◐ |
+| 16 | 158–162 | 8 · MapX/BTS | Comparing two groups of measurements from the same route on map | ● | ◐ |
 | 17 | 162–168 | 8 · MapX/BTS | Displaying base station cell beam range on map | ● | ✕ 미구현 |
-| 18 | 168–171 | 8 · MapX/BTS | Synchronizing base station map overlay with grid rows | ● | ◐ *(2026-09-03 하향 — 셀 행 → 지도 줌이 없습니다)* |
+| 18 | 168–171 | 8 · MapX/BTS | Synchronizing base station map overlay with grid rows | ● | ✅ *(2026-09-03에 ◐로 내렸다가 2026-09-04에 그 단계가 생겨 복귀)* |
 | 19 | 171–172 | 8 · MapX/BTS | Using BTS reference parameters | ● | ◐ |
 | 20 | 172–174 | 8 · MapX/BTS | Displaying base station connections on map based on pilot pollution | ● | ✅ |
-| 21 | 174–176 | 8 · MapX/BTS | Cell locator analysis | ● | ✕ 미구현 |
+| 21 | 174–176 | 8 · MapX/BTS | Cell locator analysis | ● | ◐ *(2026-09-04 구현)* |
 | 22 | 177 | 8 · MapX/BTS | 5G beam visualization | ● | ✕ 미구현 |
 | 23 | 177–179 | 8 · MapX/BTS | Exporting Serving Cell Lines to Google Earth | ● | ◐ |
 | 24 | 190–191 | 8 · 스프레드시트 | Retrieving data from minimized data sets | ● | ✕ 해당 없음 |
 | 25 | 307–310 | 10 · 리포트 자동화 | Triggering events | ● | ◐ |
 | 26 | 396–403 | 11 · KPI Workbench | Creating complex filters using multiple conditions | ● | ✅ |
 | 27 | 403–426 | 11 · KPI Workbench | Creating a KPI for dropped calls resulting from a missing handover | ● | ◐ |
-| 28 | 432–434 | 12 · 색상셋 | Automatic generation of color set for a value range | ● | ✅ |
+| 28 | 432–434 | 12 · 색상셋 | Automatic generation of color set for a value range | ● | ◐ |
 | 29 | 434–436 | 12 · 색상셋 | Creating a color set | ● | ◐ |
 | 30 | 436–439 | 12 · 색상셋 | Creating and applying a color set on map | ● | ✅ |
 | 31 | 440–443 | 12 · 색상셋 | Creating and applying a color set in grid | ● | ◐ |
@@ -122,7 +122,8 @@ UC 번호는 장의 흐름을 그대로 따릅니다 — 1–24가 8장(Viewing 
 
 **우리.** `GeoAnalysisService.cellFootprints` — 셀이 **서빙했던** 표본의 볼록 껍질. 다른 점:
 (1) 포함 기준이 "서빙"이지 "3강 안"이 아님 — `sample_neighbour`에 순위별 이웃이 있어 바꿀 수
-있습니다. (2) 셀당 한 페이지가 아니라 **전부 겹쳐** 그립니다 — 중첩이 곧 파일럿 오염이라 우리
+있습니다. *(2026-09-03 P2-4a에서 바꿨습니다: `basis`가 `SERVING`/`TOP3`를 받고 툴바에서
+고릅니다. 앞 문장은 그때의 서술입니다.)* (2) 셀당 한 페이지가 아니라 **전부 겹쳐** 그립니다 — 중첩이 곧 파일럿 오염이라 우리
 방식이 낫다고 봤지만, 셀이 수십 개면 못 읽습니다. 레퍼런스의 SC/채널 필터가 그 문제의 답입니다.
 
 #### UC2 · p68–69 · 업링크 음성 품질 서버 데이터 보기 — ●
@@ -294,7 +295,7 @@ P3-2에서 나왔습니다. `GlobalFilter`가 받는 조건은 둘이고 **둘 �
 **Compare 두 모드**에 뜹니다(`App.tsx`) — `/cohorts`가 조건을 지키므로 그 화면에서도 조건을 보고
 지울 수 있어야 하기 때문입니다.
 
-**남는 차이**: 폴리곤 영역과 `Exclude event`는 아직 문법에 없습니다 — 앞은 조건 항이 없고
+**남는 차이**: 폴리곤 영역이 아직 문법에 없습니다 *(2026-09-04 정정: `Exclude event`는 `notevent:TYPE`으로 ④에서 들어왔고, 이 절 위쪽의 보탬이 그렇게 적고 있어 결론 줄만 낡아 있었습니다)* — 앞은 조건 항이 없고
 ([`data-views.md`](data-views.md) §1의 2026-09-03 정정), 뒤는 이벤트가 `ts`로만 매여 있어 표본으로
 먼저 해석해야 하는데 그 해석이 이미 다른 곳에 있어 규칙을 두 곳에 두지 않으려고 미뤘습니다
 (`GlobalFilter` 머리주석). 그리고 조건은 **측정마다 따로** 평가됩니다(`GlobalFilter.PER_MEASUREMENT`)
@@ -336,7 +337,7 @@ mode` · `Color set`. 라인 그래프: `Line width` · **`Hold value constant u
 **그림.** `uc06-three-layers-stacked_p108`, `uc06-page-properties_p108`,
 `uc06-graph-properties-axes_p109`.
 
-**우리.** ✅ — 구성 워크북의 페인에 KPI를 겹쳐 그립니다. 레이어 체크 해제는 숨기기이지 삭제가
+**우리.** ◐ — 구성 워크북의 페인에 KPI를 겹쳐 그립니다. *(2026-09-04 정정: ✅였는데 바로 다음 문장이 "없는 것: 좌·우 이중 축"이라 적고 있어 문단이 자기와 어긋나 있었습니다.)* 레이어 체크 해제는 숨기기이지 삭제가
 아닙니다. 없는 것: 좌·우 이중 축, stacked/single 모드 전환, 고정 페이지 크기.
 
 #### UC7 · p110 · 그래프의 알림 아이콘 — ●
@@ -352,7 +353,7 @@ icons`(p451) · `Notification configuration`(p453).
 
 **그림.** `uc07-notification-icons-graph_p110`.
 
-**우리.** ✅ — 차트 이벤트 마크(시각 위치에 점선 + 타입 글리프). 이벤트의 이름과 색은
+**우리.** ◐ — 차트 이벤트 마크(시각 위치에 점선 + 타입 글리프). *(2026-09-04 정정: 3단계 `Notifications Properties` — 어느 알림을 그릴지 고르는 것 — 에 대응물이 없어 ◐입니다.)* 이벤트의 이름과 색은
 `event_type` 레지스트리 한 곳에서 나와 지도·차트·독·파이가 같은 것을 씁니다.
 
 #### UC8 · p110–112 · 컬러 그리드·표면 그래프로 파라미터 상관 보기 — ●
@@ -659,7 +660,7 @@ segment, not necessarily the mean value."*
 읽고 계획을 세우기 때문입니다 — 실제로 이 두 줄은 아래 대조표가 이미 완료로 적은 뒤에도
 남아 있었습니다.
 
-**없는 것**: 델타 플로팅의 `Time`/`Distance`/`Sample` 기준 선택(p161), 그리고 가까운 쪽의 그룹.
+**없는 것**: 델타 플로팅의 `Time`/`Distance`/`Sample` 기준 선택(p161). *(2026-09-04 정정: "가까운 쪽의 그룹"도 적혀 있었는데 `/spatial-diff`는 **양쪽 다** 측정 목록을 받습니다 — 2026-09-03에 그렇게 됐습니다.)*
 
 #### UC17 · p162–168 · 기지국 셀 빔 범위를 지도에 표시 — ●
 
@@ -895,7 +896,7 @@ Excel · `.tab`.
 **그림.** `uc23-serving-cell-lines-popup_p178`, `uc23-serving-cell-lines_p178`,
 `uc23-export-kml-popup_p179`.
 
-**우리.** ◐ — GeoJSON으로 내보냅니다. 서빙 셀 선 자체는 Mobility 탭에 있습니다.
+**우리.** ◐ — *2026-09-04 정정: 이 문장은 두 곳에서 거짓이었습니다.* 나가던 것은 한 KPI의 **표본 점**이었고, **서빙 셀 선은 Mobility 탭에 없었습니다** — Mobility에 있는 것은 커서에서 모니터드 셋으로 뻗는 부채이고, 서빙 셀로 긋는 선은 커서 표본 하나짜리였습니다. 지금은 주행 전체의 레이어가 Overview와 Coverage Issues의 Layers 독에 있고(**기본 꺼짐**) 그 줄에서 GeoJSON·CSV로 나갑니다. 남은 단계는 `.kml`이고, 검증할 수 없어서 쓰지 않습니다.
 
 ### 8.6 스프레드시트 그리드 (p180–p191) — UC24
 
@@ -1234,9 +1235,9 @@ resulting from missing handover` → `Next` → `Column Aliases` → `Finish` �
 
 **그림.** `uc28-color-set-properties_p433`, `uc28-add-range_p434`.
 
-**우리.** ✅ — `AutoScale`: 임계값이 없는 KPI에 이 세션의 사분위로 자동 구간(판정이 아님을 범례가
+**우리.** ◐ — `AutoScale`: 임계값이 없는 KPI에 이 세션의 사분위로 자동 구간(판정이 아님을 범례가
 명시). 레퍼런스의 `Add Range`는 **연속 구간이 아니라 이산값 하나하나에 색을 배정**하는 것이라
-셀 ID 채색(우리의 서빙 PCI 채색, `view/paint.ts`)이 더 가까운 대응물입니다.
+셀 ID 채색(우리의 서빙 PCI 채색, `view/paint.ts`)이 더 가까운 대응물입니다. *(2026-09-04 정정: 위 판정이 ✅였는데, 이 문장 자신이 더 가까운 대응물이 따로 있다고 적고 3·4단계 `Add Range`의 From/To/Step에는 대응물이 없어 ◐입니다.)*
 
 #### UC29 · p434–436 · 색상셋 만들기 — ●
 
@@ -1407,7 +1408,7 @@ UC26·UC27이 쓰는 요소들의 `Properties`를 원문에서 옮겼습니다. 
 |---|---|---|---|
 | **BTS 파일** — 기지국 위치·방위·채널의 별도 자산. 지도로 드래그해 경로와 "연결", 날짜 버전은 `_YYYY-MM-DD` 규약, 활성화 필요 | 9 · 14 · 17 · 18 · 19 · 20 · 21 · 22 · 23 | p63, p140–146, p459, `BTS_QUEST`(p499) | `cell_ref` 테이블. 연결·활성화 단계가 없음. 안테나 높이·틸트·빔 범위는 없음 |
 | **색상셋** — 이름 붙은 1급 자산. `numerical` / `gradient` / `string` 세 타입, Groups로 분류, 파라미터 기본값으로 매임(`Change defaults` p59), `.csf`/`.aex`로 이동 | 1 · 10 · 14 · 28–31 | p59, p128, p427–443, p457, p460 | KPI별 임계 사다리 + `AutoScale`. gradient·string 타입과 이름 붙은 재사용은 없음 |
-| **전역 필터** — 값 조건 · 2차 파라미터 · 폴리곤 · 셀 ID · 이벤트 제외. 이후 모든 조작에 적용(Crystal Reports 제외) | 5 · 15 · 16 | p74–82, p94, p467 | *2026-09-03 정정 — 이 칸은 "없음"이라고 적고 있었습니다.* `GlobalFilter`가 **`kpi:NAME:OP:VALUE`**(2차 파라미터 임계)와 **`cell:PCI`**를 받습니다. `coverage()`가 지키는 엔드포인트 14개와 면제 10개를 사유와 함께 이름으로 들고, 화면은 그 목록을 `Reach n of m`으로 읽습니다. **폴리곤과 이벤트 제외는 아직 문법에 없습니다** |
+| **전역 필터** — 값 조건 · 2차 파라미터 · 폴리곤 · 셀 ID · 이벤트 제외. 이후 모든 조작에 적용(Crystal Reports 제외) | 5 · 15 · 16 | p74–82, p94, p467 | *2026-09-03 정정 — 이 칸은 "없음"이라고 적고 있었습니다.* `GlobalFilter`가 **`kpi:NAME:OP:VALUE`**(2차 파라미터 임계)와 **`cell:PCI`**를 받습니다. `coverage()`가 지키는 엔드포인트 **15개**와 면제 **14개**를 사유와 함께 이름으로 들고(2026-09-04 기준), 화면은 그 목록을 `Reach n of m`으로 읽습니다. **폴리곤은 아직 문법에 없습니다** *(2026-09-04: 이벤트 제외는 `notevent:TYPE`으로 들어왔습니다)* |
 | **통계 기준 Time / Distance / Sample** — 비닝·델타·통계에서 매번 고를 수 있음 | 15 · 16 | p151, p161, p457, Appendix 3(p477), `QSR_*`(p495–497) | `AggregationBasis`로 `[Distance]` / `[Sample]` / `[Sample, linear dB]` |
 | **동기화된 워크북** — 같은 세션의 다른 파일(IP trace · 바이너리 로그 · 서버 로그)을 별도 워크북으로 열면 시간으로 자동 동기화 | 2 · 3 · 4 · 18 | p68–74, p94 | 공유 시간 커서 (한 세션 안) |
 | **상태 점유 = 한 행** — State Machine의 출력은 표본별 값이 아니라 구간 행(`start_time` · `end_time` · `time_interval`) | 27 | p370, p426 | *2026-09-03 정정 — "저장 모델을 건드려야 하는 유일한 항목"이 틀렸습니다.* 점유를 **진입한 표본**에 찍으면 `ts` = `start_time`, 값 = `time_interval`이라 보통의 KPI 행에 들어갑니다(`KpiGraph.ladder()`). 표본별 `CASE`는 `CLASSIFIER`로 이름이 갈렸습니다. 남은 차이는 임의 전이표가 아니라 **순서 사다리**(상태 초기 + 3)라는 것 |

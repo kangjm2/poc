@@ -1915,6 +1915,11 @@ scenario('S20 · One condition, every screen')
       .features.reduce((a, f) => a + Number(f.properties.samples), 0),
     distributionCsv: (await csvValues(`?result=distribution&kpi=RSRP${amp}`, 'count'))
       .reduce((a, b) => a + Number(b), 0),
+    // One line per sample, so it reduces to the same number as everything else. Added
+    // 2026-09-04 with the endpoint: it was declared honoured in coverage() the day it was
+    // written and NOTHING here called it with a condition, which is precisely the hole
+    // /distance-bins fell through. Being on that list is not being checked.
+    servingLines: (await apiGet(`/api/sessions/${sid}/serving-lines${qs}`)).length,
   })
   const whole = await numbers('', '')
   const narrowed = await numbers(`?filter=${enc}`, `&filter=${enc}`)
@@ -1923,13 +1928,42 @@ scenario('S20 · One condition, every screen')
   step('unfiltered, every analytic reads the same whole drive',
     wholeSet.length === 1, JSON.stringify(whole))
 
-  // The witness that matters. Twelve independent queries - six of them writing files
+  // The witness that matters. Thirteen independent queries - six of them writing files
   // rather than JSON - reduced to ONE number, so an endpoint that quietly skipped the
   // filter shows up as a second number rather than as a plausible screen.
   const narrowSet = [...new Set(Object.values(narrowed))]
-  step('filtered, they all read the same narrower drive - one number, twelve queries',
+  step('filtered, they all read the same narrower drive - one number, thirteen queries',
     narrowSet.length === 1 && narrowSet[0] < wholeSet[0] && narrowSet[0] > 0,
     JSON.stringify(narrowed))
+
+  // ── `notevent:` had NO check anywhere until 2026-09-04. It shipped with ④, and the
+  //    coverage doc pointed at S26, which is about something else entirely - so the clause
+  //    that drops eleven samples per event was never driven by anything. Found by auditing
+  //    the documents against the code, which is a strange way to find a missing test and
+  //    the reason that audit is worth running.
+  //
+  //    The window is OUR number, not the reference's: the manual removes a failed CALL and
+  //    we have no call boundaries. So the assertion is arithmetic on that number - eleven
+  //    samples per event, exactly - rather than "fewer than before", which almost anything
+  //    satisfies.
+  const rlf = (await apiGet(`/api/sessions/${sid}/events`))
+    .filter((e) => e.eventType === 'RADIO_LINK_FAILURE')
+  const notEvent = encodeURIComponent('notevent:RADIO_LINK_FAILURE')
+  const before = await apiGet(`/api/sessions/${sid}/statistics?kpi=RSRP`)
+  const after = await apiGet(`/api/sessions/${sid}/statistics?kpi=RSRP&filter=${notEvent}`)
+  const described = (await apiGet(`/api/global-filter/describe?filter=${notEvent}`)).text
+  step('excluding an event type drops its window exactly, and the bar names the window',
+    rlf.length > 0 && before.count - after.count === rlf.length * 11
+    && described === 'excluding RADIO_LINK_FAILURE \u00b15 samples',
+    `${rlf.length} events, ${before.count} -> ${after.count} samples`
+    + ` (${rlf.length} x 11 = ${rlf.length * 11}) · "${described}"`)
+
+  // And the reason the feature exists: a bad call sitting on the percentile. If the
+  // excluded samples were ordinary ones this number would not move, and the exclusion
+  // would be arithmetic with no purpose.
+  step('and the percentile moves, which is the whole point of dropping them',
+    after.p05 > before.p05,
+    `P05 ${before.p05} -> ${after.p05}`)
 
   // Degradation and area statistics answer a different shape, so they are witnessed
   // separately rather than folded into the count above.
