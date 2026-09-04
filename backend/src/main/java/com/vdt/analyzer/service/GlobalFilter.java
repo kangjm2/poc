@@ -186,12 +186,21 @@ public final class GlobalFilter {
                         + " one drive remain comparable"),
                 new Coverage("/api/sessions/{id}/cell-footprints", true,
                         "Measured cell coverage shapes"),
+                new Coverage("/api/sessions/{id}/serving-lines", true,
+                        "One line per sample to the cell serving it; per-sample, so the"
+                        + " condition selects lines the same way it selects samples"),
                 new Coverage("/api/sessions/{id}/export.csv", true,
-                        "Wide CSV of the samples"),
+                        "Wide CSV of the samples; the file also carries the condition,"
+                        + " above the header and in every row, because it is read where"
+                        + " the screen that set it is gone"),
                 new Coverage("/api/sessions/{id}/export.geojson", true,
-                        "Route as GeoJSON"),
+                        "Route as GeoJSON, carrying the condition in the collection and in"
+                        + " every feature - a GIS shows per-feature properties and drops a"
+                        + " member on the collection"),
                 new Coverage("/api/sessions/{id}/report.html", true,
-                        "Printable report; also prints the filter"),
+                        "Printable report; also prints the filter, and now prints both the"
+                        + " recorded and the selected sample count rather than the first"
+                        + " under a heading naming the second"),
                 new Coverage("/api/cohorts", true,
                         "Cohort comparison across drives; the condition is applied to"
                         + " every member of every cohort"),
@@ -221,6 +230,27 @@ public final class GlobalFilter {
                         "Not built: this endpoint takes no filter parameter. It classifies"
                         + " individual samples, which is the shape /degradations honours,"
                         + " so this is an unwired endpoint and not an impossibility"),
+                new Coverage("/api/sessions/{id}/cell-locator", false,
+                        "Estimated site positions. The confidence 1-10 is calibrated"
+                        + " against whole-drive evidence - '6 or better means within 100 m'"
+                        + " is a claim measured on complete drives - so a position computed"
+                        + " from a subset cannot carry the same score, and a score that no"
+                        + " longer means what the column says is worse than no score. Same"
+                        + " shape as the neighbour-row exemptions above. An export taken"
+                        + " under a condition says 'not applied' in the file"),
+                new Coverage("/api/sessions/{id}/cells", false,
+                        "The measurement's cell reference rows - where the operator says"
+                        + " each cell is. Reference data rather than samples: a sample"
+                        + " condition cannot move a mast"),
+                new Coverage("/api/sessions/{id}/field-to-lab", false,
+                        "The lab channel model this drive implies. It reads the drive as a"
+                        + " whole to propose a channel, so a subset would propose a channel"
+                        + " for a road nobody drove"),
+                new Coverage("/api/sessions/{id}", false,
+                        "The measurement's own identity and what it RECORDED. The condition"
+                        + " selects within a measurement; it does not change what the drive"
+                        + " collected, and a summary that moved would make two screens"
+                        + " disagree about the same drive"),
                 new Coverage("/api/sessions/{id}/problem-survey", false,
                         "Not built, for the same reason. Its causes come from three"
                         + " different detectors and one event stream, so wiring it means"

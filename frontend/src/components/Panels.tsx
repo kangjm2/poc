@@ -55,7 +55,42 @@ export function ParameterGrid({ snapshot }: { snapshot: Snapshot | null }) {
  * Ours are weighted by sample, so it says so rather than borrowing "[Time]":
  * with an irregular log the two do differ, and the reader has to know which.
  */
-export function LegendPanel({ dist, onEdit, isolate, onIsolate, weightedBy, onWeightedBy }: {
+/**
+ * The links that take a result out of the tool.
+ *
+ * Plain anchors listed side by side rather than a menu behind a button. Two reasons, and
+ * the second is the one that decided it: a link's href is in the DOM, so a check can read
+ * what the screen would actually download - which parameters rode along, whether the
+ * condition did - and a popover hides all of that behind a click. Counting controls is
+ * exactly the mistake 1.5.15 is about.
+ *
+ * Attached to the OBJECT, never to the toolbar: the reference reaches `Export Data To` by
+ * right-clicking the layer, the grid, the legend (p115, p156, p176, p429). A toolbar link
+ * exports the session, and the session is not what the reader is looking at.
+ */
+export function ExportLinks({ csv, geojson, what }: {
+  csv?: string
+  geojson?: string
+  /** Named in the tooltip, so hovering says what the file will hold. */
+  what: string
+}) {
+  if (!csv && !geojson) return null
+  return (
+    <span className="export-links">
+      {csv && (
+        <a href={csv} download title={`Download ${what} as CSV, with the condition in force`}
+           onClick={(e) => e.stopPropagation()}>csv</a>
+      )}
+      {geojson && (
+        <a href={geojson} download title={`Download ${what} as GeoJSON, for a planning tool`}
+           onClick={(e) => e.stopPropagation()}>geojson</a>
+      )}
+    </span>
+  )
+}
+
+export function LegendPanel({ dist, onEdit, isolate, onIsolate, weightedBy, onWeightedBy,
+                             exportCsv }: {
   dist: Distribution | null
   onEdit?: () => void
   /** The bin currently shown alone on the map, if any. */
@@ -64,6 +99,9 @@ export function LegendPanel({ dist, onEdit, isolate, onIsolate, weightedBy, onWe
   /** What the shares are weighted by. The heading always says which. */
   weightedBy?: string
   onWeightedBy?: (v: string) => void
+  /** p429-432, the legend's own `Export To Text File`. Beside its other two controls,
+   *  because this panel has no header to hang it on. */
+  exportCsv?: string
 }) {
   if (!dist) return <div className="loading">Loading…</div>
   return (
@@ -72,6 +110,7 @@ export function LegendPanel({ dist, onEdit, isolate, onIsolate, weightedBy, onWe
         <button className="legend-edit" onClick={onEdit}
                 title="Edit this KPI's colour scale">Edit scale</button>
       )}
+      {exportCsv && <ExportLinks csv={exportCsv} what="this legend" />}
       {onWeightedBy && (
         // The legend is where the stopped-vehicle bias is least suspected: a car held
         // ninety seconds in one bad spot puts ninety samples in the worst bin, and the
@@ -478,9 +517,18 @@ export function ParameterTree({
  * dock exists to answer is "what am I looking at", and the overlays with no control were
  * exactly the ones nobody could account for.
  */
-export function MapLayerDock({ layers, onToggle }: {
+export function MapLayerDock({ layers, onToggle, exportFor }: {
   layers: MapLayer[]
   onToggle: (t: LayerToggle) => void
+  /**
+   * Where a layer can be taken out of the tool, by layer id.
+   *
+   * A function rather than a field on MapLayer, because `view/maplayers.ts` describes what
+   * the map is DRAWING and nothing else - putting a URL there would make it depend on the
+   * screen's current parameters, and the whole point of that file is that it depends only
+   * on the contents. Layers with nothing to export get no link.
+   */
+  exportFor?: (id: string) => { csv?: string; geojson?: string; what: string } | null
 }) {
   if (layers.length === 0) {
     return <div style={{ padding: 8, color: '#666' }}>Nothing drawn on the map.</div>
@@ -504,6 +552,11 @@ export function MapLayerDock({ layers, onToggle }: {
             opacity: l.drawn ? 1 : 0.25,
           }} />
           <span style={{ flex: 1, opacity: l.drawn ? 1 : 0.5 }}>{l.label}</span>
+          {/* Only where the layer is actually drawn: a link that exports a layer the map
+              is not showing hands over a file the reader has never seen. */}
+          {l.drawn && exportFor?.(l.id) != null && (
+            <ExportLinks {...exportFor(l.id)!} />
+          )}
           <span style={{ color: '#666' }}>{l.drawn ? l.count : 'off'}</span>
         </div>
       ))}

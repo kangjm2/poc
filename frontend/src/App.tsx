@@ -37,6 +37,7 @@ import type { Correction } from './view/state'
 import { encodeView, parseView, reconcile } from './view/state'
 import type { ColorBy } from './view/paint'
 import { buildPciColors } from './view/paint'
+import type { ServingLine } from './api/types'
 import type { LayerToggle, MapContents } from './view/maplayers'
 import { describeLayers } from './view/maplayers'
 
@@ -186,6 +187,10 @@ export function App() {
   const [eventsHidden, setEventsHidden] = useState(false)
   /** The dotted line from the cursor to the cell serving it. Listed, so switchable. */
   const [servingLine, setServingLine] = useState(true)
+  // Off by default: the whole-drive fan is 1174 lines on the seeded city drive, and a map
+  // that opens under it hides the route it is drawn over. UC23 is a thing you turn ON to
+  // look at, which is also how the reference reaches it - as a layer you add.
+  const [showServingLines, setShowServingLines] = useState(false)
   /** A shape is a question being asked now, so it lives in state and is not persisted. */
   const [drawingArea, setDrawingArea] = useState(false)
   const [areaStats, setAreaStats] = useState<AreaStats | null>(null)
@@ -610,12 +615,24 @@ export function App() {
    * had switched off, and took the unfiltered footprint set so the cell filter typed into
    * the toolbar did nothing there.
    */
+  // Fetched only while the layer is on: it is one row per sample, and a drive that is not
+  // being asked the UC23 question should not pay for it.
+  const [servingLines, setServingLines] = useState<ServingLine[] | null>(null)
+  useEffect(() => {
+    if (sessionId == null || !showServingLines) { setServingLines(null); return }
+    api.servingLines(sessionId).then(setServingLines).catch(fail)
+  }, [sessionId, showServingLines, filterSpec, fail])
+
   const shownEvents = eventsHidden ? [] : events
+  // Fetched here rather than inside the panel so the map, the dock and the table read one
+  // answer. Above `mapContents` because the contents now carry it - see the `cells` branch.
+  const cellEstimates = useCellEstimates(workbook === 'cells' ? sessionId : null, locatorScore)
   const mapContents: MapContents | null =
     workbook === 'overview'
       ? {
         track, cells, bins, footprints: shownFootprints,
         showServingLine: servingLine, events: shownEvents,
+        servingLines: showServingLines ? servingLines : [],
       }
       : workbook === 'mobility'
         // The mobility map is where cell relationships are read, so it carries the fan of
@@ -629,18 +646,66 @@ export function App() {
           ? {
             track, cells, bins, footprints: shownFootprints,
             showServingLine: servingLine, events: shownEvents,
+            servingLines: showServingLines ? servingLines : [],
           }
-          : null
+          // The Cells map is about where the masts are: what the record says, and what the
+          // drive measured. No tiles, no footprints, no event pins - each would be a fourth
+          // kind of mark on a picture whose whole subject is the gap between two of them.
+          //
+          // It goes through `mapContents` like the other three because it must: this map
+          // was drawing estimates handed to RouteMap as a separate prop, so the Layers dock
+          // could not see them and the tab had no dock at all. `view/maplayers.ts` exists
+          // to prevent exactly that, and the change that added the overlay broke its rule.
+          : workbook === 'cells'
+            ? { track, cells, estimates: cellEstimates, showServingLine: servingLine }
+            : null
   // The switched-off ones, so the dock can offer them back. Everything about whether a
   // layer IS drawn still comes from the contents above.
   const layersOff: LayerToggle[] = [
     ...(showFootprints ? [] : ['footprints' as LayerToggle]),
     ...(eventsHidden ? ['events' as LayerToggle] : []),
+    ...(showServingLines ? [] : ['servingLines' as LayerToggle]),
   ]
   const mapLayers = mapContents ? describeLayers(mapContents, layersOff) : []
 
-  // Fetched here rather than inside the panel so the map and the table read one answer.
-  const cellEstimates = useCellEstimates(workbook === 'cells' ? sessionId : null, locatorScore)
+  /**
+   * Where each drawn layer can be taken out of the tool.
+   *
+   * Built here because this is where the on-screen parameters live: the KPI being shown,
+   * the tile size, the statistic painting them. The link has to carry what the reader is
+   * LOOKING at - a link built from defaults hands over a file of a different analysis and
+   * nothing about it says so. The global filter is added by `api.exportUrl` itself.
+   *
+   * Layers with no result behind them - the route, cell sites, event pins, the drawn shape -
+   * get nothing. Their data is the sample export, which the toolbar already offers.
+   */
+  const exportFor = (layerId: string) => {
+    if (sessionId == null) return null
+    if (layerId === 'bins') {
+      return {
+        csv: api.exportUrl(sessionId, 'csv',
+          { result: 'bins', kpi, sizeMeters: binSize, statistic: binStat }),
+        geojson: api.exportUrl(sessionId, 'geojson',
+          { result: 'bins', kpi, sizeMeters: binSize, statistic: binStat }),
+        what: 'these tiles',
+      }
+    }
+    if (layerId === 'servingLines') {
+      return {
+        csv: api.exportUrl(sessionId, 'csv', { result: 'serving-lines' }),
+        geojson: api.exportUrl(sessionId, 'geojson', { result: 'serving-lines' }),
+        what: 'a line from every sample to the cell that served it',
+      }
+    }
+    if (layerId === 'locator') {
+      return {
+        geojson: api.exportUrl(sessionId, 'geojson',
+          { result: 'cell-locator', minScore: locatorScore }),
+        what: 'the estimated positions and their distance from the record',
+      }
+    }
+    return null
+  }
 
   /**
    * Whether the screen on show consumes a toolbar group. One lookup, so a control is
@@ -666,6 +731,7 @@ export function App() {
       case 'footprints': setShowFootprints((v) => !v); break
       case 'events': setEventsHidden((v) => !v); break
       case 'servingLine': setServingLine((v) => !v); break
+      case 'servingLines': setShowServingLines((v) => !v); break
     }
   }
 
@@ -1039,10 +1105,10 @@ export function App() {
                 `isolate` is passed because this tab is marked isolates:true for its bar
                 chart - without it the legend's claim would be half true on the one tab
                 that now shows both a chart and a map. */}
-            <RouteMap track={track} cells={cells} cursorSeq={cursorSeq}
+            <RouteMap {...mapContents!} cursorSeq={cursorSeq}
                       frameKey={String(sessionId)} refitToken={refitToken}
                       onCursorChange={moveCursor} kpiName={activeDef?.displayName ?? kpi}
-                      estimates={cellEstimates} focusPci={focusPci}
+                      focusPci={focusPci}
                       onFilterCell={filterToCell}
                       isolate={isolate}
                       eventTypes={eventTypes} />
@@ -1250,14 +1316,14 @@ export function App() {
               {sessionId != null && (
                 <>
                   <a href={api.exportUrl(sessionId, 'csv')} download>CSV</a>
-                  <a href={api.exportUrl(sessionId, 'geojson', kpi)} download>GeoJSON</a>
+                  <a href={api.exportUrl(sessionId, 'geojson', { kpi })} download>GeoJSON</a>
                   <a href={api.reportUrl(sessionId)} target="_blank" rel="noreferrer"
                      title="Printable session report">Report</a>
                 </>
               )}
             </div>
             {range && (
-              <span className="filter-chip" title="Applies to the legend, statistics and degradation list">
+              <span className="filter-chip" title="Applies to the legend, statistics and degradation list - not to exports, which carry the global filter instead">
                 Filter: seq {range.from ?? 0}&ndash;{range.to ?? maxSeq}
                 <button onClick={() => setRange(null)} aria-label="Clear range filter">✕</button>
               </span>
@@ -1427,7 +1493,8 @@ export function App() {
                 <div className="dock-section" style={{ maxHeight: 200 }}>
                   <h3>Layers ({mapLayers.length})</h3>
                   <div className="content" style={{ maxHeight: 170 }}>
-                    <MapLayerDock layers={mapLayers} onToggle={toggleLayer} />
+                    <MapLayerDock layers={mapLayers} onToggle={toggleLayer}
+                                  exportFor={exportFor} />
                   </div>
                 </div>
               )}
@@ -1445,7 +1512,10 @@ export function App() {
                                  onEdit={activeDef ? () => setEditingScale(true) : undefined}
                                  isolate={isolate}
                                  onIsolate={tabIsolates ? setIsolate : undefined}
-                                 weightedBy={legendBasis} onWeightedBy={setLegendBasis} />
+                                 weightedBy={legendBasis} onWeightedBy={setLegendBasis}
+                                 exportCsv={sessionId == null ? undefined
+                                   : api.exportUrl(sessionId, 'csv',
+                                       { result: 'distribution', kpi, weightedBy: legendBasis })} />
                   )}
                 </div>
               </div>

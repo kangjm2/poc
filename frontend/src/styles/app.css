@@ -693,3 +693,12 @@ kbd {
 }
 .graph-vars input { width: 90px; font-size: 11px; }
 .graph-vars .dim { color: #888; }
+
+/* Export links, wherever a result can leave the tool. Small and quiet: they sit inside a
+   layer row and a panel header, and the row's own content is what the reader came for. */
+.export-links { display: inline-flex; gap: 6px; margin: 0 6px; }
+.export-links a {
+  font-size: 11px; color: #30578d; text-decoration: none;
+  border-bottom: 1px dotted #9db3d0;
+}
+.export-links a:hover { color: #1d3a63; border-bottom-style: solid; }

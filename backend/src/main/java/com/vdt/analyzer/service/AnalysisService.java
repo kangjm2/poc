@@ -120,6 +120,25 @@ public class AnalysisService {
         return s != null && !s.isBlank();
     }
 
+    /**
+     * How many of the measurement's samples the condition leaves. Null when there is none.
+     *
+     * The report prints the filter at the top and then printed a sample count that ignored
+     * it, so the one artifact that states its condition contradicted itself in its own
+     * metadata table. Both numbers now appear, because both are wanted: the reader needs to
+     * know what was measured AND what this document is about.
+     */
+    public Long filteredSampleCount(long sessionId, String filterSpec) {
+        if (filterSpec == null || filterSpec.isBlank()) return null;
+        GlobalFilter.Scope scope = GlobalFilter.scope(filterSpec, sessionId, "s");
+        List<Object> args = new ArrayList<>(List.of(sessionId));
+        args.addAll(GlobalFilter.params(scope));
+        return jdbc.queryForObject(
+                "SELECT count(*) FROM sample s WHERE s.session_id = ?"
+                        + GlobalFilter.and(scope),
+                Long.class, args.toArray());
+    }
+
     public SessionSummary getSession(long id) {
         return summarize(sessions.findById(id).orElseThrow(
                 () -> new NoSuchElementException("No session " + id)));

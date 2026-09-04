@@ -24,9 +24,16 @@ BLER 상승과 결합해 상태 기계로 격리합니다.
 **우리에게 필요한 데이터는 이미 다 있습니다.** 서빙 RSRP와 최강 이웃 RSRP — V7이
 넣었고, 실제로 `HO_MARGIN` 그래프로 계산해 본 적도 있습니다.
 
-**그런데 우리 데이터에서는 이 조건이 절대 발생하지 않습니다.** 시드 생성기가 매 표본
-argmax를 서빙 셀로 고르기 때문입니다. 커밋 `9262db0`의 정합성 불변식 #2가 바로 이것을
-단언합니다 — *"이웃이 서빙보다 강한 표본 = 0"* — 그리고 통과합니다.
+**그런데 우리 데이터에서는 이 조건이 절대 발생하지 않았습니다.** 시드 생성기가 매 표본
+argmax를 서빙 셀로 골랐기 때문입니다. 커밋 `9262db0`의 정합성 불변식 #2가 바로 이것을
+단언했습니다 — *"이웃이 서빙보다 강한 표본 = 0"*.
+
+> *2026-09-04 상태: 더 이상 그렇지 않습니다.* ④e에서 `DriveTestGenerator`가
+> `handoverLagSamples`(다른 셀이 더 강해진 뒤에도 N표본 동안 붙들고 있음)와
+> `strandedPci`(아무리 강해도 절대 서빙하지 않는 셀)를 받고, 고속도로 주행이 그 둘로
+> 시드됩니다. 그래서 "이웃이 서빙보다 강한 표본"이 실제로 존재하고 `MISSING_HANDOVER`와
+> `MISSING_NEIGHBOUR`가 거기서 발화합니다 — 위에 적은 불변식은 지금 그대로는 성립하지
+> 않습니다.
 
 > **결론**: 막고 있던 것은 이웃 셀 스키마가 아니라 **핸드오버 지연을 모델링하지 않는
 > 생성기**였습니다. 실제 망은 time-to-trigger와 히스테리시스가 있어 서빙 셀이 일시적으로
@@ -304,7 +311,7 @@ UC27을 보면 순서가 분명해집니다. 그 그래프의 **마지막 노드
 | **0** | **그래프의 두 번째 결과 모양을 결정** — KPI 실체화 외에 결과 집합 반환 경로를 둘 것인가 | 결정 | ✅ **정해졌고, 답은 "필요 없다"였습니다.** 점유를 진입 표본에 찍으면 `ts`가 `start_time`, 값이 `time_interval`이라 보통의 KPI 행에 들어갑니다(`KpiGraph.ladder()`) | **C9. 4·5번이 여기 매달려 있습니다** |
 | 1 | **`SOURCE_SAMPLE` 노드** (`latitude`·`longitude`·`speed_kmh`·`serving_pci`) | 작음 | ✅ 완료 — `KpiGraph`의 `SAMPLE_FIELDS`가 네 열을 허용 목록으로 들고, 노드는 `(session_id, seq, ts)`로 나와 KPI 소스와 그대로 붙습니다 | C9. 0번과 무관하게 지금 가능. 값은 이미 `sample`에 있음 |
 | 2 | **`SOURCE_EVENT` + 시간 상관** — 이벤트를 `(session_id, seq)` 척추에 얹기 | 중 | ✅ 완료 — `KpiGraph`의 `SOURCE_EVENT`가 이벤트를 **가장 가까운 표본**에 얹고(값은 그 표본에서 1, 나머지는 NULL), 시간 상관은 `CORRELATE` 노드 | C9. UC27의 **마지막** 노드. 이것 없이는 State Machine의 산출물을 쓸 데가 없음 |
-| 3 | 생성기에 **핸드오버 지연** 도입 → missing handover 조건 발생 | 중 | ⬜ **열려 있습니다.** `DriveTestGenerator`는 여전히 매 표본 argmax를 서빙으로 고르고(`if (rsrp > bestRsrp) …`), 주석이 "서빙 셀이 구성상 항상 최강"이라고 적습니다 | C1. 레퍼런스 대표 KPI를 재현 가능하게 만드는 전제 |
+| 3 | 생성기에 **핸드오버 지연** 도입 → missing handover 조건 발생 | 중 | ✅ **완료 (2026-09-04, ④e).** `DriveTestGenerator`가 `handoverLagSamples`와 `strandedPci`를 받고 서빙은 붙들고 있는 인덱스에서 나옵니다(`if (rsrp > bestRsrp && s.pci() != strandedPci)`). *이 칸은 09-03 13:31에 쓰였고 시드 변경은 그날 23:49에 들어왔습니다* | C1. 레퍼런스 대표 KPI를 재현 가능하게 만드는 전제 |
 | 4 | **진짜 State Machine** (전이 그래프 + 구간 출력 + `time_interval`) | 큼 | ✅ 완료 — `KpiGraph.ladder()` + `V13__classifier_rename.sql`. 전이 **그래프**가 아니라 순서 **사다리**이고 상태는 초기 + 3까지 | C2. **0번 결정 이후** |
 | 5 | **Previous / Current / Next Value** 상관 노드 | 중 | ✅ 완료 — `KpiGraph.Correlation` 다섯 개(PREVIOUS·CURRENT·NEXT + 두 fallback)와 `correlate()`. primary 게이팅도 여기 있습니다(p354의 규칙) | C8. **2번 이후** — 상관시킬 이벤트가 있어야 의미가 생김 |
 | 6 | **거리 가중 통계** (`statistics`·`distribution`·CDF·리포트) | 중 | ✅ 완료 — `WeightedStats` · `AggregationBasis`. 주행 여럿에 걸친 거리 가중은 `CohortService`가 이유를 대고 거부합니다 | C7. 1 Hz 균일이 못 없애는 유일한 편향 |

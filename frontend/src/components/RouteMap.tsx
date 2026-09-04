@@ -4,7 +4,7 @@ import 'leaflet/dist/leaflet.css'
 import type {
   AreaBin, CellFootprint, CellRef, DiffBin, EventType, MonitoredCell, NetworkEvent,
   TrackPoint,
-  CellEstimate,
+  CellEstimate, ServingLine,
 } from '../api/types'
 import type { ColorBy } from '../view/paint'
 import { buildPciColors, paint } from '../view/paint'
@@ -59,6 +59,8 @@ interface Props {
    * the analysis is for.
    */
   estimates?: CellEstimate[] | null
+  /** UC23: the whole drive's fan, one line per sample. Not the cursor's single line. */
+  servingLines?: ServingLine[] | null
   /**
    * Frame the map on one cell (UC18 p171: "the map zooms to the cell chosen in the grid").
    *
@@ -121,7 +123,7 @@ interface Props {
  */
 export function RouteMap({
   track, cells, cursorSeq, onCursorChange, kpiName, bins, showServingLine = true,
-  onFilterCell, estimates = null, focusPci = null,
+  onFilterCell, estimates = null, servingLines = null, focusPci = null,
   monitored = null, footprints = null, footprintNote = null, events = [], eventTypes,
   frameKey = '', refitToken = 0, colorBy = 'kpi', isolate = null,
   drawingArea = false, onAreaDrawn, diffBins = null,
@@ -146,6 +148,7 @@ export function RouteMap({
   const drawLayer = useRef<L.LayerGroup | null>(null)
   const diffLayer = useRef<L.LayerGroup | null>(null)
   const estimateLayer = useRef<L.LayerGroup | null>(null)
+  const servingFan = useRef<L.LayerGroup | null>(null)
   /** Vertices of the shape being drawn, in click order. */
   const [ring, setRing] = useState<[number, number][]>([])
   /**
@@ -264,8 +267,11 @@ export function RouteMap({
     if (!diffBins || diffBins.length === 0) return
     const frame: [number, number][] = []
     for (const b of diffBins) {
-      const dLat = b.sizeMeters / 111_320
-      const dLon = b.sizeMeters / (111_320 * Math.cos((b.centerLat * Math.PI) / 180))
+      // From the server, which is where the grid was cut. Recomputed here twice until
+      // 2026-09-04, from each tile's own latitude and with no floor on the cosine, while
+      // the server cut on the session centre with one - so the drawn tiles overlapped or
+      // left slivers, and neither picture was the grid the numbers came from.
+      const { latSpan: dLat, lonSpan: dLon } = b
       const oneSided = b.deltaValue == null
       const corners: [[number, number], [number, number]] = [
         [b.centerLat - dLat / 2, b.centerLon - dLon / 2],
@@ -297,8 +303,7 @@ export function RouteMap({
     layer.clearLayers()
     if (!bins || bins.length === 0) return
     for (const b of bins) {
-      const dLat = b.sizeMeters / 111_320
-      const dLon = b.sizeMeters / (111_320 * Math.cos((b.centerLat * Math.PI) / 180))
+      const { latSpan: dLat, lonSpan: dLon } = b
       L.rectangle(
         [[b.centerLat - dLat / 2, b.centerLon - dLon / 2],
          [b.centerLat + dLat / 2, b.centerLon + dLon / 2]],
@@ -545,6 +550,28 @@ export function RouteMap({
   }, [cells, onFilterCell])
 
   // Estimated cell positions, and the line to the record each one disagrees with.
+  /**
+   * UC23's fan: one line per sample to the cell that was serving it.
+   *
+   * Under the route rather than over it, and non-interactive: the lines are a shape to read
+   * whole, and 1174 of them competing for clicks would take the map's own gestures away.
+   * The colour is the layer's, not the cell's - a per-PCI palette here would collide with
+   * the route's own serving-cell colouring and claim the two pictures were the same one.
+   */
+  useEffect(() => {
+    const map = mapRef.current
+    if (!map) return
+    if (servingFan.current) { servingFan.current.remove(); servingFan.current = null }
+    if (!servingLines || servingLines.length === 0) return
+    const fan = L.layerGroup().addTo(map)
+    servingFan.current = fan
+    for (const l of servingLines) {
+      L.polyline([[l.latitude, l.longitude], [l.cellLatitude, l.cellLongitude]], {
+        color: '#b06a1f', weight: 0.7, opacity: 0.45, interactive: false,
+      }).addTo(fan)
+    }
+  }, [servingLines])
+
   useEffect(() => {
     const map = mapRef.current
     if (!map) return

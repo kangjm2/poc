@@ -53,6 +53,58 @@ page.on('pageerror', (e) => errors.push(String(e)))
 page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()) })
 
 const apiGet = async (path) => (await page.request.get(`${API}${path}`)).json()
+
+/**
+ * An exported CSV split into what it says about itself and what it contains.
+ *
+ * Three separate steps used to treat line 0 as the header. Once an export opens with
+ * '# key: value' provenance lines, `lines[0]` is a comment, and S11 was the sharp case -
+ * it EDITED line 0 to add two unknown columns and then appended a value pair to every
+ * line after it.
+ *
+ * Run against a file with six preamble lines that does something quietly absurd, which was
+ * measured rather than guessed: the two column NAMES land on a comment, and the header -
+ * now line 5 - receives the value pair meant for the fifth data row. The file that gets
+ * imported has two extra columns called `6` and `3.31`, its rows and header agree on the
+ * count, and the two named columns the scenario is about never exist. It would have gone
+ * red, but with a message about missing KPI definitions rather than about the header -
+ * which is the kind of red somebody fixes by loosening the assertion.
+ *
+ * So the rule lives here once. `preamble` is asserted on directly by the export steps -
+ * a file that stops saying what condition made it is a regression this suite must see.
+ */
+/**
+ * One CSV line into its cells, honouring quotes.
+ *
+ * `split(',')` was wrong here and passed anyway, which is the worse kind of wrong: the
+ * provenance columns hold sentences, several of them with commas ("yes - bins are
+ * quartiles of this measurement, no pass/fail implied"), so a naive split returned a
+ * fragment and the assertions that matched a prefix still went green. A checker that reads
+ * the file differently from the way the file is written is not reading the file.
+ */
+const csvCells = (line) => {
+  const out = []
+  let cur = ''
+  let quoted = false
+  for (let i = 0; i < line.length; i++) {
+    const ch = line[i]
+    if (ch === '"') {
+      if (quoted && line[i + 1] === '"') { cur += '"'; i++ } else quoted = !quoted
+    } else if (ch === ',' && !quoted) { out.push(cur); cur = '' } else cur += ch
+  }
+  out.push(cur)
+  return out
+}
+
+const csvParts = (text) => {
+  const lines = text.trim().split('\n')
+  const headerAt = lines.findIndex((l) => !l.startsWith('#'))
+  return {
+    preamble: lines.slice(0, headerAt === -1 ? lines.length : headerAt),
+    header: headerAt === -1 ? '' : lines[headerAt],
+    rows: headerAt === -1 ? [] : lines.slice(headerAt + 1),
+  }
+}
 const selectSession = async (label) => {
   await page.locator('.toolbar select[aria-label="Measurement"]').selectOption({ label })
   await page.waitForTimeout(1800)
@@ -169,10 +221,23 @@ scenario('S1 · Post-drive field analysis')
     `seq ${evSeqAfter} -> ${playSeq}, held at ${pausedSeq}`)
 
   const csv = await page.request.get(`${API}/api/sessions/${meta.id}/export.csv`)
-  const body = await csv.text()
-  const lines = body.trim().split('\n')
-  step('CSV export carries the full drive', csv.ok() && lines.length === meta.sampleCount + 1
-    && lines[0].includes('RSRP'), `${lines.length - 1} rows`)
+  const parts = csvParts(await csv.text())
+  step('CSV export carries the full drive', csv.ok()
+    && parts.rows.length === meta.sampleCount && parts.header.includes('RSRP'),
+    `${parts.rows.length} rows`)
+
+  // The file has to say what made it. Unfiltered, that is still a claim - 'none' is the
+  // difference between a file that was not narrowed and a file written before anyone
+  // thought to say. Both halves are checked because either alone survives the other's
+  // removal: the preamble is lost when rows are pasted elsewhere, the column is all the
+  // reader has then.
+  step('and says what condition made it, above the header and in every row',
+    parts.preamble.some((l) => l.startsWith('# measurement:'))
+    && parts.header.split(',').includes('global_filter')
+    && parts.rows.length > 0
+    && parts.rows.every((r) => csvCells(r).slice(-1)[0] === 'none'),
+    `${parts.preamble.length} preamble lines, last column ${
+      csvCells(parts.header).slice(-1)[0]}`)
 }
 
 // ─── S2 · Build A/B comparison ───────────────────────────────────────────────
@@ -200,8 +265,15 @@ scenario('S2 · Build A/B comparison')
   // The highway drive is also build 1.5.0, so the header alone cannot prove the
   // recompute; the sample-count meta (1200 vs 900) can.
   await page.locator('.panel select').nth(1).selectOption({ label: HIGHWAY })
-  await page.waitForTimeout(1500)
-  const meta2 = await page.locator('.panel > header .meta').first().innerText()
+  // Waits for the recompute, not for the clock. At a fixed 1500 ms this read the PRE-swap
+  // meta on a loaded machine and failed while the application was behaving correctly - and
+  // an intermittent step is one nobody trusts when it finally catches something. It still
+  // fails if the swap never recomputes; it just stops failing because the box was busy.
+  let meta2 = ''
+  for (let i = 0; i < 25 && !/900 samples/.test(meta2); i++) {
+    await page.waitForTimeout(400)
+    meta2 = await page.locator('.panel > header .meta').first().innerText()
+  }
   step('swapping a side recomputes the comparison', /900 samples/.test(meta2), meta2)
 }
 
@@ -653,14 +725,16 @@ scenario('S11 · Unknown columns become KPIs instead of being dropped')
 {
   const src = sessions.find((s) => s.name === CITY_B)
   const csv = await (await page.request.get(`${API}/api/sessions/${src.id}/export.csv`)).text()
-  const lines = csv.trim().split('\n')
+  const parts = csvParts(csv)
   // Two columns no catalogue of ours has ever contained: one integer, one with
-  // two decimals and a unit in the conventional parenthetical form.
-  lines[0] = `${lines[0]},Beam SSB index,Custom margin (dB)`
-  for (let i = 1; i < lines.length; i++) {
-    lines[i] = `${lines[i]},${i % 8},${(3.25 + i * 0.01).toFixed(2)}`
-  }
-  const withUnknown = lines.join('\n')
+  // two decimals and a unit in the conventional parenthetical form. Appended to the
+  // HEADER - it used to be `lines[0]`, which is a provenance comment now, and appending
+  // them there would have imported a file with neither column while still passing.
+  const withUnknown = [
+    ...parts.preamble,
+    `${parts.header},Beam SSB index,Custom margin (dB)`,
+    ...parts.rows.map((r, i) => `${r},${(i + 1) % 8},${(3.25 + (i + 1) * 0.01).toFixed(2)}`),
+  ].join('\n')
 
   const importFile = async (name, createUnknown) => {
     await openMode('Import')
@@ -1804,8 +1878,17 @@ scenario('S20 · One condition, every screen')
   // ── the numbers. One drive, one condition, one count - from twelve different queries.
   const sid = sessions.find((s) => s.name === CITY_A).id
   const csvRows = async (qs) =>
-    (await (await page.request.get(`${API}/api/sessions/${sid}/export.csv${qs}`)).text())
-      .trim().split('\n').length - 1
+    csvParts(await (await page.request.get(`${API}/api/sessions/${sid}/export.csv${qs}`)).text())
+      .rows.length
+  // One column of an exported result, by name off its own header - never by position,
+  // because a column added in the middle would silently move every assertion one over.
+  const csvValues = async (qs, column) => {
+    const p = csvParts(await (await page.request
+      .get(`${API}/api/sessions/${sid}/export.csv${qs}`)).text())
+    const at = csvCells(p.header).indexOf(column)
+    if (at < 0) return []
+    return p.rows.map((r) => csvCells(r)[at])
+  }
   const numbers = async (qs, amp) => ({
     statistics: (await apiGet(`/api/sessions/${sid}/statistics?kpi=RSRP${amp}`)).count,
     distribution: (await apiGet(`/api/sessions/${sid}/distribution?kpi=RSRP${amp}`)).total,
@@ -1820,6 +1903,23 @@ scenario('S20 · One condition, every screen')
       .reduce((a, b) => a + b.sampleCount, 0),
     geojson: (await apiGet(`/api/sessions/${sid}/export.geojson?kpi=RSRP${amp}`)).features.length,
     csv: await csvRows(qs),
+    // The RESULT exports, reduced to the same number. A tile export that forgot to pass
+    // the condition down to /bins would answer with the whole drive's tiles, and per-file
+    // "it got smaller" assertions would pass it - both files DO get smaller when the tile
+    // count drops. Only the shared number catches a file that narrowed differently from
+    // the screen it came from. §1.5.10.
+    binsCsv: (await csvValues(`?result=bins&kpi=RSRP&sizeMeters=150${amp}`, 'samples'))
+      .reduce((a, b) => a + Number(b), 0),
+    binsGeo: (await apiGet(
+      `/api/sessions/${sid}/export.geojson?result=bins&kpi=RSRP&sizeMeters=150${amp}`))
+      .features.reduce((a, f) => a + Number(f.properties.samples), 0),
+    distributionCsv: (await csvValues(`?result=distribution&kpi=RSRP${amp}`, 'count'))
+      .reduce((a, b) => a + Number(b), 0),
+    // One line per sample, so it reduces to the same number as everything else. Added
+    // 2026-09-04 with the endpoint: it was declared honoured in coverage() the day it was
+    // written and NOTHING here called it with a condition, which is precisely the hole
+    // /distance-bins fell through. Being on that list is not being checked.
+    servingLines: (await apiGet(`/api/sessions/${sid}/serving-lines${qs}`)).length,
   })
   const whole = await numbers('', '')
   const narrowed = await numbers(`?filter=${enc}`, `&filter=${enc}`)
@@ -1828,13 +1928,42 @@ scenario('S20 · One condition, every screen')
   step('unfiltered, every analytic reads the same whole drive',
     wholeSet.length === 1, JSON.stringify(whole))
 
-  // The witness that matters. Nine independent queries - three of them writing files
+  // The witness that matters. Thirteen independent queries - six of them writing files
   // rather than JSON - reduced to ONE number, so an endpoint that quietly skipped the
   // filter shows up as a second number rather than as a plausible screen.
   const narrowSet = [...new Set(Object.values(narrowed))]
-  step('filtered, they all read the same narrower drive - one number, nine queries',
+  step('filtered, they all read the same narrower drive - one number, thirteen queries',
     narrowSet.length === 1 && narrowSet[0] < wholeSet[0] && narrowSet[0] > 0,
     JSON.stringify(narrowed))
+
+  // ── `notevent:` had NO check anywhere until 2026-09-04. It shipped with ④, and the
+  //    coverage doc pointed at S26, which is about something else entirely - so the clause
+  //    that drops eleven samples per event was never driven by anything. Found by auditing
+  //    the documents against the code, which is a strange way to find a missing test and
+  //    the reason that audit is worth running.
+  //
+  //    The window is OUR number, not the reference's: the manual removes a failed CALL and
+  //    we have no call boundaries. So the assertion is arithmetic on that number - eleven
+  //    samples per event, exactly - rather than "fewer than before", which almost anything
+  //    satisfies.
+  const rlf = (await apiGet(`/api/sessions/${sid}/events`))
+    .filter((e) => e.eventType === 'RADIO_LINK_FAILURE')
+  const notEvent = encodeURIComponent('notevent:RADIO_LINK_FAILURE')
+  const before = await apiGet(`/api/sessions/${sid}/statistics?kpi=RSRP`)
+  const after = await apiGet(`/api/sessions/${sid}/statistics?kpi=RSRP&filter=${notEvent}`)
+  const described = (await apiGet(`/api/global-filter/describe?filter=${notEvent}`)).text
+  step('excluding an event type drops its window exactly, and the bar names the window',
+    rlf.length > 0 && before.count - after.count === rlf.length * 11
+    && described === 'excluding RADIO_LINK_FAILURE \u00b15 samples',
+    `${rlf.length} events, ${before.count} -> ${after.count} samples`
+    + ` (${rlf.length} x 11 = ${rlf.length * 11}) · "${described}"`)
+
+  // And the reason the feature exists: a bad call sitting on the percentile. If the
+  // excluded samples were ordinary ones this number would not move, and the exclusion
+  // would be arithmetic with no purpose.
+  step('and the percentile moves, which is the whole point of dropping them',
+    after.p05 > before.p05,
+    `P05 ${before.p05} -> ${after.p05}`)
 
   // Degradation and area statistics answer a different shape, so they are witnessed
   // separately rather than folded into the count above.
@@ -3158,6 +3287,33 @@ scenario('S26 · A control is offered only where something answers it')
     `${GROUPS.map(([l], i) => `${l}:${onMobility[i] ? 'yes' : 'no'}`).join(' ')}`
     + ` · area:${await areaShown()}`)
 
+  // ── the same rule one level down, in the Layers dock.
+  //
+  // The toolbar answers "does this SCREEN take the group". The dock answers "does this MAP
+  // draw the layer", and they are not the same question: the Cells map is a map, and it
+  // draws neither footprints nor event pins. The dock listed "Cell footprints - off"
+  // there anyway, because the switch is application-wide, so ticking it drew nothing and
+  // then deleted the row that had been ticked.
+  //
+  // Driven with footprints SWITCHED OFF, because that is the only state in which the bug
+  // is visible - a check run in the default state passes over it. §1.5.11.
+  await openWorkbook('Overview')
+  await page.waitForTimeout(1400)
+  const footprintBox = page.locator('.dock.right .map-layer', { hasText: 'Cell footprints' })
+    .locator('input[type=checkbox]')
+  if (await footprintBox.isChecked()) { await footprintBox.click(); await page.waitForTimeout(900) }
+  const overviewRows = await page.locator('.dock.right .map-layer').allInnerTexts()
+
+  await openWorkbook('Cells')
+  await page.waitForTimeout(2000)
+  const cellsRows = await page.locator('.dock.right .map-layer').allInnerTexts()
+  const names = (rows) => rows.map((t) => t.replace(/\s+/g, ' ').trim())
+  step('a map lists the layers IT draws, not every layer the application can switch',
+    names(overviewRows).some((t) => /^Cell footprints/.test(t))
+    && cellsRows.length > 0
+    && !names(cellsRows).some((t) => /^Cell footprints/.test(t)),
+    `Overview: ${names(overviewRows).join(' | ')} || Cells: ${names(cellsRows).join(' | ')}`)
+
   await page.goto(BASE, { waitUntil: 'domcontentloaded' })
   await page.waitForTimeout(2500)
 }
@@ -3291,6 +3447,17 @@ scenario('S28 · Where the cells really are, and whether the record agrees')
     drawn === est.length && drawn > 0,
     `${drawn} estimated positions drawn against ${est.length} estimated`)
 
+  // The dock names what the map is drawing, and it could not see this layer at all: the
+  // estimates reached RouteMap as a prop of their own instead of through `MapContents`,
+  // which is the one thing view/maplayers.ts exists to forbid. A map with an overlay the
+  // Layers list cannot account for is the defect that file was written for, and the change
+  // that added this overlay committed it.
+  const layerRows = await page.locator('.dock.right .map-layer').allInnerTexts()
+  const locatorRow = layerRows.find((t) => /Estimated cell positions/.test(t))
+  step('and the Layers dock accounts for the overlay, by name and by count',
+    locatorRow != null && locatorRow.trim().endsWith(String(est.length)),
+    locatorRow ? locatorRow.replace(/\s+/g, ' ').trim() : `no such row in [${layerRows.join(' | ')}]`)
+
   const rows = await page
     .locator('.panel:has(header .title:text-is("Cell locator")) tbody tr').count()
   const firstRow = await page
@@ -3423,6 +3590,235 @@ scenario('S29 · A graph that asks its question at run time')
 }
 
 // ─── wrap-up ─────────────────────────────────────────────────────────────────
+// ─── S30 · The analysis leaves the tool, saying what it is ───────────────────
+//
+// UC15 step 4 (p156), UC21's two routes (p176) and the legend's `Export To Text File`
+// (p429-432). What the reference exports from these objects is the ANALYSIS - the tiles
+// with the statistic that painted them, the estimated positions with their confidence, the
+// legend with its bins - not the samples underneath. Exporting only samples leaves the
+// reader to re-derive the analysis in a spreadsheet, from a thousand rows, with no way to
+// check the result against the screen.
+scenario('S30 · The analysis leaves the tool, saying what it is')
+{
+  const sid = sessions.find((x) => x.name === CITY_A).id
+  const url = (kind, qs) => `${API}/api/sessions/${sid}/export.${kind}?${qs}`
+  const getCsv = async (qs) => csvParts(await (await page.request.get(url('csv', qs))).text())
+  const getGeo = async (qs) => (await page.request.get(url('geojson', qs))).json()
+
+  // ── the exact count, not "> 0". A writer that drops the last row passes any
+  //    non-emptiness check, and the file it produces looks complete. §1.5.16.
+  const bins = await apiGet(`/api/sessions/${sid}/bins?kpi=RSRP&sizeMeters=150`)
+  const binsCsv = await getCsv('result=bins&kpi=RSRP&sizeMeters=150')
+  const binsGeo = await getGeo('result=bins&kpi=RSRP&sizeMeters=150')
+  const dist = await apiGet(`/api/sessions/${sid}/distribution?kpi=RSRP`)
+  const distCsv = await getCsv('result=distribution&kpi=RSRP')
+  const est = await apiGet(`/api/sessions/${sid}/cell-locator`)
+  const estGeo = await getGeo('result=cell-locator')
+  const withRef = est.filter((e) => e.refLatitude != null)
+
+  step('every row of the analysis reaches the file, counted exactly',
+    bins.length > 0 && binsCsv.rows.length === bins.length
+    && binsGeo.features.length === bins.length
+    && dist.bins.length > 0 && distCsv.rows.length === dist.bins.length
+    // Two features per cell where there is a record to disagree with: the estimate, and
+    // the line to where the record puts it.
+    && est.length > 0 && estGeo.features.length === est.length + withRef.length,
+    `bins ${binsCsv.rows.length}/${bins.length} csv, ${binsGeo.features.length} geo · `
+    + `legend ${distCsv.rows.length}/${dist.bins.length} · `
+    + `locator ${estGeo.features.length} features from ${est.length} cells (${withRef.length} with a record)`)
+
+  // ── the tile is the tile the map drew. Recomputing the corners in the writer would give
+  //    a third answer: the grid is cut on the measurement's centre latitude, and until
+  //    today the browser drew each tile from its own with no floor on the cosine.
+  //
+  //    EVERY tile, not the first. The tiles near the measurement's centre latitude are
+  //    exactly the ones where a per-tile cosine and a centre-latitude cosine agree, so a
+  //    step that sampled one could sample the one that cannot show the difference - and
+  //    when this was first written it did, and the injection passed. Measured on this
+  //    drive the two conventions differ by up to 5.3e-6 degrees; the tolerance below is
+  //    2e-6, which is the most that six-decimal printing can account for.
+  let worstLat = 0
+  let worstLon = 0
+  let ringsOk = binsGeo.features.length === bins.length
+  for (const f of binsGeo.features) {
+    const r = f.geometry.coordinates[0]
+    if (r.length !== 5 || r[0][0] !== r[4][0] || r[0][1] !== r[4][1]) { ringsOk = false; continue }
+    const b = bins.find((x) => Math.abs(x.centerLat - (r[0][1] + r[2][1]) / 2) < 1e-6
+                            && Math.abs(x.centerLon - (r[0][0] + r[2][0]) / 2) < 1e-6)
+    if (!b) { ringsOk = false; continue }
+    worstLat = Math.max(worstLat, Math.abs((r[2][1] - r[0][1]) - b.latSpan))
+    worstLon = Math.max(worstLon, Math.abs((r[2][0] - r[0][0]) - b.lonSpan))
+  }
+  step('every tile is exported as the rectangle the grid was cut on, closed',
+    ringsOk && worstLat < 2e-6 && worstLon < 2e-6,
+    `${binsGeo.features.length} rings, worst deviation ${worstLat.toExponential(2)} lat `
+    + `${worstLon.toExponential(2)} lon`)
+
+  // ── what the screen states around the number travels with it. Read off the RESULT: the
+  //    file has to say [Minimum] because the tiles were painted from their minimum, not
+  //    because the request said so - those come apart the moment a value is defaulted.
+  const minCsv = await getCsv('result=bins&kpi=RSRP&sizeMeters=150&statistic=MINIMUM')
+  const avgCsv = await getCsv('result=bins&kpi=RSRP&sizeMeters=150')
+  const col = (p, name) => {
+    const at = csvCells(p.header).indexOf(name)
+    return at < 0 ? [] : p.rows.map((r) => csvCells(r)[at])
+  }
+  step('the statistic that painted the tiles is in the file, and it is the one used',
+    minCsv.preamble.some((l) => /^# statistic: \[Minimum\]/.test(l))
+    && avgCsv.preamble.some((l) => /^# statistic: \[Average\]/.test(l))
+    && col(minCsv, 'statistic').every((v) => v === '[Minimum]')
+    // The painted value must actually differ, or the label is decoration on identical files.
+    && JSON.stringify(col(minCsv, 'painted_value')) !== JSON.stringify(col(avgCsv, 'painted_value')),
+    `minimum: ${col(minCsv, 'painted_value').slice(0, 3).join(',')} · `
+    + `average: ${col(avgCsv, 'painted_value').slice(0, 3).join(',')}`)
+
+  // ── derived is a column, because a legend built from this drive's own quartiles is
+  //    indistinguishable from a configured one and reads as a pass/fail nobody made.
+  //    Made here rather than looked for: every KPI in the seed is configured, so a check
+  //    that hunted for an unconfigured one would find none and pass on an empty set. Strip
+  //    one the way a newly imported KPI arrives, export, put it back - the same technique
+  //    S10 uses for the same reason.
+  const stripped = 'CQI'
+  await page.request.delete(`${API}/api/kpi-definitions/${stripped}/thresholds`)
+  const derivedDist = await apiGet(`/api/sessions/${sid}/distribution?kpi=${stripped}`)
+  const derivedCsv = await getCsv(`result=distribution&kpi=${stripped}`)
+  await page.request.post(`${API}/api/kpi-definitions/${stripped}/thresholds/reset`)
+
+  step('a legend says whether its colours are a judgement or this drive ranked against itself',
+    derivedDist.derived === true && derivedCsv.rows.length > 0
+    && col(derivedCsv, 'derived').every((v) => v.startsWith('yes'))
+    && distCsv.rows.length > 0
+    && col(distCsv, 'derived').every((v) => v.startsWith('no')),
+    `${stripped}: ${col(derivedCsv, 'derived')[0]} · RSRP: ${col(distCsv, 'derived')[0]}`)
+
+  // ── the condition, from what the SOURCE does rather than from a second list. An exempt
+  //    result must not print a blank: a file that drops the condition silently is read as a
+  //    file the condition did not change.
+  const enc = encodeURIComponent('kpi:RSRQ:>=:-12')
+  const binsFiltered = await getCsv(`result=bins&kpi=RSRP&sizeMeters=150&filter=${enc}`)
+  const locFiltered = await getCsv(`result=cell-locator&filter=${enc}`)
+  step('an honoured result narrows and says so; an exempt one says it did NOT',
+    binsFiltered.rows.length > 0 && binsFiltered.rows.length < bins.length
+    && col(binsFiltered, 'global_filter').every((v) => /RSRQ/.test(v) && !/not applied/.test(v))
+    && locFiltered.rows.length === est.length
+    && col(locFiltered, 'global_filter').every((v) => v.startsWith('not applied')),
+    `bins ${bins.length} -> ${binsFiltered.rows.length} · locator stays ${locFiltered.rows.length}`
+    + `, saying "${col(locFiltered, 'global_filter')[0]?.slice(0, 40)}…"`)
+
+  // ── UC23. The line is only worth exporting if it IS the line: the geometry's two ends
+  //    have to be the sample and the recorded cell, and `metres` has to describe that same
+  //    pair. A column of plausible distances beside geometry computed some other way is
+  //    the failure this pins down - both look right on their own.
+  const lines = await apiGet(`/api/sessions/${sid}/serving-lines`)
+  const linesCsv = await getCsv('result=serving-lines')
+  const linesGeo = await getGeo('result=serving-lines')
+  const metresApart = (a, b) => {
+    const R = 6371000
+    const dLat = (b[1] - a[1]) * Math.PI / 180
+    const dLon = (b[0] - a[0]) * Math.PI / 180
+    const la1 = a[1] * Math.PI / 180
+    const la2 = b[1] * Math.PI / 180
+    const h = Math.sin(dLat / 2) ** 2 + Math.cos(la1) * Math.cos(la2) * Math.sin(dLon / 2) ** 2
+    return 2 * R * Math.asin(Math.sqrt(h))
+  }
+  const stated = col(linesCsv, 'metres').map(Number)
+  const drawnLen = linesGeo.features.map((f) => metresApart(...f.geometry.coordinates))
+  // A metre of slack: both ends are printed at six decimals before this recomputes them.
+  const worstMetres = drawnLen.length === stated.length && stated.length > 0
+    ? Math.max(...drawnLen.map((m, i) => Math.abs(m - stated[i]))) : Infinity
+  step('a serving cell line is the line it says it is, and its length describes that line',
+    lines.length > 0 && linesCsv.rows.length === lines.length
+    && linesGeo.features.length === lines.length
+    && linesGeo.features.every((f) => f.geometry.type === 'LineString'
+                                   && f.geometry.coordinates.length === 2)
+    && worstMetres < 1,
+    `${lines.length} lines, worst length disagreement ${worstMetres.toFixed(3)} m`)
+
+  // ── a request that cannot mean anything is refused rather than answered with a file that
+  //    looks like the one that was asked for.
+  const status = async (kind, qs) => (await page.request.get(url(kind, qs))).status()
+  const refusals = {
+    unknownResult: await status('csv', 'result=nope&kpi=RSRP'),
+    unreadParam: await status('csv', 'result=distribution&kpi=RSRP&sizeMeters=500'),
+    noGeometry: await status('geojson', 'result=distribution&kpi=RSRP'),
+    missingKpi: await status('csv', 'result=bins&sizeMeters=150'),
+  }
+  step('a request the result cannot answer is refused, not filled in',
+    Object.values(refusals).every((v) => v === 400), JSON.stringify(refusals))
+
+  // ── the link on the screen, read as rendered. Calling the server directly proves the
+  //    server; it says nothing about whether the screen would ask it the right question,
+  //    which is where §1.5.15 says the defect actually lives.
+  await selectSession(CITY_A)
+  await openWorkbook('Overview')
+  await page.locator('.toolbar select[aria-label="Area bins"]').selectOption('150')
+  await page.waitForTimeout(1500)
+  const statSelect = page.locator('.toolbar select[aria-label="Bin statistic"]')
+  if (await statSelect.count() > 0) {
+    await statSelect.selectOption('MINIMUM')
+    await page.waitForTimeout(1500)
+  }
+  const binHref = await page.locator('.dock.right .map-layer', { hasText: 'Area bins' })
+    .locator('a[download]').first().getAttribute('href')
+
+  // ── the fan is a layer you turn ON, and the link exists only once it is drawn.
+  //    Exporting a layer the map is not showing hands over a file the reader has never
+  //    seen, which is the same rule the dock follows for the tiles.
+  const fanRow = page.locator('.dock.right .map-layer', { hasText: 'Serving cell lines' })
+  const linkWhileOff = await fanRow.locator('a[download]').count()
+  const pathsBefore = await page.locator('.leaflet-overlay-pane path').count()
+  await fanRow.locator('input[type=checkbox]').click()
+  await page.waitForTimeout(5000)
+  const pathsAfter = await page.locator('.leaflet-overlay-pane path').count()
+  const fanHref = await fanRow.locator('a[download]').first().getAttribute('href')
+  step('UC23 draws before it exports, and offers no link for a layer it is not drawing',
+    linkWhileOff === 0 && pathsAfter - pathsBefore === lines.length
+    && fanHref != null && /result=serving-lines/.test(fanHref),
+    `${linkWhileOff} links while off · ${pathsBefore} -> ${pathsAfter} paths for `
+    + `${lines.length} lines · ${fanHref}`)
+  await fanRow.locator('input[type=checkbox]').click()
+  await page.waitForTimeout(1200)
+  step('the link on the layer asks for what the screen is showing, not for the defaults',
+    binHref != null && /result=bins/.test(binHref) && /kpi=RSRP/.test(binHref)
+    && /sizeMeters=150/.test(binHref)
+    && (await statSelect.count() === 0 || /statistic=MINIMUM/.test(binHref)),
+    binHref ?? 'no link on the Area bins row')
+
+  // And the condition rides along, because the link is built through the same `filtered`
+  // as every fetch - the reason `result=` is a parameter rather than a path of its own.
+  await page.locator('#gf-spec').fill('kpi:RSRQ:>=:-12')
+  await page.locator('.globalfilter button', { hasText: 'Apply' }).click()
+  await page.waitForTimeout(1800)
+  const filteredHref = await page.locator('.dock.right .map-layer', { hasText: 'Area bins' })
+    .locator('a[download]').first().getAttribute('href')
+  step('and it carries the condition in force, without a line of its own to maintain',
+    filteredHref != null && /filter=/.test(filteredHref) && /RSRQ/.test(filteredHref),
+    filteredHref ?? 'no link')
+
+  // ── every attachment point, not the two that were convenient.
+  //
+  //    There are five: three Layers rows, the legend's controls, the Cell locator table.
+  //    The steps above drive two of them, which is the sampling bias §1.5.17 is about - a
+  //    link that stopped carrying the condition on the legend would pass every check here
+  //    while the two it does drive stayed green. So this reads EVERY rendered href on the
+  //    two screens that hold them and holds all of them to the same rule.
+  const allLinks = async () => page.locator('.dock.right .export-links a, .panels .export-links a')
+    .evaluateAll((as) => as.map((a) => a.getAttribute('href')))
+  const onOverview = await allLinks()
+  await openWorkbook('Cells')
+  await page.waitForTimeout(2500)
+  const onCells = await allLinks()
+  const every = [...onOverview, ...onCells]
+  step('every export link on screen names a result and carries the condition',
+    every.length >= 4
+    && every.every((h) => /[?&]result=/.test(h) && /[?&]filter=/.test(h)),
+    `${every.length} links: ${every.map((h) => h.replace(/^.*result=/, '')
+      .replace(/&filter=.*/, '+filter')).join(' | ')}`)
+
+  await page.goto(BASE, { waitUntil: 'domcontentloaded' })
+  await page.waitForTimeout(2500)
+}
+
 const appErrors = errors.filter((e) =>
   !/tile\.openstreetmap\.org|ERR_CONNECTION|Failed to load resource|ERR_TIMED_OUT/.test(e))
 scenario('Cross-cutting')

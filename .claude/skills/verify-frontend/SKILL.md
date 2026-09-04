@@ -11,7 +11,7 @@ committing UI-affecting work; a change is not "verified" until all pass.
 | Checker | Catches | Cost |
 |---|---|---|
 | `node scripts/verify-ui.mjs` | Individual behaviour regressions (125 checks) | ~60s |
-| `node scripts/verify-scenarios.mjs` | Broken user journeys — steps carry state (283 steps, 29 scenarios) | ~90s |
+| `node scripts/verify-scenarios.mjs` | Broken user journeys — steps carry state (299 steps, 30 scenarios) | ~90s |
 | `node tools/uxtest/api-surface.mjs` | Logic-without-view: endpoints or client methods nothing renders | ~5s |
 
 ## Service lifecycle (required before browser checks)
@@ -37,9 +37,23 @@ before the restart.
 - A scenario step failure means the *journey* is broken at that point — read the
   steps above it in the same scenario; the failing step often only inherits bad
   state from an earlier UI change (e.g. a workbook that was never switched back).
-- `api-surface.mjs` failing means something was added on one side only. Fix by
-  wiring the UI (preferred) or deleting the dead endpoint/method — never by
-  weakening the checker.
+- `api-surface.mjs` exits non-zero for six reasons, and only two of them mean
+  "added on one side only":
+  - an endpoint no client method calls, or a client method no component calls —
+    fix by wiring the UI (preferred) or deleting the dead one;
+  - a session analytic named in NEITHER column of `GlobalFilter.coverage()` —
+    fix by adding a `Coverage` entry, honoured or exempt with a reason. A path
+    that is on neither list is never called twice by the step that would catch
+    it, so it passes every check while ignoring the condition. Three were found
+    this way on 2026-09-04;
+  - a `@…Mapping` annotation the extractor could not read — fix the extractor,
+    not the count;
+  - the KPI-reachability probe failing to launch — that is the environment (the
+    stack has to be up), and the run reports 2 of 3 checks ran rather than
+    passing;
+  - a KPI defined server-side but unreachable in the tree.
+
+  Never by weakening the checker.
 
 ## Adding assertions — the validated rules
 

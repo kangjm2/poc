@@ -84,7 +84,7 @@ public class CellLocatorService {
      * Not a confidence of 1 but an absence: three samples produce a centroid that is
      * exactly the mean of three points on a road, which is a statement about the road.
      */
-    private static final int MIN_SAMPLES = 12;
+    static final int MIN_SAMPLES = 12;
 
     /**
      * How far below a cell's best sample still counts as "close to the site", in dB.
@@ -93,7 +93,7 @@ public class CellLocatorService {
      * and thin cells lose the sample count they need; looser and the far tail of the drive
      * drags the centroid back down the road.
      */
-    private static final double NEAR_WINDOW_DB = 8.0;
+    static final double NEAR_WINDOW_DB = 8.0;
 
     private final JdbcTemplate jdbc;
 

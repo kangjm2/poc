@@ -42,8 +42,10 @@ Base Stations · Maps · Polygons · Data Source Files · Macros · Reports.
 > **남은 것은 그리는 것이 아니라 간직하는 것입니다.** 폴리곤을 이름 붙여 저장했다가 다시
 > 쓰는 자산(`Area | Name`)이 없어 그린 영역은 화면을 떠나면 사라지고, 저장 스키마에도
 > 폴리곤 테이블이 없습니다. `Folder from area`는 폴더 개념 자체가 없어 없습니다. 그리고
-> **전역 필터의 문법에도 폴리곤 항이 없습니다** — `GlobalFilter`가 받는 것은 `kpi:…`와
-> `cell:…` 둘뿐이라, p467이 말하는 "폴리곤을 전역 조건으로"는 그대로 남은 격차입니다.
+> **전역 필터의 문법에도 폴리곤 항이 없습니다** — `GlobalFilter`가 받는 것은 `kpi:…` ·
+> `cell:…` · `notevent:…` 셋이라(*2026-09-04 정정: "둘뿐"이라 적혀 있었고 셋째가 2026-09-03에
+> 더해졌습니다 — 결론은 그대로 맞고 그것을 받치는 열거가 낡아 있었습니다*), p467이 말하는
+> "폴리곤을 전역 조건으로"는 그대로 남은 격차입니다.
 
 ---
 
@@ -76,7 +78,7 @@ Interval·Direction**과, 구간 경계의 어느 쪽을 포함할지 정하는 
 | 뷰 | 페이지 | 우리 |
 |---|---|---|
 | **Graphs** (line / bar / scatter / **color grid** / **surface**) | 94–111 | ◐ 라인·바·파이. color grid·surface 없음 |
-| **Grids** (+ Side panel, Row details, Export) | 112–121 | ✅ 표 |
+| **Grids** (+ Side panel, Row details, Export) | 112–121 | ◐ 표·행 상세는 있고 그리드의 `Export Data To`는 없음 — *2026-09-04 정정: 이름에 Export를 담고도 ✅로 세고 있었습니다.* 범례와 Cell locator 표는 자기 내보내기를 갖습니다(2026-09-04) |
 | **Maps / Live Maps** (+ **Google Street View**) | 122–131 | ◐ Street View 없음 |
 | **MapX** (Map/Route/BTS properties, 심볼 경로) | 132–146 | ⛔ MapInfo 자산 계열 |
 | **Spreadsheet grid** (셀 서식·필터·**수식**·함수) | 180–189 | ⛔ |
@@ -178,7 +180,7 @@ Troubleshooting toolkit의 **선택 구성요소**입니다.
 - 페이지 추가, 저장, **PDF / MS Word / MS PowerPoint / 이미지로 내보내기**, 복사, 속성
 
 > **우리**: 사용자 구성 워크북은 만들었지만 **레이아웃 프리셋(2×2 등)과 기성 워크북
-> 라이브러리가 없습니다.** 내보내기는 리포트 HTML 하나뿐입니다.
+> 라이브러리가 없습니다.** 내보내기는 리포트 HTML 하나뿐입니다. *(2026-09-04 정정: 툴바에 CSV·GeoJSON·리포트 셋이 있고, 그 위에 분석 결과 넷이 더 있습니다 — 타일 · 범례 · 추정 셀 위치 · 서빙 셀 선. 다만 **워크북 자신의 내보내기는 여전히 없고**, 리포트는 워크북이 아니라 세션 단위입니다.)*
 
 ---
 
