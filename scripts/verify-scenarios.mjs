@@ -3253,6 +3253,10 @@ scenario('S28 · Where the cells really are, and whether the record agrees')
   // The reference attaches "<100 m" to a score, so ours has to mean the same thing or the
   // column is decoration. This is the assertion the confidence formula must satisfy - if a
   // future drive puts a high-confidence estimate past 100 m, the weights were wrong.
+  // It has already caught exactly that: the weights were chosen on three drives and this
+  // step went red on the fourth (198 m at 6). See ui-testing/README.md 1.5.19 - a check
+  // that restated the formula would have stayed green, because the formula had not
+  // changed; what broke was what the formula PROMISED.
   const good = withRef.filter((e) => e.confidence >= 6)
   const worst = good.length ? Math.max(...good.map((e) => e.errorMetres)) : null
   step('and a confidence of 6 or more means inside 100 m, the accuracy the manual claims',
