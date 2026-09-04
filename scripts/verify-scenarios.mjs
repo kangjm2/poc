@@ -3761,6 +3761,26 @@ scenario('S30 · The analysis leaves the tool, saying what it is')
     filteredHref != null && /filter=/.test(filteredHref) && /RSRQ/.test(filteredHref),
     filteredHref ?? 'no link')
 
+  // ── every attachment point, not the two that were convenient.
+  //
+  //    There are five: three Layers rows, the legend's controls, the Cell locator table.
+  //    The steps above drive two of them, which is the sampling bias §1.5.17 is about - a
+  //    link that stopped carrying the condition on the legend would pass every check here
+  //    while the two it does drive stayed green. So this reads EVERY rendered href on the
+  //    two screens that hold them and holds all of them to the same rule.
+  const allLinks = async () => page.locator('.dock.right .export-links a, .panels .export-links a')
+    .evaluateAll((as) => as.map((a) => a.getAttribute('href')))
+  const onOverview = await allLinks()
+  await openWorkbook('Cells')
+  await page.waitForTimeout(2500)
+  const onCells = await allLinks()
+  const every = [...onOverview, ...onCells]
+  step('every export link on screen names a result and carries the condition',
+    every.length >= 4
+    && every.every((h) => /[?&]result=/.test(h) && /[?&]filter=/.test(h)),
+    `${every.length} links: ${every.map((h) => h.replace(/^.*result=/, '')
+      .replace(/&filter=.*/, '+filter')).join(' | ')}`)
+
   await page.goto(BASE, { waitUntil: 'domcontentloaded' })
   await page.waitForTimeout(2500)
 }

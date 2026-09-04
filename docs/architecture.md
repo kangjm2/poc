@@ -39,7 +39,9 @@
 │                                                                    │
 │  service/     AnalysisService   읽기 분석 (전량 SQL 집계)           │
 │               GeoAnalysisService 공간 분석                          │
-│               ExportService     CSV 피벗 · GeoJSON 스트리밍         │
+│               ExportService     표본 스트리밍 · 결과 테이블 쓰기      │
+│               ResultExports     내보낼 수 있는 결과의 레지스트리      │
+│               ExportScope/Csv   파일이 자기를 설명하는 방식 · 서식     │
 │               KpiCatalog        KPI 정의 조회 · 값→구간 판정        │
 │               AutoScale         임계값 없는 KPI의 스케일 파생        │
 │               KpiSql            구간 분류 SQL 생성                  │
@@ -411,11 +413,14 @@ select·join·group by 하든 끼워 넣기만 하면 됩니다. 그래서 "이 
 | GET | `/compare?a&b&kpis` | 두 세션 KPI별 통계·판정 |
 | GET | `/cohorts?kpi&groupBy&holdConstant&…` | 주행 속성으로 묶은 **그룹별 풀링 통계**. 좁히는 파라미터는 `/sessions`의 것과 같습니다(§4.7) |
 
-> **`filter=`는 위 표의 대부분과 아래 표의 일부가 함께 받습니다** — `track` · `series` ·
-> `distribution` · `statistics` · `cell-breakdown` · `degradations` · `area-statistics` ·
-> `bins` · `cell-footprints` · `export.csv` · `export.geojson` · `report.html` · `cohorts`
-> 열셋입니다.
-> 어느 것이 받고 어느 것이 받지 않는지는 문서가 아니라 `/global-filter/coverage`가 답합니다.
+> **`filter=`는 위 표의 대부분과 아래 표의 일부가 함께 받습니다.** 어느 것이 받고 어느 것이
+> 받지 않는지는 **문서가 아니라 `/global-filter/coverage`가 답합니다** — 그것이 그 목록의
+> 요점이고, 여기에 이름을 다시 적으면 두 곳이 됩니다.
+>
+> *2026-09-04 정정: 실제로 그렇게 됐습니다.* 이 자리에 열셋이 손으로 적혀 있었고 그 목록에는
+> `distance-bins`가 **빠져 있었습니다** — 지키는데도요. 그래서 목록을 지우고 숫자만 남깁니다:
+> 오늘 **지킴 15 · 면제 14**이고, 면제는 전부 20자 넘는 사유를 답니다. 지키지도 면제도 아닌
+> 경로가 하나라도 있으면 `api-surface.mjs`가 빨개집니다(2026-09-04에 셋을 그렇게 찾았습니다).
 
 ### 공간·내보내기
 
@@ -428,8 +433,18 @@ select·join·group by 하든 끼워 넣기만 하면 됩니다. 그래서 "이 
 | GET | `/sessions/{id}/neighbour-breakdown` | 드라이브 전체 셀 검출 요약 (p95·검출률·서빙률) |
 | GET | `/sessions/{id}/pilot-pollution` | 경합 셀 구간 |
 | GET | `/sessions/{id}/coverage-issues?weakRsrpDbm&poorSinrDb&overshootKm` | 커버리지 문제 자동 탐지 (기본 -105 dBm · 0 dB · 3 km) |
-| GET | `/sessions/{id}/export.csv` | 전 KPI 피벗 CSV (스트리밍) |
-| GET | `/sessions/{id}/export.geojson?kpi` | 지리 데이터 |
+| GET | `/sessions/{id}/serving-lines` | **UC23** — 표본마다 그때 서빙하던 셀까지의 선분 하나 |
+| GET | `/sessions/{id}/export.csv?result=&…` | 표본 피벗(스트리밍), 또는 `result=`가 고른 **분석 결과** |
+| GET | `/sessions/{id}/export.geojson?result=&kpi&…` | 같은 결과의 지오메트리 |
+
+> **`result=`가 경로가 아니라 파라미터인 이유.** 클라이언트는 `filter=`를 붙일지를 `?` 앞의
+> 경로로 판정하므로, `?result=bins`는 이미 목록에 있는 `/export.csv` 항목이 **한 줄도 고치지
+> 않고** 덮습니다. 결과마다 경로를 만들면 그 목록에 결과마다 한 줄이 필요하고, 그 목록이 낡는
+> 것이 `distance-bins`가 조건 없이 배포된 경위입니다.
+>
+> 오늘 나가는 결과는 넷입니다 — `bins` · `distribution` · `cell-locator` · `serving-lines`.
+> 어느 파라미터를 읽는지는 `ResultExports`가 결과마다 선언하고, **읽지 않는 파라미터가 오면
+> 400**입니다: `?result=distribution&sizeMeters=500`은 500 m짜리 범례가 아니라 없는 것입니다.
 
 ### KPI 카탈로그
 
@@ -466,9 +481,9 @@ select·join·group by 하든 끼워 넣기만 하면 됩니다. 그래서 "이 
 | 검사기 | 잡는 것 | 규모 (2026-09-02) |
 |---|---|---|
 | `scripts/verify-ui.mjs` | 개별 동작 회귀 | 125개 |
-| `scripts/verify-scenarios.mjs` | 여정 회귀 — 단계 간 상태가 이어짐 | 283단계 / 29 시나리오 |
+| `scripts/verify-scenarios.mjs` | 여정 회귀 — 단계 간 상태가 이어짐 | 297단계 / 30 시나리오 |
 | `tools/uxtest/api-surface.mjs` | **로직은 있는데 뷰가 없는** 격차 | 엔드포인트 · 클라이언트 · KPI 도달성 |
-| `mvn test` | SQL을 조립하는 코드와 기하 | 91개 단위 테스트 |
+| `mvn test` | SQL을 조립하는 코드와 기하 | 99개 단위 테스트 |
 
 단위 테스트가 **여섯 곳**에만 있는 것은 의도적입니다. 2026-09-03에 둘이 늘었습니다 —
 `CohortTest`(13)는 그룹의 백분위가 세션별 요약에서 복원되지 않기 때문이고(그래서 풀링 질의의

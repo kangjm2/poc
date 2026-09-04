@@ -72,7 +72,7 @@
 
 | 매뉴얼 기재 기능 | 상태 |
 |---|---|
-| Data export to MapInfo / Excel / txt / Google Earth | ◐ CSV + GeoJSON |
+| Data export to MapInfo / Excel / txt / Google Earth | ◐ CSV + GeoJSON. **2026-09-04**: 나가는 것이 표본에서 **분석 결과**로 늘었습니다 — 타일 · 범례 · 추정 셀 위치 · 서빙 셀 선이고, 레퍼런스처럼 **결과 객체에서**(레이어 줄 · 패널 머리글) 꺼냅니다. 파일은 조건·기준·통계를 **서두와 행에 함께** 싣습니다. 남은 것은 포맷입니다: **Excel 바이너리 · MapInfo `.tab` · `.kml`**. `.tab`은 넉 장 중 둘이 바이너리라 열리는지 확인할 방법이 없고, `.kml`은 Google Earth로 열어 본 사람이 없어 검증할 수 없습니다 — 둘 다 "어려워서"가 아니라 **검사할 수 없어서** 안 만듭니다 |
 | Statistical reporting with Microsoft Excel | ◐ 인쇄 가능한 HTML 리포트(`/report.html`) — 세션 메타 · 원인 요약 · KPI 통계 · 구간 분포. Excel 바이너리는 아님 |
 | Report templates (Excel / PowerPoint / Word) | ⛔ 템플릿 디자이너 없음. 고정 레이아웃 리포트 1종만 |
 | Benchmarking reports (CDR E2E voice/data) | ⛔ |

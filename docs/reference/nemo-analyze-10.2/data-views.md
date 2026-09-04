@@ -76,7 +76,7 @@ Interval·Direction**과, 구간 경계의 어느 쪽을 포함할지 정하는 
 | 뷰 | 페이지 | 우리 |
 |---|---|---|
 | **Graphs** (line / bar / scatter / **color grid** / **surface**) | 94–111 | ◐ 라인·바·파이. color grid·surface 없음 |
-| **Grids** (+ Side panel, Row details, Export) | 112–121 | ✅ 표 |
+| **Grids** (+ Side panel, Row details, Export) | 112–121 | ◐ 표·행 상세는 있고 그리드의 `Export Data To`는 없음 — *2026-09-04 정정: 이름에 Export를 담고도 ✅로 세고 있었습니다.* 범례와 Cell locator 표는 자기 내보내기를 갖습니다(2026-09-04) |
 | **Maps / Live Maps** (+ **Google Street View**) | 122–131 | ◐ Street View 없음 |
 | **MapX** (Map/Route/BTS properties, 심볼 경로) | 132–146 | ⛔ MapInfo 자산 계열 |
 | **Spreadsheet grid** (셀 서식·필터·**수식**·함수) | 180–189 | ⛔ |

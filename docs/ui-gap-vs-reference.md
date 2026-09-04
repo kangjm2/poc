@@ -372,12 +372,21 @@ P3-2를 "큼"으로 사정한 이유가 그대로 설계가 됐습니다. **어�
 말하게** 만들었습니다 — `GlobalFilter.coverage()`가 목록이고, `GET /api/global-filter/coverage`가
 그 목록이며, 화면의 **Reach: 14 of 24** 버튼이 같은 목록을 펼칩니다.
 
-| 지킴 (14) | 면제 (10) · 이유 |
+| 지킴 (15) | 면제 (14) · 이유 |
 |---|---|
-| `track` · `series` · `distribution` · `statistics` · `cell-breakdown` · `degradations` · `area-statistics` · `bins` · `cell-footprints` · `export.csv` · `export.geojson` · `report.html` · **`cohorts`** · **`distance-bins`**(2026-09-03) | `events` · `messages` — **시각(ts)으로 매인 행**이라 표본 필터가 고르지 못합니다 |
+| `track` · `series` · `distribution` · `statistics` · `cell-breakdown` · `degradations` · `area-statistics` · `bins` · `cell-footprints` · `export.csv` · `export.geojson` · `report.html` · **`cohorts`** · **`distance-bins`**(2026-09-03) · **`serving-lines`**(2026-09-04) | `events` · `messages` — **시각(ts)으로 매인 행**이라 표본 필터가 고르지 못합니다 |
 | | `snapshot` — 표본 하나를 번호로 지목 |
 | | `monitored-set` · `pilot-pollution` · `neighbour-breakdown` — 이웃 행 / 구간 판정. 가운데 표본을 빼면 **한 구간이 두 개로 보고**됩니다 |
 | | `spatial-diff` · `compare` — **아직 필터 파라미터를 받지 않습니다.** 배선이 안 됐을 뿐 불가능한 것이 아닙니다 |
+| | **`cell-locator`**(2026-09-04) — confidence 1–10이 **주행 전체의 증거로 보정**돼 있어, 조건으로 표본을 덜어 낸 위치는 같은 점수를 주장할 수 없습니다. 조건이 걸린 화면에서 내보낸 파일은 행마다 `not applied`라고 적습니다 |
+| | **`cells`** · **`field-to-lab`** · **`{id}`**(2026-09-04) — 셀 참조 행 / 주행 전체로 제안하는 채널 모델 / 측정이 **기록한** 것. 셋 다 표본 조건이 바꿀 대상이 아닙니다 |
+
+> **2026-09-04 — 이 표에 없던 넷을 찾은 방법.** `cell-locator` · `cells` · `field-to-lab`는
+> **지킴에도 면제에도 없었습니다.** 목록에 없는 경로는 "전부 두 번 호출해 좁아지는지 본다"는
+> 그 단계가 아예 부르지 않으므로, **조건을 무시하면서 모든 검사를 통과**합니다 —
+> `distance-bins`가 실제로 그렇게 배포됐던 경로입니다. 이제 `api-surface.mjs`가 이 목록을
+> 자기가 이미 뽑아 둔 매핑에 대고 재고, 어느 쪽에도 없는 세션 분석이 하나라도 있으면
+> 빨개집니다(§1.5.14 — 감사하는 목록은 자기 완전성을 **다른 곳에서** 재야 합니다).
 | | `coverage-issues` · `problem-survey` — **아직 필터 파라미터를 받지 않습니다**(2026-09-03 추가). `coverage-issues`는 표본을 하나씩 분류하므로 `/degradations`가 지키는 것과 같은 모양이고, `problem-survey`는 원인이 **검출기 셋과 이벤트 스트림 하나**에서 오므로 배선하려면 이벤트에서 온 원인에 조건이 무슨 뜻인지를 먼저 정해야 합니다 — `/events`가 면제인 바로 그 물음입니다 |
 
 구현은 **`(session_id, seq) IN (...)` 하위질의 한 줄**입니다. 이 스키마의 모든 분석이 그 쌍으로

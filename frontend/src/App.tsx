@@ -1323,7 +1323,7 @@ export function App() {
               )}
             </div>
             {range && (
-              <span className="filter-chip" title="Applies to the legend, statistics and degradation list">
+              <span className="filter-chip" title="Applies to the legend, statistics and degradation list - not to exports, which carry the global filter instead">
                 Filter: seq {range.from ?? 0}&ndash;{range.to ?? maxSeq}
                 <button onClick={() => setRange(null)} aria-label="Clear range filter">✕</button>
               </span>
