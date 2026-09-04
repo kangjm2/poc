@@ -53,6 +53,35 @@ page.on('pageerror', (e) => errors.push(String(e)))
 page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()) })
 
 const apiGet = async (path) => (await page.request.get(`${API}${path}`)).json()
+
+/**
+ * An exported CSV split into what it says about itself and what it contains.
+ *
+ * Three separate steps used to treat line 0 as the header. Once an export opens with
+ * '# key: value' provenance lines, `lines[0]` is a comment, and S11 was the sharp case -
+ * it EDITED line 0 to add two unknown columns and then appended a value pair to every
+ * line after it.
+ *
+ * Run against a file with six preamble lines that does something quietly absurd, which was
+ * measured rather than guessed: the two column NAMES land on a comment, and the header -
+ * now line 5 - receives the value pair meant for the fifth data row. The file that gets
+ * imported has two extra columns called `6` and `3.31`, its rows and header agree on the
+ * count, and the two named columns the scenario is about never exist. It would have gone
+ * red, but with a message about missing KPI definitions rather than about the header -
+ * which is the kind of red somebody fixes by loosening the assertion.
+ *
+ * So the rule lives here once. `preamble` is asserted on directly by the export steps -
+ * a file that stops saying what condition made it is a regression this suite must see.
+ */
+const csvParts = (text) => {
+  const lines = text.trim().split('\n')
+  const headerAt = lines.findIndex((l) => !l.startsWith('#'))
+  return {
+    preamble: lines.slice(0, headerAt === -1 ? lines.length : headerAt),
+    header: headerAt === -1 ? '' : lines[headerAt],
+    rows: headerAt === -1 ? [] : lines.slice(headerAt + 1),
+  }
+}
 const selectSession = async (label) => {
   await page.locator('.toolbar select[aria-label="Measurement"]').selectOption({ label })
   await page.waitForTimeout(1800)
@@ -169,10 +198,22 @@ scenario('S1 · Post-drive field analysis')
     `seq ${evSeqAfter} -> ${playSeq}, held at ${pausedSeq}`)
 
   const csv = await page.request.get(`${API}/api/sessions/${meta.id}/export.csv`)
-  const body = await csv.text()
-  const lines = body.trim().split('\n')
-  step('CSV export carries the full drive', csv.ok() && lines.length === meta.sampleCount + 1
-    && lines[0].includes('RSRP'), `${lines.length - 1} rows`)
+  const parts = csvParts(await csv.text())
+  step('CSV export carries the full drive', csv.ok()
+    && parts.rows.length === meta.sampleCount && parts.header.includes('RSRP'),
+    `${parts.rows.length} rows`)
+
+  // The file has to say what made it. Unfiltered, that is still a claim - 'none' is the
+  // difference between a file that was not narrowed and a file written before anyone
+  // thought to say. Both halves are checked because either alone survives the other's
+  // removal: the preamble is lost when rows are pasted elsewhere, the column is all the
+  // reader has then.
+  step('and says what condition made it, above the header and in every row',
+    parts.preamble.some((l) => l.startsWith('# measurement:'))
+    && parts.header.split(',').includes('global_filter')
+    && parts.rows.length > 0 && parts.rows.every((r) => r.endsWith(',none')),
+    `${parts.preamble.length} preamble lines, last column ${
+      parts.header.split(',').slice(-1)[0]}`)
 }
 
 // ─── S2 · Build A/B comparison ───────────────────────────────────────────────
@@ -653,14 +694,16 @@ scenario('S11 · Unknown columns become KPIs instead of being dropped')
 {
   const src = sessions.find((s) => s.name === CITY_B)
   const csv = await (await page.request.get(`${API}/api/sessions/${src.id}/export.csv`)).text()
-  const lines = csv.trim().split('\n')
+  const parts = csvParts(csv)
   // Two columns no catalogue of ours has ever contained: one integer, one with
-  // two decimals and a unit in the conventional parenthetical form.
-  lines[0] = `${lines[0]},Beam SSB index,Custom margin (dB)`
-  for (let i = 1; i < lines.length; i++) {
-    lines[i] = `${lines[i]},${i % 8},${(3.25 + i * 0.01).toFixed(2)}`
-  }
-  const withUnknown = lines.join('\n')
+  // two decimals and a unit in the conventional parenthetical form. Appended to the
+  // HEADER - it used to be `lines[0]`, which is a provenance comment now, and appending
+  // them there would have imported a file with neither column while still passing.
+  const withUnknown = [
+    ...parts.preamble,
+    `${parts.header},Beam SSB index,Custom margin (dB)`,
+    ...parts.rows.map((r, i) => `${r},${(i + 1) % 8},${(3.25 + (i + 1) * 0.01).toFixed(2)}`),
+  ].join('\n')
 
   const importFile = async (name, createUnknown) => {
     await openMode('Import')
@@ -1804,8 +1847,8 @@ scenario('S20 · One condition, every screen')
   // ── the numbers. One drive, one condition, one count - from twelve different queries.
   const sid = sessions.find((s) => s.name === CITY_A).id
   const csvRows = async (qs) =>
-    (await (await page.request.get(`${API}/api/sessions/${sid}/export.csv${qs}`)).text())
-      .trim().split('\n').length - 1
+    csvParts(await (await page.request.get(`${API}/api/sessions/${sid}/export.csv${qs}`)).text())
+      .rows.length
   const numbers = async (qs, amp) => ({
     statistics: (await apiGet(`/api/sessions/${sid}/statistics?kpi=RSRP${amp}`)).count,
     distribution: (await apiGet(`/api/sessions/${sid}/distribution?kpi=RSRP${amp}`)).total,

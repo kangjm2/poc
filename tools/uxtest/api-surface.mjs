@@ -69,6 +69,31 @@ for (const f of javaFiles) {
   }
 }
 
+// --------------------------------------------- 1b. the global filter's own audit list
+//
+// `GlobalFilter.coverage()` is what the application shows a user who asks "what does this
+// condition actually reach". It names every session-scoped analytic, honoured or exempt
+// with a reason, and a scenario step calls each honoured one twice to prove it narrows.
+//
+// What no check could see was an endpoint in NEITHER column. Three were: /cell-locator,
+// /cells and /field-to-lab. A path that is not on the list is not called by the step that
+// would catch it, so it passes every check while ignoring the condition - which is exactly
+// how /distance-bins shipped. GlobalFilterTest cannot see it either: it can only inspect
+// the entries that exist.
+//
+// So the list is measured against the mappings, which are themselves measured against the
+// annotation count above. Same shape as `unread`: a list that audits things has to have
+// its own completeness measured somewhere else. §1.5.14.
+const filterSrc = read(`${CONTROLLERS}/service/GlobalFilter.java`)
+const listedPaths = new Set(
+  [...filterSrc.matchAll(/new Coverage\("([^"]+)"/g)].map((m) => m[1]))
+// POST and DELETE change data rather than answering a question, and a condition that
+// narrowed a delete would be a weapon. Only the GETs are analytics.
+const analyticPaths = [...new Set(mappings
+  .filter((m) => m.method === 'GET' && m.path.startsWith('/api/sessions/{id}'))
+  .map((m) => m.path))]
+const unaudited = analyticPaths.filter((p) => !listedPaths.has(p))
+
 const clientText = srcFiles.filter((f) => f.includes('/api/')).map(read).join('\n')
 
 /**
@@ -202,11 +227,13 @@ try {
 // ---------------------------------------------------------------- report
 const problems =
   unreachedEndpoints.length + unusedClientMethods.length + kpiGaps.length
-  + (probeFailed ? 1 : 0) + unread.length
+  + (probeFailed ? 1 : 0) + unread.length + unaudited.length
 
 console.log('API surface coverage')
 console.log(`  endpoints declared:      ${mappings.length}`)
 console.log(`  client methods declared: ${clientMethods.length}`)
+console.log(`  global-filter coverage:  ${analyticPaths.length} session analytics,`
+            + ` ${analyticPaths.length - unaudited.length} named in GlobalFilter.coverage()`)
 console.log(`  KPI reachability:        ${renderedNote}`)
 if (unreachedEndpoints.length) {
   console.log('\n  endpoints no client method calls:')
@@ -223,6 +250,11 @@ if (kpiGaps.length) {
 if (NOT_CALLED_BY_THE_APP.length) {
   console.log('\n  not called by the app, on purpose:')
   for (const e of NOT_CALLED_BY_THE_APP) console.log(`    ${e.method} ${e.path} - ${e.why}`)
+}
+if (unaudited.length) {
+  console.log('\n  session analytics named in NEITHER column of GlobalFilter.coverage()'
+              + ' - the condition reaches them or not, and nothing says which:')
+  for (const p of unaudited) console.log(`    GET ${p}`)
 }
 if (unread.length) {
   console.log('\n  mapping annotations this script could not read'

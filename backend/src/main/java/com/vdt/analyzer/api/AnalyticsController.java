@@ -19,16 +19,19 @@ public class AnalyticsController {
     private final com.vdt.analyzer.service.KpiCatalog catalog;
     private final com.vdt.analyzer.service.ReportService reports;
     private final com.vdt.analyzer.service.CellLocatorService locator;
+    private final com.vdt.analyzer.service.AnalysisService analysis;
 
     public AnalyticsController(GeoAnalysisService geo, ExportService export,
                                com.vdt.analyzer.service.KpiCatalog catalog,
                                com.vdt.analyzer.service.ReportService reports,
-                               com.vdt.analyzer.service.CellLocatorService locator) {
+                               com.vdt.analyzer.service.CellLocatorService locator,
+                               com.vdt.analyzer.service.AnalysisService analysis) {
         this.geo = geo;
         this.export = export;
         this.catalog = catalog;
         this.reports = reports;
         this.locator = locator;
+        this.analysis = analysis;
     }
 
     /** Averages the route into fixed-size tiles so a long drive stays readable. */
@@ -116,14 +119,24 @@ public class AnalyticsController {
         return reports.render(id, filter);
     }
 
+    /**
+     * Both exports resolve the measurement BEFORE touching the response.
+     *
+     * The headers used to be set first, so an unknown id answered 200 with an empty but
+     * entirely plausible file - a CSV with six columns and no rows reads as a drive that
+     * recorded nothing, not as a drive that does not exist. The sibling `report.html` goes
+     * through the same lookup and has always answered 404. The lookup also supplies the
+     * name the file is called after, so the two needs are one call.
+     */
     @GetMapping("/export.csv")
     public void exportCsv(@PathVariable long id,
                           @RequestParam(required = false) String filter,
                           HttpServletResponse response) throws IOException {
+        String name = analysis.getSession(id).name();
         response.setContentType("text/csv; charset=UTF-8");
         response.setHeader("Content-Disposition",
-                "attachment; filename=\"session-" + id + ".csv\"");
-        export.exportCsv(id, response.getOutputStream(), filter);
+                "attachment; filename=\"" + fileName(id, name, null, "csv") + "\"");
+        export.exportCsv(id, response.getOutputStream(), filter, label(id, name));
     }
 
     @GetMapping("/export.geojson")
@@ -134,9 +147,32 @@ public class AnalyticsController {
         // this one the export answered 200 with a null-valued property on every
         // feature, so a typo produced a plausible-looking file full of nulls.
         catalog.require(kpi);
+        String name = analysis.getSession(id).name();
         response.setContentType("application/geo+json; charset=UTF-8");
         response.setHeader("Content-Disposition",
-                "attachment; filename=\"session-" + id + ".geojson\"");
-        export.exportGeoJson(id, kpi, response.getOutputStream(), filter);
+                "attachment; filename=\"" + fileName(id, name, kpi, "geojson") + "\"");
+        export.exportGeoJson(id, kpi, response.getOutputStream(), filter, label(id, name));
+    }
+
+    /** What the file says it is inside: the id AND the name, since neither alone is enough. */
+    private static String label(long id, String name) {
+        return name + " (#" + id + ")";
+    }
+
+    /**
+     * What the file is called on disk.
+     *
+     * The KPI is in the name because it was not: every GeoJSON export of a drive was
+     * `session-3.geojson`, so pulling RSRP and then SINR left one file. The condition is
+     * NOT in the name - a `-filtered` suffix says that something was excluded without
+     * saying what, disappears the moment the file is renamed or attached to mail, and
+     * worse, makes every file without it read as unfiltered, which is false of every file
+     * this application produced before today. The condition lives inside.
+     */
+    private static String fileName(long id, String name, String kpi, String ext) {
+        String slug = name == null ? "" : name.toLowerCase()
+                .replaceAll("[^a-z0-9]+", "-").replaceAll("(^-|-$)", "");
+        if (slug.isBlank()) slug = "measurement-" + id;
+        return slug + (kpi == null ? "" : "-" + kpi.toLowerCase()) + "." + ext;
     }
 }

@@ -72,15 +72,39 @@ public class ReportService {
         row(b, "Location", s.locationName());
         row(b, "Period", s.startedAt() + " — " + s.endedAt());
         row(b, "Duration", Duration.between(s.startedAt(), s.endedAt()).toMinutes() + " min");
-        row(b, "Samples", String.valueOf(s.sampleCount()));
+        // Both numbers, not one. This row used to print the whole drive's sample count
+        // under a heading that named a condition two rows below, so the document
+        // contradicted itself in its own metadata table - and the contradiction was
+        // invisible, because a smaller number is exactly what a filtered drive looks like.
+        Long kept = analysis.filteredSampleCount(sessionId, filterSpec);
+        row(b, "Samples", kept == null ? String.valueOf(s.sampleCount())
+                : s.sampleCount() + " recorded \u00b7 " + kept + " under this condition");
         if (filterText != null) row(b, "Global filter", filterText);
-        row(b, "Events", String.valueOf(s.eventCount()));
+        // Events are NOT given a filtered count, deliberately. The condition selects
+        // samples; an event is a timestamped row with no seq, which is why
+        // GlobalFilter.coverage() lists /events as exempt with that reason. Printing a
+        // number here would be a claim we have said elsewhere we cannot make.
+        row(b, "Events", s.eventCount()
+                + (filterText == null ? ""
+                   : " \u00b7 not narrowed: the condition selects samples, events are"
+                     + " timestamped"));
         if (s.notes() != null) row(b, "Notes", s.notes());
         b.append("</tbody></table>");
 
         // --- problems first: a report is read for what went wrong, not for what did not.
         ProblemSurvey.Survey survey = problems.survey(sessionId);
         b.append("<h2>Problem survey</h2>");
+        // Said, not hidden. `problems.survey` has one overload and it takes no condition -
+        // GlobalFilter.coverage() records why: what a sample condition means for an
+        // event-sourced cause is an open question, not an oversight, and answering it is
+        // its own piece of work. Until then the section that does not honour the filter
+        // above says so, in the section, where somebody reading only this table sees it.
+        if (filterText != null) {
+            b.append("<p class=\"foot\">Whole drive \u2014 this section does not honour the"
+                     + " condition above. A cause is raised from events and detector"
+                     + " intervals rather than from single samples, so narrowing by sample"
+                     + " would split intervals rather than remove them.</p>");
+        }
         if (survey.total() == 0) {
             b.append("<p class=\"none\">No problems detected.</p>");
         } else {

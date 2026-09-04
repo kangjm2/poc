@@ -36,9 +36,19 @@ public class ImportService {
     private static final int BATCH = 5_000;
 
     /** Column names understood as position/time rather than as a KPI. */
-    private static final Set<String> RESERVED = Set.of(
-            "timestamp", "time", "ts", "latitude", "lat", "longitude", "lon", "lng",
-            "seq", "speed_kmh", "speed", "serving_pci", "pci");
+    /**
+     * Header names that are position or provenance, never a measurement.
+     *
+     * The second half comes from {@link com.vdt.analyzer.service.ExportScope} rather than
+     * being retyped: our own exports write those columns, this application's files are
+     * meant to come straight back in, and a column called `global_filter` arriving as a
+     * KPI definition is what happens when the two lists are maintained separately.
+     */
+    private static final Set<String> RESERVED = java.util.stream.Stream.concat(
+            java.util.stream.Stream.of("timestamp", "time", "ts", "latitude", "lat", "longitude", "lon", "lng",
+                      "seq", "speed_kmh", "speed", "serving_pci", "pci"),
+            com.vdt.analyzer.service.ExportScope.COLUMN_NAMES.stream())
+            .collect(java.util.stream.Collectors.toUnmodifiableSet());
 
     private final JdbcTemplate jdbc;
     private final KpiCatalog catalog;
@@ -96,7 +106,16 @@ public class ImportService {
         try (BufferedReader reader = new BufferedReader(
                 new InputStreamReader(file.getInputStream(), StandardCharsets.UTF_8))) {
 
+            // Our own exports open with '# key: value' lines saying what condition was in
+            // force when the file was written. They are skipped here rather than at the
+            // call site because every path into this method has to skip them - and because
+            // a file that says what it is should not be harder to read back than one that
+            // does not. Other tools use the same convention; nothing legitimate starts a
+            // header with '#'.
             String headerLine = reader.readLine();
+            while (headerLine != null && headerLine.startsWith("#")) {
+                headerLine = reader.readLine();
+            }
             if (headerLine == null) throw new IllegalArgumentException("File is empty");
             String[] header = split(headerLine, delimiter);
 
