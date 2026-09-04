@@ -9,6 +9,7 @@ import type {
   GraphRequest, GraphValidation, StoredGraph,
   DistanceBin, CellFootprint, Workbook, WorkbookLimits, WorkbookRequest, EventType,
   FilterCoverage, CohortSet,
+  CellEstimate,
 } from './types'
 
 const BASE = '/api'
@@ -364,6 +365,19 @@ export const api = {
    * on the map and the shape the statistics are about are one value. Taking an array here
    * meant serialising it a second time, and the two copies were free to drift.
    */
+  /**
+   * @param minScore the reference's `Minimum accuracy score (0-10)` - drop estimates below
+   *                 it. Its own dialog offers this because a low score means the drive did
+   *                 not see the site well enough to place it.
+   */
+  cellLocator: (id: number, minScore?: number, minRsrp?: number) => {
+    const q = new URLSearchParams()
+    if (minScore != null) q.set('minScore', String(minScore))
+    if (minRsrp != null) q.set('minRsrp', String(minRsrp))
+    const qs = q.toString()
+    return get<CellEstimate[]>(`/sessions/${id}/cell-locator${qs ? `?${qs}` : ''}`)
+  },
+
   areaStatistics: (id: number, kpi: string, polygon: string) =>
     get<AreaStats>(`/sessions/${id}/area-statistics?kpi=${encodeURIComponent(kpi)}`
       + `&polygon=${encodeURIComponent(polygon)}`),

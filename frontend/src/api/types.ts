@@ -160,6 +160,23 @@ export interface DerivedKpiResult {
   kpi: KpiDefinition; valuesComputed: number; referencedKpis: string[]
 }
 
+/**
+ * One cell's position as this drive's own measurements put it (UC21 p174-176).
+ *
+ * `refLatitude`/`refLongitude` are what the cell reference says, and `errorMetres` is the
+ * distance between the two - which is the number the analysis exists to produce. All three
+ * are null for a drive whose cells have no record.
+ */
+export interface CellEstimate {
+  pci: number; arfcn: number
+  latitude: number; longitude: number
+  /** 1-10, the reference's own scale. At 6 and above ours land inside 100 m. */
+  confidence: number
+  samples: number; samplesUsed: number; strongestRsrp: number
+  refLatitude: number | null; refLongitude: number | null
+  errorMetres: number | null
+}
+
 export interface KpiDefinition {
   name: string; displayName: string; unit: string; category: string
   technology: string; direction: string; decimals: number

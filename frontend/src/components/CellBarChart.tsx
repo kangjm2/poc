@@ -98,7 +98,15 @@ function BarChart({ data, isolate, onPickCell }: {
 }
 
 /** The same breakdown as numbers, because a bar chart is not a table. */
-function BreakdownTable({ data }: { data: CellBreakdown }) {
+function BreakdownTable({ data, onPickCell }: {
+  data: CellBreakdown
+  /**
+   * UC18 p171: "the map zooms to the cell chosen in the grid". The row was inert until
+   * this page had a map to zoom - and the bar chart's own `onPickCell` had been a prop
+   * App never passed, so the whole seam was dead in both directions.
+   */
+  onPickCell?: (pci: number) => void
+}) {
   const d = data.decimals
   return (
     <table className="grid">
@@ -110,7 +118,9 @@ function BreakdownTable({ data }: { data: CellBreakdown }) {
       </thead>
       <tbody>
         {data.cells.map((c) => (
-          <tr key={c.pci}>
+          <tr key={c.pci} className={onPickCell ? 'deg-row' : undefined}
+              title={onPickCell ? 'Show this cell on the map' : undefined}
+              onClick={onPickCell ? () => onPickCell(c.pci) : undefined}>
             <td className="num">{c.pci}</td>
             <td>{c.band ?? '-'}</td>
             <td className="num">{c.arfcn ?? '-'}</td>
@@ -183,7 +193,7 @@ export function CellsPage({
           <span className="title">Serving cell breakdown</span>
           <span className="meta">{data.cells.length} cells &middot; {data.total} samples</span>
         </header>
-        <BreakdownTable data={data} />
+        <BreakdownTable data={data} onPickCell={onPickCell} />
       </div>
     </>
   )

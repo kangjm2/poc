@@ -3232,6 +3232,103 @@ scenario('S27 · The two causes a Nemo user looks for first')
   await page.waitForTimeout(2500)
 }
 
+// ─── S28 · Where the cells really are, and whether the record agrees ─────────
+//
+// UC21 p174-176. The first scoping of this called it a demo - we hold `cell_ref`, so
+// estimating a position we already know looked like arithmetic with the answer alongside.
+// The manual's own figure settles it the other way: p175 draws the REAL site in green and
+// the ESTIMATED one in purple on one map, because having the record is the CONDITION for
+// using this. What an operator is asking is whether the record is still true.
+scenario('S28 · Where the cells really are, and whether the record agrees')
+{
+  const cityA = sessions.find((x) => x.name === CITY_A).id
+  const est = await apiGet(`/api/sessions/${cityA}/cell-locator`)
+  const withRef = est.filter((e) => e.errorMetres != null)
+
+  step('every cell the drive measured gets a position estimated from measurement alone',
+    est.length > 0 && est.every((e) =>
+      Number.isFinite(e.latitude) && Number.isFinite(e.longitude) && e.samplesUsed > 0),
+    `${est.length} cells, ${withRef.length} with a record to compare against`)
+
+  // The reference attaches "<100 m" to a score, so ours has to mean the same thing or the
+  // column is decoration. This is the assertion the confidence formula must satisfy - if a
+  // future drive puts a high-confidence estimate past 100 m, the weights were wrong.
+  const good = withRef.filter((e) => e.confidence >= 6)
+  const worst = good.length ? Math.max(...good.map((e) => e.errorMetres)) : null
+  step('and a confidence of 6 or more means inside 100 m, the accuracy the manual claims',
+    good.length > 0 && worst < 100,
+    `${good.length} of ${withRef.length} at 6+, worst ${worst?.toFixed(0)} m`)
+
+  // A number that does not track the thing it describes is worse than no number: it is
+  // read as a judgement. Low-confidence estimates have to be measurably worse.
+  const poor = withRef.filter((e) => e.confidence < 6)
+  const medianOf = (a) => a.length ? [...a].sort((x, y) => x - y)[Math.floor(a.length / 2)] : null
+  const gm = medianOf(good.map((e) => e.errorMetres))
+  step('and the number is honest: the low-confidence ones really are further out',
+    poor.length === 0 || medianOf(poor.map((e) => e.errorMetres)) > gm,
+    poor.length === 0 ? `every cell scored 6+ on this drive (median ${gm?.toFixed(0)} m)`
+      : `median ${gm?.toFixed(0)} m at 6+ against `
+        + `${medianOf(poor.map((e) => e.errorMetres))?.toFixed(0)} m below`)
+
+  // The reference's `Minimum accuracy score` - and its own warning that a high one can
+  // filter everything out.
+  const strict = await apiGet(`/api/sessions/${cityA}/cell-locator?minScore=10`)
+  step('the minimum accuracy score drops the estimates that do not reach it',
+    strict.length < est.length && strict.every((e) => e.confidence >= 10),
+    `${est.length} cells at any score, ${strict.length} at 10`)
+
+  await selectSession(CITY_A)
+  await openWorkbook('Cells')
+  await page.waitForTimeout(2200)
+
+  // Both positions on one map, which is the reference's own picture.
+  const drawn = await page.locator('path.cell-estimate').count()
+  step('the screen draws the estimate beside the recorded position, as the manual does',
+    drawn === est.length && drawn > 0,
+    `${drawn} estimated positions drawn against ${est.length} estimated`)
+
+  const rows = await page
+    .locator('.panel:has(header .title:text-is("Cell locator")) tbody tr').count()
+  const firstRow = await page
+    .locator('.panel:has(header .title:text-is("Cell locator")) tbody tr').first().innerText()
+  step('and the table gives the distance, because a line on a map has no scale to read',
+    rows === est.length && /\d+ m/.test(firstRow),
+    `${rows} rows, first "${firstRow.replace(/\s+/g, ' ').trim().slice(0, 60)}"`)
+
+  // ── UC18 p171: "the map zooms to the cell chosen in the grid". The Cells page had no
+  //    map until now, which is why this row click had nothing to do.
+  // What framing has to put in the middle is the PAIR, not one of them: the two points are
+  // hundreds of metres apart, so centring either one pushes the other toward the edge, and
+  // the gap between them is the thing this screen is for.
+  const mapBox = await page.locator('.map').first().boundingBox()
+  const mapCentre = { x: mapBox.x + mapBox.width / 2, y: mapBox.y + mapBox.height / 2 }
+  const midOf = async (pci) => {
+    const a = await page.locator(`path.cell-estimate.pci-${pci}`).first().boundingBox()
+    const b = await page.locator(`path.cell-site.pci-${pci}`).first().boundingBox()
+    if (!a || !b) return null
+    return { x: (a.x + a.width / 2 + b.x + b.width / 2) / 2,
+             y: (a.y + a.height / 2 + b.y + b.height / 2) / 2 }
+  }
+  const distTo = (p) => (p == null ? Infinity : Math.hypot(p.x - mapCentre.x, p.y - mapCentre.y))
+  const far = [...est].sort((a, b) => (b.errorMetres ?? 0) - (a.errorMetres ?? 0))[0].pci
+  const beforePos = await midOf(far)
+  await page.locator('.panel:has(header .title:text-is("Serving cell breakdown")) tbody tr')
+    .filter({ hasText: String(far) }).first().click()
+  await page.waitForTimeout(1600)
+  const afterPos = await midOf(far)
+  // The attribute says the row reached the map; the geometry says the map then acted on
+  // it. Two failures that look the same from outside and want different fixes.
+  const asked = await page.locator('.map').first().getAttribute('data-focus-pci')
+  step('picking a cell in the grid frames that cell and its estimate together',
+    asked === String(far) && distTo(afterPos) < distTo(beforePos)
+    && distTo(afterPos) < mapBox.width * 0.12,
+    `PCI ${far}: map asked for "${asked}", pair was ${distTo(beforePos).toFixed(0)} px from`
+    + ` centre, now ${distTo(afterPos).toFixed(0)} px (map ${mapBox.width.toFixed(0)} px)`)
+
+  await page.goto(BASE, { waitUntil: 'domcontentloaded' })
+  await page.waitForTimeout(2500)
+}
+
 // ─── wrap-up ─────────────────────────────────────────────────────────────────
 const appErrors = errors.filter((e) =>
   !/tile\.openstreetmap\.org|ERR_CONNECTION|Failed to load resource|ERR_TIMED_OUT/.test(e))

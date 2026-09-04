@@ -16,6 +16,7 @@ import { CompareView } from './components/CompareView'
 import { CohortView } from './components/CohortView'
 import { parsePciFilter } from './view/pciFilter'
 import { CellsPage } from './components/CellBarChart'
+import { CellLocatorPanel, useCellEstimates } from './components/CellLocatorPanel'
 import { MonitoredSetDock, MonitoredSetPage } from './components/MonitoredSetPanel'
 import { ComposedWorkbook } from './components/ComposedWorkbook'
 import { DistanceProfile } from './components/DistanceProfile'
@@ -213,6 +214,14 @@ export function App() {
    * per keystroke would make a typo cost a round trip.
    */
   const [footprintCells, setFootprintCells] = useState('')
+  /**
+   * The cell the Cells page is framing, and the reference's own minimum accuracy score.
+   *
+   * `focusPci` is state rather than a call into the map because the map is a child: the
+   * grid row names a cell, this holds which one, and RouteMap frames it. UC18 p171.
+   */
+  const [focusPci, setFocusPci] = useState<number | null>(null)
+  const [locatorScore, setLocatorScore] = useState(0)
   const [footprints, setFootprints] = useState<CellFootprint[] | null>(null)
   const [workbooks, setWorkbooks] = useState<Workbook[]>([])
   const [issues, setIssues] = useState<CoverageIssue[]>([])
@@ -630,6 +639,9 @@ export function App() {
   ]
   const mapLayers = mapContents ? describeLayers(mapContents, layersOff) : []
 
+  // Fetched here rather than inside the panel so the map and the table read one answer.
+  const cellEstimates = useCellEstimates(workbook === 'cells' ? sessionId : null, locatorScore)
+
   /**
    * Whether the screen on show consumes a toolbar group. One lookup, so a control is
    * offered exactly where something answers it.
@@ -1019,9 +1031,28 @@ export function App() {
                                  onJump={moveCursor} />
       case 'cells':
         return (
-          <CellsPage sessionId={sessionId} kpi={kpi} range={range}
-                     scaleVersion={scaleVersion} isolate={isolate}
-                     filterSpec={filterSpec} />
+          <>
+            {/* The map UC18 needs and UC21 draws on, in one place: a grid row frames a
+                cell here, and the locator's estimates sit beside the recorded positions.
+                Before this the Cells page had no map at all, which is why the row click
+                and the estimate overlay were both blocked on the same missing thing.
+                `isolate` is passed because this tab is marked isolates:true for its bar
+                chart - without it the legend's claim would be half true on the one tab
+                that now shows both a chart and a map. */}
+            <RouteMap track={track} cells={cells} cursorSeq={cursorSeq}
+                      frameKey={String(sessionId)} refitToken={refitToken}
+                      onCursorChange={moveCursor} kpiName={activeDef?.displayName ?? kpi}
+                      estimates={cellEstimates} focusPci={focusPci}
+                      onFilterCell={filterToCell}
+                      isolate={isolate}
+                      eventTypes={eventTypes} />
+            <CellLocatorPanel sessionId={sessionId} estimates={cellEstimates}
+                              onPick={setFocusPci}
+                              minScore={locatorScore} onMinScore={setLocatorScore} />
+            <CellsPage sessionId={sessionId} kpi={kpi} range={range}
+                       scaleVersion={scaleVersion} isolate={isolate}
+                       filterSpec={filterSpec} onPickCell={setFocusPci} />
+          </>
         )
       case 'statistics':
         return (
