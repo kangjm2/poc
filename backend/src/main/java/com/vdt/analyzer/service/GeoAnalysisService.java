@@ -57,6 +57,50 @@ public class GeoAnalysisService {
             double latSpan, double lonSpan) {}
 
     /**
+     * One sample, and the cell that was serving it.
+     *
+     * `metres` is carried rather than left to the reader: the line on the map shows that
+     * one is longer than another, and the number says whether that is 400 m or 4 km.
+     */
+    public record ServingLine(int seq, double latitude, double longitude, int pci,
+                              double cellLatitude, double cellLongitude, double metres) {}
+
+    /**
+     * UC23 p177-179: the line from each measurement to the cell serving it.
+     *
+     * The reference opens this as a layer and exports it to Google Earth, and the picture
+     * is a fan: where the fan points backwards along the road, a cell is holding the
+     * terminal past the point another should have taken it, and where the fan is long the
+     * cell is reaching somewhere it was not planned to reach. Both are visible as SHAPE
+     * before any number is read, which is why the layer earns its place next to the
+     * overshoot detector that measures the same geometry.
+     *
+     * Empty on an imported drive: a CSV import brings samples and no `cell_ref` rows, so
+     * there is nothing to draw a line to. The reference has the same precondition - its
+     * procedure begins by opening a BTS file - and the screen says so rather than showing
+     * an empty layer that looks like a drive with no serving cell.
+     */
+    public List<ServingLine> servingLines(long sessionId, String filterSpec) {
+        GlobalFilter.Scope scope = GlobalFilter.scope(filterSpec, sessionId, "s");
+        String toCell = RouteContinuity.metresBetween(
+                "s.latitude", "s.longitude", "c.latitude", "c.longitude");
+        return jdbc.query("""
+                SELECT s.seq, s.latitude, s.longitude, s.serving_pci,
+                       c.latitude AS c_lat, c.longitude AS c_lon, %s AS m
+                FROM sample s
+                JOIN cell_ref c ON c.session_id = s.session_id AND c.pci = s.serving_pci
+                WHERE s.session_id = ?%s
+                ORDER BY s.seq
+                """.formatted(toCell, GlobalFilter.and(scope)),
+                (rs, i) -> new ServingLine(rs.getInt("seq"),
+                        round6(rs.getDouble("latitude")), round6(rs.getDouble("longitude")),
+                        rs.getInt("serving_pci"),
+                        round6(rs.getDouble("c_lat")), round6(rs.getDouble("c_lon")),
+                        round2(rs.getDouble("m"))),
+                args(sessionId, scope));
+    }
+
+    /**
      * Averages samples into a fixed-size geographic grid.
      *
      * The grid is computed in SQL over degree offsets derived from the session's own
@@ -533,27 +577,27 @@ public class GeoAnalysisService {
                 weakRsrpDbm, poorSinrDb, sessionId));
 
         // Overshoot: a cell serving well beyond its intended footprint.
+        //
+        // The distance comes from RouteContinuity, which is where this repository keeps the
+        // formula. It used to be written out twice inside this one query - once to report
+        // and once to threshold - so the two could in principle have been edited apart.
+        String toServingCell = RouteContinuity.metresBetween(
+                "s.latitude", "s.longitude", "c.latitude", "c.longitude");
         issues.addAll(jdbc.query("""
                 SELECT s.serving_pci, count(*) n, avg(s.latitude) lat, avg(s.longitude) lon,
                        min(s.seq) a, max(s.seq) b,
-                       max(2 * 6371 * asin(sqrt(
-                           power(sin(radians(s.latitude - c.latitude) / 2), 2) +
-                           cos(radians(c.latitude)) * cos(radians(s.latitude)) *
-                           power(sin(radians(s.longitude - c.longitude) / 2), 2)))) AS max_km
+                       max(%1$s) AS max_m
                 FROM sample s
                 JOIN cell_ref c ON c.session_id = s.session_id AND c.pci = s.serving_pci
                 WHERE s.session_id = ?
                 GROUP BY s.serving_pci
-                HAVING max(2 * 6371 * asin(sqrt(
-                           power(sin(radians(s.latitude - c.latitude) / 2), 2) +
-                           cos(radians(c.latitude)) * cos(radians(s.latitude)) *
-                           power(sin(radians(s.longitude - c.longitude) / 2), 2)))) > ?
-                ORDER BY max_km DESC LIMIT 20
-                """, (rs, i) -> new CoverageIssue("OVERSHOOT", "WARNING",
+                HAVING max(%1$s) > ? * 1000
+                ORDER BY max_m DESC LIMIT 20
+                """.formatted(toServingCell), (rs, i) -> new CoverageIssue("OVERSHOOT", "WARNING",
                 rs.getInt("a"), rs.getInt("b"), rs.getInt("n"),
                 rs.getDouble("lat"), rs.getDouble("lon"),
                 "PCI " + rs.getInt("serving_pci") + " serving up to "
-                        + round2(rs.getDouble("max_km")) + " km away"),
+                        + round2(rs.getDouble("max_m") / 1000.0) + " km away"),
                 sessionId, overshootKm));
 
         return issues;
@@ -570,6 +614,13 @@ public class GeoAnalysisService {
     private static Object[] meanArgs(long sessionId, GlobalFilter.Scope scope) {
         List<Object> out = new ArrayList<>();
         out.add(sessionId);
+        out.addAll(GlobalFilter.params(scope));
+        return out.toArray();
+    }
+
+    /** The fixed bindings, then the filter's own, which always sit last in the WHERE. */
+    private static Object[] args(long sessionId, GlobalFilter.Scope scope) {
+        List<Object> out = new ArrayList<>(List.of(sessionId));
         out.addAll(GlobalFilter.params(scope));
         return out.toArray();
     }

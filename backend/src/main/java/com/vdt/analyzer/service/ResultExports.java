@@ -98,6 +98,8 @@ public class ResultExports {
                 Set.of("kpi", "weightedBy"),
                 // No geometry: a legend is a table of value ranges, not places.
                 null));
+        declare(new Kind("serving-lines", "serving cell lines - one per sample",
+                "/api/sessions/{id}/serving-lines", Set.of(), Set.of()));
         declare(new Kind("cell-locator", "estimated cell positions, against the record",
                 "/api/sessions/{id}/cell-locator",
                 Set.of("minScore", "carrier", "minRsrp"),
@@ -190,6 +192,7 @@ public class ResultExports {
         return switch (result) {
             case "bins" -> bins(k, sessionId, label, params, filterSpec);
             case "distribution" -> distribution(k, sessionId, label, params, filterSpec);
+            case "serving-lines" -> servingLines(k, sessionId, label, filterSpec);
             case "cell-locator" -> cellLocator(k, sessionId, label, params, filterSpec);
             default -> throw new IllegalArgumentException(
                     "'" + result + "' is declared but not built. This is a bug, not a"
@@ -363,6 +366,49 @@ public class ResultExports {
                     Csv.coord(e.refLatitude()), Csv.coord(e.refLongitude()),
                     Csv.number(e.strongestRsrp(), 1),
                     String.valueOf(e.samples()), String.valueOf(e.samplesUsed())), g));
+        }
+        return new Table(sc, cols, rows);
+    }
+
+    // ---------------------------------------------------------- serving lines
+
+    /**
+     * UC23 p177-179, the one export the reference names a destination for.
+     *
+     * One LineString per sample, from where the terminal was to where the record puts the
+     * cell serving it. `metres` rides along because a line on a map shows only that one is
+     * longer than another.
+     *
+     * The reference sends this to Google Earth as `.kml`. We write GeoJSON, which Google
+     * Earth does not read - so this reaches a planning tool and a GIS, and NOT the
+     * destination the manual names. Recorded rather than papered over: a KML writer is
+     * easy, and nobody here has opened its output in Google Earth to find out whether it
+     * is right. An export verified nowhere is a feature we have not built.
+     */
+    private Table servingLines(Kind k, long sessionId, String label, String filterSpec) {
+        List<GeoAnalysisService.ServingLine> lines = geo.servingLines(sessionId, filterSpec);
+        ExportScope sc = baseScope(k, label, filterSpec)
+                .file("geometry", "one line per sample: the measurement position to the"
+                        + " recorded position of its serving cell")
+                .file("empty file", "an imported measurement carries no cell reference rows,"
+                        + " so there is nothing to draw a line to")
+                .file("format", "GeoJSON. The reference exports this to Google Earth as KML,"
+                        + " which this file is not")
+                .file("coordinates", "WGS84 longitude, latitude - RFC 7946, no crs member");
+
+        List<String> cols = List.of("seq", "pci", "metres",
+                "sample_lat", "sample_lon", "cell_lat", "cell_lon");
+        List<Row> rows = new ArrayList<>(lines.size());
+        for (GeoAnalysisService.ServingLine l : lines) {
+            rows.add(new Row(List.of(
+                    String.valueOf(l.seq()), String.valueOf(l.pci()),
+                    Csv.number(l.metres(), 1),
+                    Csv.coord(l.latitude()), Csv.coord(l.longitude()),
+                    Csv.coord(l.cellLatitude()), Csv.coord(l.cellLongitude())),
+                    List.of(new Geom("serving line",
+                            "{\"type\":\"LineString\",\"coordinates\":["
+                            + pos(l.longitude(), l.latitude()) + ","
+                            + pos(l.cellLongitude(), l.cellLatitude()) + "]}"))));
         }
         return new Table(sc, cols, rows);
     }

@@ -252,6 +252,14 @@ export interface AreaBin {
   latSpan: number; lonSpan: number
 }
 
+/** One sample and the cell that was serving it. UC23. */
+export interface ServingLine {
+  seq: number; latitude: number; longitude: number; pci: number
+  cellLatitude: number; cellLongitude: number
+  /** How far the terminal was from its serving cell. The line shows only the ordering. */
+  metres: number
+}
+
 export interface CoverageIssue {
   type: string; severity: string; startSeq: number; endSeq: number
   sampleCount: number; latitude: number; longitude: number; detail: string

@@ -85,6 +85,29 @@ final class RouteContinuity {
                   * power(sin(radians(longitude - lag(longitude) OVER (%1$s)) / 2), 2)
             ))""".formatted(PER_DRIVE);
 
+    /**
+     * Great-circle metres between two positions, named by their column expressions.
+     *
+     * {@link #STEP_METRES} above is this same formula against the previous sample. The
+     * overshoot detector had it written out twice more inside one query, and a
+     * serving-cell line wanted a fourth copy - so it lives here once instead, the way
+     * `EventOnSample` holds the event-to-sample rule. `WeightedStats` already says why:
+     * three screens once computed the drive's length three ways, and every new copy is
+     * another chance for the map and the numbers to disagree about how far apart two
+     * things are.
+     *
+     * Metres, like STEP_METRES. A caller wanting kilometres divides, rather than this
+     * returning a different unit depending on who asks.
+     */
+    public static String metresBetween(String aLat, String aLon, String bLat, String bLon) {
+        return """
+                2 * 6371000 * asin(sqrt(
+                    power(sin(radians(%1$s - %3$s) / 2), 2)
+                    + cos(radians(%3$s)) * cos(radians(%1$s))
+                      * power(sin(radians(%2$s - %4$s) / 2), 2)))"""
+                .formatted(aLat, aLon, bLat, bLon);
+    }
+
     /** Seconds since the previous sample, NULL on the first row of a drive. */
     public static final String SECONDS_SINCE_PREV =
             "extract(epoch FROM (ts - lag(ts) OVER (" + PER_DRIVE + ")))";

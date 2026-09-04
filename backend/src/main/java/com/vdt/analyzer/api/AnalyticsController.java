@@ -40,6 +40,13 @@ public class AnalyticsController {
         this.results = results;
     }
 
+    /** UC23: the line from each measurement to the cell that was serving it. */
+    @GetMapping("/serving-lines")
+    public List<GeoAnalysisService.ServingLine> servingLines(
+            @PathVariable long id, @RequestParam(required = false) String filter) {
+        return geo.servingLines(id, filter);
+    }
+
     /** Averages the route into fixed-size tiles so a long drive stays readable. */
     @GetMapping("/bins")
     public List<GeoAnalysisService.AreaBin> bins(

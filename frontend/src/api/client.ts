@@ -9,7 +9,7 @@ import type {
   GraphRequest, GraphValidation, StoredGraph,
   DistanceBin, CellFootprint, Workbook, WorkbookLimits, WorkbookRequest, EventType,
   FilterCoverage, CohortSet,
-  CellEstimate,
+  CellEstimate, ServingLine,
 } from './types'
 
 const BASE = '/api'
@@ -45,7 +45,7 @@ const FILTERED_PATHS = [
   '/track', '/series', '/distribution', '/statistics', '/cell-breakdown',
   '/degradations', '/area-statistics', '/bins', '/cell-footprints',
   '/export.csv', '/export.geojson', '/report.html',
-  '/cohorts', '/distance-bins',
+  '/cohorts', '/distance-bins', '/serving-lines',
 ]
 
 /** Appends `filter=` to the paths that honour it, and to nothing else. */
@@ -518,6 +518,9 @@ export const api = {
     const res = await fetch(`${BASE}/kpi-definitions/graphs/${id}`, { method: 'DELETE' })
     if (!res.ok) throw new Error(`${res.status}: ${res.statusText}`)
   },
+
+  /** UC23: one line per sample to the cell serving it, for the whole drive. */
+  servingLines: (id: number) => get<ServingLine[]>(`/sessions/${id}/serving-lines`),
 
   // A report opens rather than downloads: it is meant to be read, and printed to PDF
   // from the browser if the reader wants a file.

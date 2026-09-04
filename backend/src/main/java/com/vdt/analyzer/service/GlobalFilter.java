@@ -186,6 +186,9 @@ public final class GlobalFilter {
                         + " one drive remain comparable"),
                 new Coverage("/api/sessions/{id}/cell-footprints", true,
                         "Measured cell coverage shapes"),
+                new Coverage("/api/sessions/{id}/serving-lines", true,
+                        "One line per sample to the cell serving it; per-sample, so the"
+                        + " condition selects lines the same way it selects samples"),
                 new Coverage("/api/sessions/{id}/export.csv", true,
                         "Wide CSV of the samples; the file also carries the condition,"
                         + " above the header and in every row, because it is read where"

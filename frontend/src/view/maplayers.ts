@@ -1,6 +1,6 @@
 import type {
   AreaBin, CellEstimate, CellFootprint, CellRef, DiffBin, MonitoredCell, NetworkEvent,
-  TrackPoint,
+  ServingLine, TrackPoint,
 } from '../api/types'
 
 /**
@@ -42,10 +42,19 @@ export interface MapContents {
    * contents handed to the map.
    */
   estimates?: CellEstimate[] | null
+  /**
+   * UC23: one line per sample to the cell serving it, for the whole drive.
+   *
+   * Not the same layer as `showServingLine`, which draws ONE line from the cursor. That is
+   * a reading aid for the moment under the cursor; this is a shape you look at whole - the
+   * fan tells you where a cell held on past its neighbour, and where one reaches too far.
+   */
+  servingLines?: ServingLine[] | null
 }
 
 /** A layer's toggle, where one exists. App maps these ids to its setters, in one switch. */
 export type LayerToggle = 'bins' | 'footprints' | 'events' | 'servingLine'
+  | 'servingLines'
 
 export interface MapLayer {
   id: string
@@ -137,6 +146,13 @@ export function describeLayers(m: MapContents, off: LayerToggle[] = []): MapLaye
     out.push({
       id: 'serving', label: 'Line to serving cell', drawn: !!m.showServingLine,
       count: m.showServingLine ? 1 : 0, source: 'toggle', toggle: 'servingLine',
+    })
+  }
+  if (offers(m.servingLines) && ((m.servingLines?.length ?? 0) > 0 || isOff('servingLines'))) {
+    out.push({
+      id: 'servingLines', label: 'Serving cell lines (whole drive)',
+      drawn: !!m.servingLines?.length, count: m.servingLines?.length ?? 0,
+      source: 'toggle', toggle: 'servingLines', swatch: '#b06a1f',
     })
   }
   if (m.monitored && m.monitored.length > 0) {

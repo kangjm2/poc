@@ -3671,6 +3671,35 @@ scenario('S30 · The analysis leaves the tool, saying what it is')
     `bins ${bins.length} -> ${binsFiltered.rows.length} · locator stays ${locFiltered.rows.length}`
     + `, saying "${col(locFiltered, 'global_filter')[0]?.slice(0, 40)}…"`)
 
+  // ── UC23. The line is only worth exporting if it IS the line: the geometry's two ends
+  //    have to be the sample and the recorded cell, and `metres` has to describe that same
+  //    pair. A column of plausible distances beside geometry computed some other way is
+  //    the failure this pins down - both look right on their own.
+  const lines = await apiGet(`/api/sessions/${sid}/serving-lines`)
+  const linesCsv = await getCsv('result=serving-lines')
+  const linesGeo = await getGeo('result=serving-lines')
+  const metresApart = (a, b) => {
+    const R = 6371000
+    const dLat = (b[1] - a[1]) * Math.PI / 180
+    const dLon = (b[0] - a[0]) * Math.PI / 180
+    const la1 = a[1] * Math.PI / 180
+    const la2 = b[1] * Math.PI / 180
+    const h = Math.sin(dLat / 2) ** 2 + Math.cos(la1) * Math.cos(la2) * Math.sin(dLon / 2) ** 2
+    return 2 * R * Math.asin(Math.sqrt(h))
+  }
+  const stated = col(linesCsv, 'metres').map(Number)
+  const drawnLen = linesGeo.features.map((f) => metresApart(...f.geometry.coordinates))
+  // A metre of slack: both ends are printed at six decimals before this recomputes them.
+  const worstMetres = drawnLen.length === stated.length && stated.length > 0
+    ? Math.max(...drawnLen.map((m, i) => Math.abs(m - stated[i]))) : Infinity
+  step('a serving cell line is the line it says it is, and its length describes that line',
+    lines.length > 0 && linesCsv.rows.length === lines.length
+    && linesGeo.features.length === lines.length
+    && linesGeo.features.every((f) => f.geometry.type === 'LineString'
+                                   && f.geometry.coordinates.length === 2)
+    && worstMetres < 1,
+    `${lines.length} lines, worst length disagreement ${worstMetres.toFixed(3)} m`)
+
   // ── a request that cannot mean anything is refused rather than answered with a file that
   //    looks like the one that was asked for.
   const status = async (kind, qs) => (await page.request.get(url(kind, qs))).status()
@@ -3697,6 +3726,24 @@ scenario('S30 · The analysis leaves the tool, saying what it is')
   }
   const binHref = await page.locator('.dock.right .map-layer', { hasText: 'Area bins' })
     .locator('a[download]').first().getAttribute('href')
+
+  // ── the fan is a layer you turn ON, and the link exists only once it is drawn.
+  //    Exporting a layer the map is not showing hands over a file the reader has never
+  //    seen, which is the same rule the dock follows for the tiles.
+  const fanRow = page.locator('.dock.right .map-layer', { hasText: 'Serving cell lines' })
+  const linkWhileOff = await fanRow.locator('a[download]').count()
+  const pathsBefore = await page.locator('.leaflet-overlay-pane path').count()
+  await fanRow.locator('input[type=checkbox]').click()
+  await page.waitForTimeout(5000)
+  const pathsAfter = await page.locator('.leaflet-overlay-pane path').count()
+  const fanHref = await fanRow.locator('a[download]').first().getAttribute('href')
+  step('UC23 draws before it exports, and offers no link for a layer it is not drawing',
+    linkWhileOff === 0 && pathsAfter - pathsBefore === lines.length
+    && fanHref != null && /result=serving-lines/.test(fanHref),
+    `${linkWhileOff} links while off · ${pathsBefore} -> ${pathsAfter} paths for `
+    + `${lines.length} lines · ${fanHref}`)
+  await fanRow.locator('input[type=checkbox]').click()
+  await page.waitForTimeout(1200)
   step('the link on the layer asks for what the screen is showing, not for the defaults',
     binHref != null && /result=bins/.test(binHref) && /kpi=RSRP/.test(binHref)
     && /sizeMeters=150/.test(binHref)
