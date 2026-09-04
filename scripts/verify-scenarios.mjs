@@ -3201,6 +3201,33 @@ scenario('S26 · A control is offered only where something answers it')
     `${GROUPS.map(([l], i) => `${l}:${onMobility[i] ? 'yes' : 'no'}`).join(' ')}`
     + ` · area:${await areaShown()}`)
 
+  // ── the same rule one level down, in the Layers dock.
+  //
+  // The toolbar answers "does this SCREEN take the group". The dock answers "does this MAP
+  // draw the layer", and they are not the same question: the Cells map is a map, and it
+  // draws neither footprints nor event pins. The dock listed "Cell footprints - off"
+  // there anyway, because the switch is application-wide, so ticking it drew nothing and
+  // then deleted the row that had been ticked.
+  //
+  // Driven with footprints SWITCHED OFF, because that is the only state in which the bug
+  // is visible - a check run in the default state passes over it. §1.5.11.
+  await openWorkbook('Overview')
+  await page.waitForTimeout(1400)
+  const footprintBox = page.locator('.dock.right .map-layer', { hasText: 'Cell footprints' })
+    .locator('input[type=checkbox]')
+  if (await footprintBox.isChecked()) { await footprintBox.click(); await page.waitForTimeout(900) }
+  const overviewRows = await page.locator('.dock.right .map-layer').allInnerTexts()
+
+  await openWorkbook('Cells')
+  await page.waitForTimeout(2000)
+  const cellsRows = await page.locator('.dock.right .map-layer').allInnerTexts()
+  const names = (rows) => rows.map((t) => t.replace(/\s+/g, ' ').trim())
+  step('a map lists the layers IT draws, not every layer the application can switch',
+    names(overviewRows).some((t) => /^Cell footprints/.test(t))
+    && cellsRows.length > 0
+    && !names(cellsRows).some((t) => /^Cell footprints/.test(t)),
+    `Overview: ${names(overviewRows).join(' | ')} || Cells: ${names(cellsRows).join(' | ')}`)
+
   await page.goto(BASE, { waitUntil: 'domcontentloaded' })
   await page.waitForTimeout(2500)
 }
@@ -3333,6 +3360,17 @@ scenario('S28 · Where the cells really are, and whether the record agrees')
   step('the screen draws the estimate beside the recorded position, as the manual does',
     drawn === est.length && drawn > 0,
     `${drawn} estimated positions drawn against ${est.length} estimated`)
+
+  // The dock names what the map is drawing, and it could not see this layer at all: the
+  // estimates reached RouteMap as a prop of their own instead of through `MapContents`,
+  // which is the one thing view/maplayers.ts exists to forbid. A map with an overlay the
+  // Layers list cannot account for is the defect that file was written for, and the change
+  // that added this overlay committed it.
+  const layerRows = await page.locator('.dock.right .map-layer').allInnerTexts()
+  const locatorRow = layerRows.find((t) => /Estimated cell positions/.test(t))
+  step('and the Layers dock accounts for the overlay, by name and by count',
+    locatorRow != null && locatorRow.trim().endsWith(String(est.length)),
+    locatorRow ? locatorRow.replace(/\s+/g, ' ').trim() : `no such row in [${layerRows.join(' | ')}]`)
 
   const rows = await page
     .locator('.panel:has(header .title:text-is("Cell locator")) tbody tr').count()

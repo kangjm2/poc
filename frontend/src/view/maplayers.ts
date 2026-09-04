@@ -1,5 +1,6 @@
 import type {
-  AreaBin, CellFootprint, CellRef, DiffBin, MonitoredCell, NetworkEvent, TrackPoint,
+  AreaBin, CellEstimate, CellFootprint, CellRef, DiffBin, MonitoredCell, NetworkEvent,
+  TrackPoint,
 } from '../api/types'
 
 /**
@@ -31,6 +32,16 @@ export interface MapContents {
   events?: NetworkEvent[]
   showServingLine?: boolean
   diffBins?: DiffBin[] | null
+  /**
+   * Estimated cell positions, drawn beside the recorded ones.
+   *
+   * Added 2026-09-04, and its absence was this file's own rule being broken by the change
+   * that introduced the overlay: the estimates reached RouteMap as a separate prop, so the
+   * map drew a layer `describeLayers` could not see and the dock could not name. Exactly
+   * the drift the doc comment above describes - a list built from anything other than the
+   * contents handed to the map.
+   */
+  estimates?: CellEstimate[] | null
 }
 
 /** A layer's toggle, where one exists. App maps these ids to its setters, in one switch. */
@@ -64,9 +75,24 @@ export function describeLayers(m: MapContents, off: LayerToggle[] = []): MapLaye
   const out: MapLayer[] = []
   // A switched-off layer is still listed, unticked, or turning one off would delete the
   // control that turns it back on - a checkbox with one usable state.
+  //
+  // But only on a map that DOES that layer at all. The two are different questions and
+  // conflating them produced a control with one usable state anyway, in the other
+  // direction: the Cells map does not draw footprints, so its contents carry no
+  // `footprints` key, yet the dock listed "Cell footprints - off" because the switch is
+  // application-wide. Ticking it drew nothing and made the row disappear, since the map
+  // then had neither footprints nor an off-switch to explain. `events` had the same defect
+  // latent - hide events on Overview, walk to Cells, and an Events row would appear for a
+  // map that has none.
+  //
+  // So: an ABSENT key means this map does not offer the layer; a null or empty value means
+  // it does and there is nothing to draw. `undefined` rather than a truthiness test,
+  // because empty and absent are exactly the two cases being told apart. This keeps the
+  // rule at the top of the file intact - the list still comes only from the contents.
+  const offers = (v: unknown) => v !== undefined
   const isOff = (t: LayerToggle) => off.includes(t)
 
-  if ((m.footprints && m.footprints.length > 0) || isOff('footprints')) {
+  if (offers(m.footprints) && ((m.footprints?.length ?? 0) > 0 || isOff('footprints'))) {
     out.push({
       id: 'footprints', label: 'Cell footprints', drawn: !!m.footprints?.length,
       count: m.footprints?.length ?? 0,
@@ -97,17 +123,29 @@ export function describeLayers(m: MapContents, off: LayerToggle[] = []): MapLaye
       id: 'cells', label: 'Cell sites', drawn: true, count: m.cells.length, source: 'data',
     })
   }
-  out.push({
-    id: 'serving', label: 'Line to serving cell', drawn: !!m.showServingLine,
-    count: m.showServingLine ? 1 : 0, source: 'toggle', toggle: 'servingLine',
-  })
+  if (m.estimates && m.estimates.length > 0) {
+    // Its own row rather than folded into 'Cell sites'. The two are different claims about
+    // the same masts - one is what the record says, one is what the drive measured - and
+    // the gap between them is the reason the screen exists, so a dock that counted them
+    // together would hide the subject.
+    out.push({
+      id: 'locator', label: 'Estimated cell positions', drawn: true,
+      count: m.estimates.length, source: 'data', swatch: '#5b3fa8',
+    })
+  }
+  if (offers(m.showServingLine)) {
+    out.push({
+      id: 'serving', label: 'Line to serving cell', drawn: !!m.showServingLine,
+      count: m.showServingLine ? 1 : 0, source: 'toggle', toggle: 'servingLine',
+    })
+  }
   if (m.monitored && m.monitored.length > 0) {
     out.push({
       id: 'monitored', label: 'Lines to monitored set', drawn: true,
       count: m.monitored.length, source: 'data',
     })
   }
-  if ((m.events && m.events.length > 0) || isOff('events')) {
+  if (offers(m.events) && ((m.events?.length ?? 0) > 0 || isOff('events'))) {
     out.push({
       id: 'events', label: 'Events', drawn: !!m.events?.length,
       count: m.events?.length ?? 0, source: 'toggle', toggle: 'events',

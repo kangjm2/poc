@@ -611,6 +611,9 @@ export function App() {
    * the toolbar did nothing there.
    */
   const shownEvents = eventsHidden ? [] : events
+  // Fetched here rather than inside the panel so the map, the dock and the table read one
+  // answer. Above `mapContents` because the contents now carry it - see the `cells` branch.
+  const cellEstimates = useCellEstimates(workbook === 'cells' ? sessionId : null, locatorScore)
   const mapContents: MapContents | null =
     workbook === 'overview'
       ? {
@@ -630,7 +633,17 @@ export function App() {
             track, cells, bins, footprints: shownFootprints,
             showServingLine: servingLine, events: shownEvents,
           }
-          : null
+          // The Cells map is about where the masts are: what the record says, and what the
+          // drive measured. No tiles, no footprints, no event pins - each would be a fourth
+          // kind of mark on a picture whose whole subject is the gap between two of them.
+          //
+          // It goes through `mapContents` like the other three because it must: this map
+          // was drawing estimates handed to RouteMap as a separate prop, so the Layers dock
+          // could not see them and the tab had no dock at all. `view/maplayers.ts` exists
+          // to prevent exactly that, and the change that added the overlay broke its rule.
+          : workbook === 'cells'
+            ? { track, cells, estimates: cellEstimates, showServingLine: servingLine }
+            : null
   // The switched-off ones, so the dock can offer them back. Everything about whether a
   // layer IS drawn still comes from the contents above.
   const layersOff: LayerToggle[] = [
@@ -638,9 +651,6 @@ export function App() {
     ...(eventsHidden ? ['events' as LayerToggle] : []),
   ]
   const mapLayers = mapContents ? describeLayers(mapContents, layersOff) : []
-
-  // Fetched here rather than inside the panel so the map and the table read one answer.
-  const cellEstimates = useCellEstimates(workbook === 'cells' ? sessionId : null, locatorScore)
 
   /**
    * Whether the screen on show consumes a toolbar group. One lookup, so a control is
@@ -1039,10 +1049,10 @@ export function App() {
                 `isolate` is passed because this tab is marked isolates:true for its bar
                 chart - without it the legend's claim would be half true on the one tab
                 that now shows both a chart and a map. */}
-            <RouteMap track={track} cells={cells} cursorSeq={cursorSeq}
+            <RouteMap {...mapContents!} cursorSeq={cursorSeq}
                       frameKey={String(sessionId)} refitToken={refitToken}
                       onCursorChange={moveCursor} kpiName={activeDef?.displayName ?? kpi}
-                      estimates={cellEstimates} focusPci={focusPci}
+                      focusPci={focusPci}
                       onFilterCell={filterToCell}
                       isolate={isolate}
                       eventTypes={eventTypes} />
