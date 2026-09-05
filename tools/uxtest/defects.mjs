@@ -133,7 +133,13 @@ export const DEFECTS = [
       + "server's sentence, becoming the fourth author of one rule.",
     file: 'frontend/src/view/doc/build.ts',
     find: `      condition = d.text || 'none'`,
-    replace: `      condition = filterSpec.replace(/^kpi:/, '').replace(/:/g, ' ')`,
+    // A NEAR miss, not a wild one. The first version of this defect stripped 'kpi:' and
+    // turned the colons into spaces, which produced 'RSRQ >= -12' - the server's sentence,
+    // character for character - and the check stayed green because nothing had changed.
+    // A hand-rolled formatter that happens to agree today is the one this check cannot
+    // see; what it can see is the same formatter tidying the operator tomorrow.
+    replace: `      condition = filterSpec.replace(/^kpi:/, '')
+        .replace(/:>=:/, ' \u2265 ').replace(/:/g, ' ')`,
   },
   {
     id: 'D14-doc-claims-saved',

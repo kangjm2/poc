@@ -3869,8 +3869,15 @@ scenario('S31 · The workbook itself leaves the tool')
     html.includes('# workbook: S31 export book') && /<section class="wb-pane"/.test(html),
     `${(html.match(/<section class="wb-pane"/g) || []).length} pane(s), ${html.length} bytes`)
 
-  // Verbatim, both strings. A document that formatted 'RSRQ >= -12' itself would look
+  // Verbatim, both strings. A document that formatted the condition itself would look
   // identical to a reader and be the fourth author of one sentence.
+  //
+  // What this cannot see, and it is worth writing down (1.5.12): a hand-rolled formatter
+  // whose output happens to MATCH the server's today. Measured, not assumed - the first
+  // injection written for this step stripped 'kpi:' and replaced the colons with spaces,
+  // which is 'RSRQ >= -12' exactly, and the suite stayed at 303/303. The check catches the
+  // formatter the day it drifts, which is the day that matters, and it catches nothing
+  // before then.
   step("the condition is the SERVER's sentence, character for character",
     said.text.length > 0 && html.includes(`# condition: ${said.text}`)
     && html.includes(said.scope),
