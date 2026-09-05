@@ -13,8 +13,13 @@ export const DEFECTS = [
     describes: 'A KPI family exists server-side but the parameter tree filters it out, '
       + 'so it is unreachable in the UI.',
     file: 'frontend/src/components/Panels.tsx',
-    find: `  const byCat = defs.reduce<Record<string, KpiDefinition[]>>((acc, d) => {`,
-    replace: `  const byCat = defs.filter((d) => d.category !== 'Fronthaul')
+    // Re-anchored 2026-09-05. The original anchor was `defs.reduce<` and the source now
+    // reads `matches.reduce<` - a search box landed between them. `inject.mjs apply` has
+    // been exiting 3 ever since, so the check this defect proves has had NO proof for as
+    // long as the search box has existed, and nothing said so: the register listed it and
+    // the harness silently refused it.
+    find: `  const byCat = matches.reduce<Record<string, KpiDefinition[]>>((acc, d) => {`,
+    replace: `  const byCat = matches.filter((d) => d.category !== 'Fronthaul')
     .reduce<Record<string, KpiDefinition[]>>((acc, d) => {`,
   },
   {
@@ -44,8 +49,16 @@ export const DEFECTS = [
     describes: 'The shared time cursor stops driving the value panels. Layout is intact; '
       + 'the numbers just stop following the cursor.',
     file: 'frontend/src/App.tsx',
-    find: `    api.snapshot(sessionId, cursorSeq).then(setSnapshot).catch(() => { /* seq may be out of range */ })`,
-    replace: `    api.snapshot(sessionId, 0).then(setSnapshot).catch(() => { /* seq may be out of range */ })`,
+    // Re-anchored 2026-09-05, and this one is the sharp case. The anchor was a one-line
+    // `api.snapshot(sessionId, cursorSeq).then(setSnapshot)`; the debounce that wraps the
+    // cursor fetches moved it into a setTimeout with a `live` guard, and from that moment
+    // the defect guarding the shared cursor - the application's central invariant - could
+    // not be applied at all. 139/139 stayed green throughout, because a defect that will
+    // not apply is not a failing check, it is an absent one.
+    find: `      api.snapshot(sessionId, cursorSeq)
+        .then((d) => { if (live) setSnapshot(d) })`,
+    replace: `      api.snapshot(sessionId, 0)
+        .then((d) => { if (live) setSnapshot(d) })`,
   },
   {
     id: 'D5-severity-colour-dropped',

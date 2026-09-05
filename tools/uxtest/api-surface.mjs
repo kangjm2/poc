@@ -261,11 +261,42 @@ const relocalised = [
   ...(/=>\s*`\$\{i === 0 \? 'M' : 'L'\}/.test(composedText) ? ["a path 'd' builder"] : []),
 ]
 
+// ------------------------------------------- 5. every injectable defect still anchors
+//
+// The defect register is how this project proves a check can fail. It proves nothing about
+// a defect whose anchor has drifted: `inject.mjs apply` exits 3 with "source has moved",
+// the loop skips it, and the suite stays green - so the check it was written to prove has
+// no proof and nothing says so. Measured, not hypothesised: D1 and D4 had both been dead
+// for as long as the search box and the cursor debounce had existed, and D4 guards the
+// shared time cursor, which is the application's central invariant.
+//
+// Static on purpose: this asserts the anchor is FINDABLE, which is the whole failure mode.
+// Whether the defect then turns a check red is what the injection round is for.
+const defectsSrc = read('tools/uxtest/defects.mjs')
+const defectCount = [...defectsSrc.matchAll(/^\s{4}id: '/gm)].length
+const deadDefects = []
+for (const m of defectsSrc.matchAll(/id:\s*'([^']+)'[\s\S]*?file:\s*'([^']+)'[\s\S]*?find:\s*`([\s\S]*?)`,\n/g)) {
+  const [, id, file, find] = m
+  let target
+  try {
+    target = read(file)
+  } catch {
+    deadDefects.push(`${id} - ${file} does not exist`)
+    continue
+  }
+  // The register stores the anchor as a template literal, so `${...}` in the source is
+  // escaped there; compare against the unescaped form.
+  if (!target.includes(find.replace(/\\`/g, '`').replace(/\\\$/g, '$'))) {
+    deadDefects.push(`${id} - anchor no longer in ${file}`)
+  }
+}
+
 // ---------------------------------------------------------------- report
 const problems =
   unreachedEndpoints.length + unusedClientMethods.length + kpiGaps.length
   + (probeFailed ? 1 : 0) + unread.length + unaudited.length
   + domInGeom.length + extensionlessImports.length + relocalised.length
+  + deadDefects.length
 
 console.log('API surface coverage')
 console.log(`  endpoints declared:      ${mappings.length}`)
@@ -273,6 +304,8 @@ console.log(`  client methods declared: ${clientMethods.length}`)
 console.log(`  global-filter coverage:  ${analyticPaths.length} session analytics,`
             + ` ${analyticPaths.length - unaudited.length} named in GlobalFilter.coverage()`)
 console.log(`  KPI reachability:        ${renderedNote}`)
+console.log(`  injectable defects:      ${defectCount} declared,`
+            + ` ${defectCount - deadDefects.length} whose anchor still resolves`)
 console.log(`  geometry modules:        ${geomFiles.length} a checker may import in Node,`
             + ` ${domInGeom.length} touching the DOM,`
             + ` ${extensionlessImports.length} import(s) Node cannot resolve`)
@@ -301,6 +334,11 @@ if (unread.length) {
   console.log('\n  mapping annotations this script could not read'
               + ' - the endpoint surface below is incomplete:')
   for (const u of unread) console.log(`    ${u}`)
+}
+if (deadDefects.length) {
+  console.log('\n  defects that can no longer be injected, so the checks they prove'
+              + ' have no proof:')
+  for (const d of deadDefects) console.log(`    ${d}`)
 }
 if (domInGeom.length) {
   console.log('\n  view/geom must stay DOM-free - a checker imports it in Node:')

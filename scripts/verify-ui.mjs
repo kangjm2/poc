@@ -1459,9 +1459,17 @@ check('페인 그림과 문서 속 그림이 같은 기하',
 
 // The map picture drops every hover, and the hover is the only place a run's time, value,
 // bin and sample count are ever stated. A table row per run is what keeps them.
-const domRuns = await page.locator('.leaflet-overlay-pane path.route-run').count()
+// The screen's own runs, minus the ones Leaflet clipped to nothing - it writes a literal
+// `d="M0 0"` for a polyline entirely outside the padded bounds, which the route checks
+// above already work around.
+const domRuns = await page.locator('.leaflet-overlay-pane path.route-run')
+  .evaluateAll((ps) => ps.filter((x) => (x.getAttribute('d') ?? '').trim() !== 'M0 0').length)
+// Three counts, all three load-bearing. `domRuns` was computed here and used ONLY inside
+// the failure message: the file was compared against itself and the screen rode along as
+// decoration, which is §1.5.1 in the check that was supposed to be about the map.
 check('지도 그림이 사실을 조용히 삼키지 않음',
-  at(parts.factsRows, 1) === at(parts.runs, 1).length && at(parts.factsRows, 1) > 0,
+  at(parts.factsRows, 1) === at(parts.runs, 1).length
+  && at(parts.runs, 1).length === domRuns && domRuns > 0,
   `${at(parts.factsRows, 1)} table rows, ${at(parts.runs, 1).length} runs in the file,`
   + ` ${domRuns} on screen`)
 

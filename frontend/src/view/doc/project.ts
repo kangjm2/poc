@@ -1,4 +1,5 @@
 import L from 'leaflet'
+import { breakColor, breakDash } from '../geom/routeruns.ts'
 import type { RouteForm } from '../geom/routeruns'
 
 /**
@@ -87,10 +88,14 @@ export function projectRoute(
     })),
     breaks: form.breaks.map((b) => ({
       d: path(b.coords),
-      color: b.kind === 1 ? '#8a8a95' : '#b00020',
+      // Through routeruns' own accessors. These four values were retyped here in the round
+      // that created both files - the exact duplication that round was written to prevent,
+      // three files apart. A gap drawn grey in the document and a different grey on the
+      // map is the shape it would have taken.
+      color: breakColor(b.kind),
       weight: 2,
       opacity: 0.85,
-      dash: b.kind === 1 ? '5 7' : '3 5',
+      dash: breakDash(b.kind),
     })),
     bounds: {
       south: Math.min(...pts.map((p) => p[0])), north: Math.max(...pts.map((p) => p[0])),
