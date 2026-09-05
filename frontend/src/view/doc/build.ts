@@ -1,5 +1,5 @@
 import { api } from '../../api/client'
-import { composeChartPane, paneTraceColor } from '../geom/panegeom'
+import { composeChartPane, paneTitle, paneTraceColor } from '../geom/panegeom'
 import { composeRuns } from '../geom/routeruns'
 import { describeLayers, type MapContents } from '../maplayers'
 import { documentFileName, paneFileName } from './naming'
@@ -93,7 +93,7 @@ export async function buildWorkbookDocument(input: BuildInput): Promise<BuiltDoc
       const first = visible[0]
       if (!first) {
         return {
-          kind: 'EMPTY' as const, title: pane.title ?? 'Map',
+          kind: 'EMPTY' as const, title: paneTitle(pane, (k) => displayName(defs, k)),
           reason: 'No visible layer. Nothing was drawn on this pane.',
           measurement, condition,
         }
@@ -109,7 +109,7 @@ export async function buildWorkbookDocument(input: BuildInput): Promise<BuiltDoc
       const contents: MapContents = { track, cells: [] }
       return {
         kind: 'MAP' as const,
-        title: pane.title ?? `Map — ${caption}`,
+        title: paneTitle(pane, (k) => displayName(defs, k)),
         form,
         route: projectRoute(form, { width: MAP_DOC_W, height: MAP_DOC_H }),
         layerNotes: describeLayers(contents).filter((l) => l.drawn).map((l) => l.label),
@@ -131,7 +131,7 @@ export async function buildWorkbookDocument(input: BuildInput): Promise<BuiltDoc
     if (geom.empty) {
       return {
         kind: 'EMPTY' as const,
-        title: pane.title ?? 'Chart',
+        title: paneTitle(pane, (k) => displayName(defs, k)),
         reason: geom.empty === 'no-visible-layer'
           ? 'No visible layer. Nothing was drawn on this pane.'
           : 'The visible layers recorded no samples in this measurement.',
@@ -140,8 +140,7 @@ export async function buildWorkbookDocument(input: BuildInput): Promise<BuiltDoc
     }
     return {
       kind: 'CHART' as const,
-      title: pane.title
-        ?? geom.traces.map((t) => t.displayName).join(' · '),
+      title: paneTitle(pane, (k) => displayName(defs, k)),
       geom,
       omitted,
       measurement,

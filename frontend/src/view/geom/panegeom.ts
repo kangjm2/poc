@@ -221,3 +221,26 @@ export function composeChartPane(
     empty: null,
   }
 }
+
+/**
+ * What a pane is called when nobody has named it.
+ *
+ * Here rather than at the two call sites, because it WAS at the two call sites and they
+ * already disagreed: the screen listed every visible layer while the document listed the
+ * traces that had data, so a pane holding one layer the drive never recorded was called by
+ * that layer's name on screen and by nothing at all in the file. Both were defensible and
+ * that is exactly the problem - the header of a picture and the heading above it in the
+ * document referred to one pane by two names.
+ *
+ * `displayNameOf` is passed in so this stays a function of its arguments: the catalogue
+ * lives in a component's props and this module must remain importable outside a browser.
+ */
+export function paneTitle(
+  pane: { kind: string; title?: string | null; layers: Array<{ kpiName: string; visible: boolean }> },
+  displayNameOf: (kpiName: string) => string,
+): string {
+  if (pane.title != null && pane.title.trim() !== '') return pane.title
+  const drawn = pane.layers.filter((l) => l.visible).map((l) => displayNameOf(l.kpiName))
+  if (pane.kind === 'MAP') return drawn.length === 0 ? 'Map' : `Map \u2014 ${drawn[0]}`
+  return drawn.length === 0 ? 'Chart' : drawn.join(' \u00b7 ')
+}

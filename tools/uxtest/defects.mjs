@@ -142,7 +142,7 @@ export const DEFECTS = [
       + 'a picture of unsaved edits presents itself as the saved arrangement.',
     file: 'frontend/src/view/doc/build.ts',
     find: `    .file('saved', dirty`,
-    replace: `    .file('saved', false`,
+    replace: `    .file('saved', dirty && false`,
   },
   {
     id: 'D15-map-facts-dropped',
@@ -159,8 +159,13 @@ export const DEFECTS = [
     describes: 'The document is named from the workbook name alone. Every workbook is '
       + "created as 'New workbook', so the second download replaces the first.",
     file: 'frontend/src/view/doc/naming.ts',
-    find: `  return \`\${book}-\${id}-\${drive}.\${ext}\``,
-    replace: `  return \`\${book}-\${drive}.\${ext}\``,
+    find: `  const id = workbook.id == null ? 'unsaved' : String(workbook.id)
+  const drive = session == null ? 'no-measurement'
+    : (slug(session.name) || \`measurement-\${session.id}\`)
+  return \`\${book}-\${id}-\${drive}.\${ext}\``,
+    replace: `  const drive = session == null ? 'no-measurement'
+    : (slug(session.name) || \`measurement-\${session.id}\`)
+  return \`\${book}-\${drive}.\${ext}\``,
   },
   {
     id: 'D17-pane-cursor-full-width',
@@ -169,7 +174,8 @@ export const DEFECTS = [
       + 'pad the plot is inset by - the cursor lands where the trace is not.',
     file: 'frontend/src/components/ComposedWorkbook.tsx',
     find: `             onCursorChange(seqAtFraction(geom, (e.clientX - r.left) / r.width))`,
-    replace: `             onCursorChange(Math.round(Math.max(0, Math.min(1,
-               (e.clientX - r.left) / r.width)) * geom.maxSeq))`,
+    replace: `             onCursorChange(seqAtFraction(
+               { ...geom, frame: { ...geom.frame, padL: 0, padR: 0 } },
+               (e.clientX - r.left) / r.width))`,
   },
 ]

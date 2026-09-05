@@ -1391,12 +1391,24 @@ check('숨긴 레이어는 그림에 없고, 없다고 적힘',
 const wantKeys = ['format', 'workbook', 'measurement', 'condition', 'generated', 'saved',
   'contains', 'not_included']
 const missingKeys = wantKeys.filter((k) => !(k in parts.preamble))
-const captioned = parts.sections.filter((sec) =>
-  /measurement:/.test(sec) && /condition:/.test(sec)).length
+// Two carriers, asserted separately, because they leave by different doors and a section
+// containing the words proves neither. The first version searched the whole section for
+// 'measurement:' and passed when the <figcaption> was deleted outright - the picture's own
+// <desc> carries the same sentence, so the check could not tell which one it had found.
+// The caption is for a reader of the document; the desc travels with a picture pulled out
+// of it. Losing either is a real loss and only one assertion each can see it.
+const carriers = (sec) => ({
+  caption: /<figcaption>[^<]*measurement:[^<]*condition:/.test(sec),
+  desc: /<desc>[^<]*measurement:[^<]*condition:/.test(sec),
+})
+const captioned = parts.sections.filter((sec) => carriers(sec).caption).length
+const described = parts.sections.filter((sec) => carriers(sec).desc).length
 check('출처가 서두와 페인 양쪽에 있음',
-  missingKeys.length === 0 && captioned === parts.sections.length,
+  missingKeys.length === 0 && captioned === parts.sections.length
+  && described === parts.sections.length,
   `${missingKeys.length ? `missing ${missingKeys.join(',')}` : 'all keys'},`
-  + ` ${captioned}/${parts.sections.length} panes captioned`)
+  + ` ${captioned}/${parts.sections.length} captions, ${described}/${parts.sections.length}`
+  + ' picture descriptions')
 
 // It says what it is NOT. The reference's own title for p223 is 'Exporting workbooks as
 // PDF/MS Word/MS PowerPoint files', and this file is none of them.

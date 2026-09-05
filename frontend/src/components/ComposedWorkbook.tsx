@@ -1,7 +1,9 @@
 import { Fragment, useEffect, useState } from 'react'
 import { api } from '../api/client'
 import { RouteMap } from './RouteMap'
-import { composeChartPane, paneTraceColor, seqAtFraction } from '../view/geom/panegeom'
+import {
+  composeChartPane, paneTitle, paneTraceColor, seqAtFraction,
+} from '../view/geom/panegeom'
 import { WorkbookExport } from './WorkbookExport'
 import type {
   CellRef, KpiDefinition, Series, SessionSummary, TrackPoint, Workbook,
@@ -213,6 +215,9 @@ export function ComposedWorkbook({
   // that is open, which is what every layer meant before drives were nameable - and what
   // keeps a saved workbook a reusable arrangement rather than a snapshot of one drive.
   const sessionName = (id: number) => sessions.find((x) => x.id === id)?.name ?? `#${id}`
+  /** The catalogue's name for a KPI, handed to the rules that must not import it. */
+  const nameOf = (kpiName: string) =>
+    defs.find((d) => d.name === kpiName)?.displayName ?? kpiName
   const trackKey = (kpiName: string, sid: number | null | undefined) =>
     `${sid ?? sessionId ?? 0}|${kpiName}`
   const mapWants = draft.panes
@@ -338,7 +343,7 @@ export function ComposedWorkbook({
                   // ticked there is no KPI to colour by, and drawing the route in some
                   // other KPI's colours would answer a question nobody asked.
                   <div className="panel">
-                    <header><span className="title">{pane.title ?? 'Map'}</span></header>
+                    <header><span className="title">{paneTitle(pane, nameOf)}</span></header>
                     <div style={{ padding: 12, color: '#666' }}>
                       No visible layer. Tick one in the Layers dock.
                     </div>
@@ -368,15 +373,14 @@ export function ComposedWorkbook({
                 )
               ) : visible.length === 0 ? (
                 <div className="panel">
-                  <header><span className="title">{pane.title ?? 'Chart'}</span></header>
+                  <header><span className="title">{paneTitle(pane, nameOf)}</span></header>
                   <div style={{ padding: 12, color: '#666' }}>
                     No visible layer. Tick one in the Layers dock.
                   </div>
                 </div>
               ) : (
                 <MultiSeriesChart
-                  title={pane.title ?? visible.map((l) =>
-                    defs.find((d) => d.name === l.kpiName)?.displayName ?? l.kpiName).join(' · ')}
+                  title={paneTitle(pane, nameOf)}
                   series={visible.map((l) => ({
                     s: series.find((x) => x.kpi === l.kpiName),
                     color: paneTraceColor(pane.layers, l.kpiName),
