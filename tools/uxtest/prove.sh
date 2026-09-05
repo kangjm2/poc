@@ -55,6 +55,19 @@ for D in "$@"; do
   fi
 
   timeout 2400 node "$CHECKER" > /tmp/prove-run.out 2>&1
+  # A checker that DIED prints no summary, and `grep -c FAIL` on its output is 0 - which
+  # reads exactly like "the defect changed nothing". Both coverage defects did that on
+  # their first run: they broke the SQL parameter count, the endpoint 500'd, the suite
+  # threw, and the loop reported a clean sheet. So the summary line is required before any
+  # count is believed. An injection that CRASHES the application is not an injection
+  # either (1.5.9) - it is a different defect from the one being proved.
+  if ! grep -qE '(checks|steps) passed' /tmp/prove-run.out; then
+    echo "  CRASHED - the checker did not finish, so there is no result." | tee -a "$LOG"
+    echo "    (an injection that breaks the app rather than doing less: 1.5.9)" | tee -a "$LOG"
+    tail -3 /tmp/prove-run.out | sed 's/^/    /' | tee -a "$LOG"
+    node tools/uxtest/inject.mjs revert "$D" > /dev/null 2>&1
+    continue
+  fi
   FAILS=$(grep -cE '^ *FAIL' /tmp/prove-run.out)
   echo "  result: $FAILS failing" | tee -a "$LOG"
   grep -E '^ *FAIL' /tmp/prove-run.out | sed 's/^/    /' | tee -a "$LOG"

@@ -229,21 +229,21 @@ export const DEFECTS = [
       + 'does not. The total drops, so the screen looks narrowed, while its overshoot '
       + 'answer is still about the whole drive.',
     file: 'backend/src/main/java/com/vdt/analyzer/service/GeoAnalysisService.java',
-    find: `                WHERE s.session_id = ?%2$s`,
-    replace: `                WHERE s.session_id = ?%2$.0s`,
+    // Blanking only the SQL left the parameters bound and the query threw - which crashes
+    // the endpoint rather than answering it wrongly, and a crash is a different defect
+    // from the one under test (1.5.9). Nulling the scope removes it from the clause AND
+    // from the bind list, so the query runs and returns a plausible list.
+    find: `        GlobalFilter.Scope overshootScope = GlobalFilter.scope(filterSpec, sessionId, "s");`,
+    replace: `        GlobalFilter.Scope overshootScope = null;`,
   },
   {
-    id: 'D21-issues-filtered-after-islanding',
+    id: 'D21-weak-coverage-unscoped',
     kind: 'backend',
-    describes: 'The condition narrows the finished intervals instead of the samples they '
-      + 'are gathered from, so a stretch is kept whole because one sample in it survived '
-      + 'and every interval spans ground the condition excluded.',
+    describes: 'The weak-coverage detector ignores the condition while the other two '
+      + 'honour it. The total still drops, so the screen looks narrowed, and its longest '
+      + 'interval spans ground the condition excluded.',
     file: 'backend/src/main/java/com/vdt/analyzer/service/GeoAnalysisService.java',
-    find: `                    WHERE k.session_id = ? AND k.kpi_name = 'RSRP'%1$s
-                ),
-                islands AS (`,
-    replace: `                    WHERE k.session_id = ? AND k.kpi_name = 'RSRP'
-                ),
-                islands AS (`,
+    find: `        GlobalFilter.Scope weakScope = GlobalFilter.scope(filterSpec, sessionId, "k");`,
+    replace: `        GlobalFilter.Scope weakScope = null;`,
   },
 ]
