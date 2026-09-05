@@ -768,13 +768,31 @@ public class AnalysisService {
      */
     public Comparison compare(long idA, long idB, List<String> kpiNames,
                               String weightedBy, String domain) {
+        return compare(idA, idB, kpiNames, weightedBy, domain, null);
+    }
+
+    /**
+     * The same, under a global condition.
+     *
+     * The condition is applied to each drive SEPARATELY - `statistics` scopes to the
+     * session it was given - which is what `GlobalFilter.PER_MEASUREMENT` says and the only
+     * reading that makes a comparison mean anything: "where RSRQ was usable" is a different
+     * stretch of road in each drive, and comparing drive A's usable road against drive B's
+     * whole route would answer nothing.
+     *
+     * Both sides or neither. Passing the condition to one call and not the other leaves a
+     * table that still narrows, still prints a verdict, and compares a subset against a
+     * whole drive - which looks exactly like a real regression.
+     */
+    public Comparison compare(long idA, long idB, List<String> kpiNames,
+                              String weightedBy, String domain, String filterSpec) {
         SessionSummary a = getSession(idA);
         SessionSummary b = getSession(idB);
         List<ComparisonRow> rows = new ArrayList<>();
         for (String name : kpiNames) {
             KpiDefinition def = catalog.require(name);
-            Statistics sa = statistics(idA, name, null, null, weightedBy, domain);
-            Statistics sb = statistics(idB, name, null, null, weightedBy, domain);
+            Statistics sa = statistics(idA, name, null, null, weightedBy, domain, filterSpec);
+            Statistics sb = statistics(idB, name, null, null, weightedBy, domain, filterSpec);
             Double delta = (sa.mean() == null || sb.mean() == null)
                     ? null : round(sb.mean() - sa.mean());
             rows.add(new ComparisonRow(name, def.getDisplayName(), def.getUnit(),

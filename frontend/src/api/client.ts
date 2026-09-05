@@ -46,6 +46,7 @@ const FILTERED_PATHS = [
   '/degradations', '/area-statistics', '/bins', '/cell-footprints',
   '/export.csv', '/export.geojson', '/report.html',
   '/cohorts', '/distance-bins', '/serving-lines',
+  '/compare', '/coverage-issues',
 ]
 
 /** Appends `filter=` to the paths that honour it, and to nothing else. */

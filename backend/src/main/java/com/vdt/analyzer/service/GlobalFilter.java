@@ -224,12 +224,18 @@ public final class GlobalFilter {
                         "Not built: this endpoint takes no filter parameter. `scope()`"
                         + " can now name a set of drives, so this is an unwired"
                         + " endpoint and not an impossibility"),
-                new Coverage("/api/compare", false,
-                        "Not built, for the same reason: no filter parameter yet"),
-                new Coverage("/api/sessions/{id}/coverage-issues", false,
-                        "Not built: this endpoint takes no filter parameter. It classifies"
-                        + " individual samples, which is the shape /degradations honours,"
-                        + " so this is an unwired endpoint and not an impossibility"),
+                new Coverage("/api/compare", true,
+                        "Both drives, each narrowed by the condition against ITSELF - which"
+                        + " is what per-measurement means and the only reading that makes a"
+                        + " comparison mean anything. The header keeps printing what each"
+                        + " drive RECORDED beside what the condition selected, because"
+                        + " /sessions/{id} is exempt so that the recorded number never"
+                        + " moves"),
+                new Coverage("/api/sessions/{id}/coverage-issues", true,
+                        "All three detectors, narrowed BEFORE the islanding - the shape"
+                        + " /degradations already uses. An interval is a run of samples"
+                        + " that are both bad and selected, so a condition can SPLIT one"
+                        + " stretch into several and the count on screen can go up"),
                 new Coverage("/api/sessions/{id}/cell-locator", false,
                         "Estimated site positions. The confidence 1-10 is calibrated"
                         + " against whole-drive evidence - '6 or better means within 100 m'"

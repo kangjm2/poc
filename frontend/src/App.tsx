@@ -564,10 +564,12 @@ export function App() {
   }, [])
   useEffect(reloadWorkbooks, [reloadWorkbooks])
 
+  // The condition reaches this list through `api.coverageIssues` itself; naming it in the
+  // deps is what makes the screen ASK again when the bar changes.
   useEffect(() => {
     if (sessionId == null) return
     api.coverageIssues(sessionId).then(setIssues).catch(fail)
-  }, [sessionId, fail])
+  }, [sessionId, fail, filterSpec])
 
   // Only while identity colouring is on: the legend is the only consumer, and this is a
   // full-table aggregate rather than something already in the track payload.
@@ -1147,6 +1149,17 @@ export function App() {
               <div className="basis-note">
                 Weak coverage below &minus;105 dBm &middot; poor quality below 0 dB SINR with
                 adequate power &middot; overshoot beyond 3 km from the site.
+                {/* Said here, because the surprise is real and belongs where the count is.
+                    The condition narrows which SAMPLES are classified, before the run of
+                    bad ones is gathered - so taking a sample out of the middle of a bad
+                    stretch ends the stretch there, and one interval becomes two. A reader
+                    who expects a filter to only ever remove rows would read a HIGHER count
+                    as the tool contradicting itself. */}
+                {filterSpec && (
+                  <> Narrowed by the condition above, applied to the samples before the
+                    stretches are gathered &mdash; so a stretch can be <b>split</b> by it,
+                    and this count can go up as well as down.</>
+                )}
               </div>
               <div style={{ maxHeight: 320, overflow: 'auto' }}>
                 <table className="grid">
@@ -1426,7 +1439,7 @@ export function App() {
             </button>
           </div>
           {cohortBy == null
-            ? <CompareView sessions={sessions} />
+            ? <CompareView sessions={sessions} filterSpec={filterSpec} />
             : <CohortView defs={defs} kpi={kpi} groupBy={cohortBy} holdConstant={cohortHold}
                           filterSpec={filterSpec} onKpi={setKpi}
                           onDimension={(by, hold) => { setCohortBy(by); setCohortHold(hold) }} />}

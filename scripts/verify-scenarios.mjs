@@ -18,6 +18,7 @@
  *   S10 Unconfigured KPI            (auto scale: readable, stable under filtering, honest)
  *   S11 Lossless import             (unknown columns become KPIs, analysable straight away)
  *   S31 Workbook export             (the arrangement leaves as a document, saying its condition)
+ *   S32 Condition reaches compare   (a verdict over the narrowed samples; intervals of kept samples)
  *
  * Scale beyond the seed is covered separately by scripts/load-test.sh.
  */
@@ -2044,6 +2045,16 @@ scenario('S20 · One condition, every screen')
   await page.waitForTimeout(900)
   await openWorkbook('Statistics')
   await page.waitForTimeout(900)
+  // Added 2026-09-05 with F2/F3. Both were exempt when this walk was written, so neither
+  // was on it - and an endpoint the walk never touches is an endpoint this step cannot
+  // speak for. The Compare mode also puts the recorder on a screen outside Analysis, which
+  // is where /compare lives.
+  await openWorkbook('Coverage Issues')
+  await page.waitForTimeout(1600)
+  await openMode('Compare')
+  await page.waitForTimeout(2500)
+  await openMode('Analysis')
+  await page.waitForTimeout(1200)
   await openWorkbook('Overview')
   await page.waitForTimeout(900)
   page.off('request', record)
@@ -3916,6 +3927,129 @@ scenario('S31 · The workbook itself leaves the tool')
     + ` (${keptWithValue} with a reading), ${drawn} points drawn`)
 
   await page.request.delete(`${API}/api/workbooks/${book.id}`)
+  await page.locator('.globalfilter button', { hasText: 'Clear' }).click().catch(() => {})
+  await page.goto(BASE, { waitUntil: 'domcontentloaded' })
+  await page.waitForTimeout(2000)
+}
+
+// ─── S32 · The condition reaches the comparison and the issue list ───────────
+//
+// Both endpoints carried a "Not built" note in GlobalFilter.coverage() saying, in the
+// repo's own words, that they were unwired rather than impossible. Wiring them is small;
+// what needs a journey is that the two screens now say something DIFFERENT, and say it
+// truthfully - a verdict computed over a subset, and a list of intervals gathered from
+// samples the condition kept.
+scenario('S32 · The condition reaches the comparison and the issue list')
+{
+  const a = sessions.find((x) => x.name === CITY_A).id
+  const b = sessions.find((x) => x.name === CITY_B).id
+  const spec = 'kpi:RSRQ:>=:-12'
+  const enc = encodeURIComponent(spec)
+  const kpis = 'RSRP,SINR'
+
+  const plain = await apiGet(`/api/compare?a=${a}&b=${b}&kpis=${kpis}`)
+  const narrowed = await apiGet(`/api/compare?a=${a}&b=${b}&kpis=${kpis}&filter=${enc}`)
+
+  // ── the load-bearing one: one number, from two endpoints that share no code path.
+  //    /compare reaches it through AnalysisService.compare; /statistics is asked directly.
+  //    A condition passed to one side of the comparison and not the other still narrows
+  //    the table and still prints a verdict - and only this sees it.
+  const rowFor = (c, kpi) => c.rows.find((r) => r.kpi === kpi)
+  const statA = await apiGet(`/api/sessions/${a}/statistics?kpi=RSRP&filter=${enc}`)
+  const statB = await apiGet(`/api/sessions/${b}/statistics?kpi=RSRP&filter=${enc}`)
+  const rn = rowFor(narrowed, 'RSRP')
+  step('each side of the comparison counts what /statistics counts, under the condition',
+    rn.a.count === statA.count && rn.b.count === statB.count
+    && statA.count !== statB.count,
+    `compare ${rn.a.count}/${rn.b.count} vs statistics ${statA.count}/${statB.count}`)
+
+  // Both sides moved, and by different amounts - so a condition applied to only one of
+  // them cannot masquerade as this.
+  const rp = rowFor(plain, 'RSRP')
+  step('the condition narrowed both drives, each against itself',
+    rn.a.count < rp.a.count && rn.b.count < rp.b.count
+    && (rp.a.count - rn.a.count) !== (rp.b.count - rn.b.count),
+    `${rp.a.count}->${rn.a.count} and ${rp.b.count}->${rn.b.count}`)
+
+  // The arithmetic moved, not just the row count. On the seeded pair this flips the RSRP
+  // verdict - measured, not assumed - which is the whole reason the feature is worth
+  // having: the answer to "which build is better here" depends on where "here" is.
+  step('and the verdict is computed over the narrowed samples',
+    rp.meanDelta !== rn.meanDelta,
+    `delta ${rp.meanDelta} (${rp.verdict}) -> ${rn.meanDelta} (${rn.verdict})`)
+
+  // ── the screen. The recorded count must NOT move - /sessions/{id} is exempt precisely
+  //    so two screens cannot disagree about what a drive collected - so the header has to
+  //    carry both numbers or it is a smaller table with no explanation.
+  await page.goto(BASE, { waitUntil: 'domcontentloaded' })
+  await page.waitForSelector('.statusbar', { timeout: 20000 })
+  await page.waitForTimeout(2500)
+  await page.locator('#gf-spec').fill(spec)
+  await page.locator('.globalfilter button', { hasText: 'Apply' }).click()
+  await page.waitForTimeout(2000)
+  await openMode('Compare')
+  await page.waitForTimeout(3000)
+  // The comparison panel, named by the controls only it carries. `.panel header .meta`
+  // last() picked the CDF panel below it - the same shape of mistake as measuring the
+  // container instead of the contents.
+  const meta = await page.locator('.panel:has(.basis-controls) header .meta').first()
+    .innerText()
+  step('the comparison header prints what was recorded AND what the condition selected',
+    /recorded/.test(meta) && /under this condition/.test(meta)
+    && meta.includes(String(rp.a.count)) && meta.includes(String(rn.a.count)),
+    meta.replace(/\s+/g, ' '))
+
+  await openMode('Analysis')
+  await page.waitForTimeout(1500)
+
+  // ── the issue list. Containment is the assertion, not the count: an interval is a run
+  //    of samples that are both bad AND selected, so every sample inside one must be a
+  //    sample the condition kept. Filtering the finished intervals instead would keep a
+  //    stretch whole because one sample in it survived.
+  const cell = 'cell:44'
+  const cellEnc = encodeURIComponent(cell)
+  const wide = await apiGet(`/api/sessions/${a}/coverage-issues`)
+  const narrow = await apiGet(`/api/sessions/${a}/coverage-issues?filter=${cellEnc}`)
+  const track = await apiGet(
+    `/api/sessions/${a}/track?kpi=RSRP&maxPoints=4000&filter=${cellEnc}`)
+  const kept = new Set(track.map((t) => t.seq))
+  const spans = narrow.filter((x) => x.type !== 'OVERSHOOT')
+  const leaks = spans.filter((x) => {
+    for (let q = x.startSeq; q <= x.endSeq; q++) if (!kept.has(q)) return true
+    return false
+  })
+  step('every interval is a run of samples the condition kept, with none skipped',
+    spans.length > 0 && leaks.length === 0
+    && spans.every((x) => x.endSeq - x.startSeq + 1 === x.sampleCount),
+    `${spans.length} intervals, ${leaks.length} containing an unselected sample`)
+
+  // Non-empty on BOTH sides. A condition that empties the screen would satisfy any
+  // containment assertion trivially - the check would be about nothing.
+  step('and the list narrowed rather than emptied',
+    wide.length > narrow.length && narrow.length > 0,
+    `${wide.length} -> ${narrow.length} issues`)
+
+  // ── all three detectors, or none. The overshoot query is the one that reads `sample`
+  //    directly rather than a KPI, so it is the one a partial wiring would leave whole -
+  //    and a screen whose total drops looks narrowed while one of its three answers is
+  //    still about the whole drive.
+  const overshootIn = (list) => list.filter((x) => x.type === 'OVERSHOOT');
+  const elsewhere = await apiGet(
+    `/api/sessions/${a}/coverage-issues?filter=${encodeURIComponent('cell:8')}`)
+  step('the overshoot detector is narrowed too, not left whole',
+    overshootIn(wide).length === 1 && overshootIn(elsewhere).length === 0,
+    `whole drive: ${overshootIn(wide).map((x) => x.detail).join('; ') || 'none'}`
+    + ` | under cell:8: ${overshootIn(elsewhere).length}`)
+
+  // ── and the screen says the surprising part, where the count is read.
+  await openWorkbook('Coverage Issues')
+  await page.waitForTimeout(2000)
+  const note = await page.locator('.panel:has(.title:text-is("Detected coverage issues"))')
+    .locator('.basis-note').innerText()
+  step('the panel says a condition can SPLIT a stretch, so the count can go up',
+    /Narrowed by the condition/.test(note) && /split/i.test(note),
+    note.replace(/\s+/g, ' ').slice(-110))
+
   await page.locator('.globalfilter button', { hasText: 'Clear' }).click().catch(() => {})
   await page.goto(BASE, { waitUntil: 'domcontentloaded' })
   await page.waitForTimeout(2000)

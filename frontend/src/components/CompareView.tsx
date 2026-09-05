@@ -13,7 +13,16 @@ const COMPARE_KPIS = [
  * reason virtual drive test exists, so this is a top-level view rather than a
  * workbook the user has to assemble.
  */
-export function CompareView({ sessions }: { sessions: SessionSummary[] }) {
+export function CompareView({ sessions, filterSpec }: {
+  sessions: SessionSummary[]
+  /**
+   * A refetch trigger, not a request parameter - `api.compare` attaches the condition
+   * itself, through the same `filtered` every other honoured fetch goes through. It is a
+   * prop so the table recomputes when the bar changes, which is the half a screen usually
+   * forgets: the request would carry the new condition and nothing would ask for it.
+   */
+  filterSpec?: string | null
+}) {
   const [a, setA] = useState<number | null>(null)
   const [b, setB] = useState<number | null>(null)
   const [data, setData] = useState<Comparison | null>(null)
@@ -56,7 +65,22 @@ export function CompareView({ sessions }: { sessions: SessionSummary[] }) {
     setError(null)
     api.compare(a, b, COMPARE_KPIS, weightedBy, domain)
       .then(setData).catch((e) => setError(String(e)))
-  }, [a, b, weightedBy, domain])
+  }, [a, b, weightedBy, domain, filterSpec])
+
+  /**
+   * What the condition selected, taken from the row that carries the most on each side.
+   *
+   * Per KPI rather than per drive, because a drive does not record every KPI at every
+   * sample - so the largest row IS the count of samples the condition kept that carried
+   * anything at all. Null when no condition is in force, which is how the header knows to
+   * print one pair rather than two.
+   */
+  const selected = filterSpec && filterSpec.trim() && data
+    ? {
+      a: Math.max(0, ...data.rows.map((r) => r.a.count)),
+      b: Math.max(0, ...data.rows.map((r) => r.b.count)),
+    }
+    : null
 
   // The row whose CDFs are overlaid; defaults to the first KPI both sides measured.
   const selectedRow = data
@@ -106,8 +130,19 @@ export function CompareView({ sessions }: { sessions: SessionSummary[] }) {
                 <option value="LINEAR">linear power</option>
               </select>
             </span>
+            {/* Both numbers, never one.
+                `sampleCount` is what each drive RECORDED, and it must not move under a
+                condition - `/api/sessions/{id}` is exempt for exactly that reason, so two
+                screens cannot disagree about the same drive. What the condition selected
+                is a different number, and it is read off the ROWS rather than recomputed,
+                so the header cannot drift from the table under it. Printing only the
+                recorded pair under a condition is the defect the session report already
+                fixed once: a smaller table is exactly what a filtered drive looks like. */}
             <span className="meta">
-              {data.sessionA.sampleCount} / {data.sessionB.sampleCount} samples
+              {selected == null
+                ? `${data.sessionA.sampleCount} / ${data.sessionB.sampleCount} samples`
+                : `${data.sessionA.sampleCount} / ${data.sessionB.sampleCount} recorded`
+                  + ` · ${selected.a} / ${selected.b} under this condition`}
             </span>
           </header>
           {/* The verdict is only as meaningful as the basis behind it, so the basis is

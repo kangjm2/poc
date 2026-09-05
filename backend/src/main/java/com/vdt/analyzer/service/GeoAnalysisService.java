@@ -525,7 +525,37 @@ public class GeoAnalysisService {
      */
     public List<CoverageIssue> coverageIssues(long sessionId, double weakRsrpDbm,
                                               double poorSinrDb, double overshootKm) {
+        return coverageIssues(sessionId, weakRsrpDbm, poorSinrDb, overshootKm, null);
+    }
+
+    /**
+     * The same, under a global condition.
+     *
+     * The condition narrows which SAMPLES are classified, and it is applied inside each
+     * `flagged` CTE - before the islanding, never after. That placement is the whole of it:
+     * filtering the finished intervals would keep a stretch whole because one sample in it
+     * survived, and drop a stretch whose samples all survived because its midpoint did not.
+     * Narrowing first means an interval is a run of samples that are BOTH bad and selected,
+     * which is what `degradations` already does with the same gaps-and-islands shape.
+     *
+     * A consequence worth stating rather than hiding: a condition can SPLIT one interval
+     * into several, because removing a sample from the middle of a bad run ends the run
+     * there. That is the honest answer - the tool cannot claim continuity across ground it
+     * was told to ignore - and it is why the count on screen can go UP under a filter.
+     *
+     * All three detectors, or none. Scoping the weak-coverage query and leaving
+     * interference whole leaves a screen whose total drops - so it looks narrowed - while
+     * one of its three answers is still about the whole drive.
+     */
+    public List<CoverageIssue> coverageIssues(long sessionId, double weakRsrpDbm,
+                                              double poorSinrDb, double overshootKm,
+                                              String filterSpec) {
         List<CoverageIssue> issues = new ArrayList<>();
+        // One scope per query, because each names its own alias for the table the
+        // condition keys on. `scope` takes the alias precisely because it cannot guess it.
+        GlobalFilter.Scope weakScope = GlobalFilter.scope(filterSpec, sessionId, "k");
+        GlobalFilter.Scope interfScope = GlobalFilter.scope(filterSpec, sessionId, "r");
+        GlobalFilter.Scope overshootScope = GlobalFilter.scope(filterSpec, sessionId, "s");
 
         // Weak coverage: low received power regardless of interference.
         issues.addAll(jdbc.query("""
@@ -534,7 +564,7 @@ public class GeoAnalysisService {
                            (k.value < ?) AS bad
                     FROM sample_kpi k
                     JOIN sample s ON s.session_id = k.session_id AND s.seq = k.seq
-                    WHERE k.session_id = ? AND k.kpi_name = 'RSRP'
+                    WHERE k.session_id = ? AND k.kpi_name = 'RSRP'%1$s
                 ),
                 islands AS (
                     SELECT *, seq - row_number() OVER (PARTITION BY bad ORDER BY seq) AS grp
@@ -544,11 +574,12 @@ public class GeoAnalysisService {
                        min(value) worst
                 FROM islands WHERE bad GROUP BY grp HAVING count(*) >= 5
                 ORDER BY count(*) DESC LIMIT 50
-                """, (rs, i) -> new CoverageIssue("WEAK_COVERAGE", "CRITICAL",
+                """.formatted(GlobalFilter.and(weakScope)),
+                (rs, i) -> new CoverageIssue("WEAK_COVERAGE", "CRITICAL",
                 rs.getInt("a"), rs.getInt("b"), rs.getInt("n"),
                 rs.getDouble("lat"), rs.getDouble("lon"),
                 "RSRP down to " + round2(rs.getDouble("worst")) + " dBm"),
-                weakRsrpDbm, sessionId));
+                issueArgs(weakRsrpDbm, sessionId, weakScope)));
 
         // Poor quality despite adequate power: the signature of interference, not range.
         issues.addAll(jdbc.query("""
@@ -559,7 +590,7 @@ public class GeoAnalysisService {
                     JOIN sample_kpi q ON q.session_id = r.session_id AND q.seq = r.seq
                                      AND q.kpi_name = 'SINR'
                     JOIN sample s ON s.session_id = r.session_id AND s.seq = r.seq
-                    WHERE r.session_id = ? AND r.kpi_name = 'RSRP'
+                    WHERE r.session_id = ? AND r.kpi_name = 'RSRP'%1$s
                 ),
                 islands AS (
                     SELECT *, seq - row_number() OVER (PARTITION BY bad ORDER BY seq) AS grp
@@ -569,12 +600,13 @@ public class GeoAnalysisService {
                        min(sinr) worst, avg(rsrp) meanrsrp
                 FROM islands WHERE bad GROUP BY grp HAVING count(*) >= 5
                 ORDER BY count(*) DESC LIMIT 50
-                """, (rs, i) -> new CoverageIssue("INTERFERENCE", "WARNING",
+                """.formatted(GlobalFilter.and(interfScope)),
+                (rs, i) -> new CoverageIssue("INTERFERENCE", "WARNING",
                 rs.getInt("a"), rs.getInt("b"), rs.getInt("n"),
                 rs.getDouble("lat"), rs.getDouble("lon"),
                 "SINR " + round2(rs.getDouble("worst")) + " dB with RSRP "
                         + round2(rs.getDouble("meanrsrp")) + " dBm"),
-                weakRsrpDbm, poorSinrDb, sessionId));
+                issueArgs(weakRsrpDbm, poorSinrDb, sessionId, interfScope)));
 
         // Overshoot: a cell serving well beyond its intended footprint.
         //
@@ -589,16 +621,19 @@ public class GeoAnalysisService {
                        max(%1$s) AS max_m
                 FROM sample s
                 JOIN cell_ref c ON c.session_id = s.session_id AND c.pci = s.serving_pci
-                WHERE s.session_id = ?
+                WHERE s.session_id = ?%2$s
                 GROUP BY s.serving_pci
                 HAVING max(%1$s) > ? * 1000
                 ORDER BY max_m DESC LIMIT 20
-                """.formatted(toServingCell), (rs, i) -> new CoverageIssue("OVERSHOOT", "WARNING",
+                """.formatted(toServingCell, GlobalFilter.and(overshootScope)),
+                (rs, i) -> new CoverageIssue("OVERSHOOT", "WARNING",
                 rs.getInt("a"), rs.getInt("b"), rs.getInt("n"),
                 rs.getDouble("lat"), rs.getDouble("lon"),
                 "PCI " + rs.getInt("serving_pci") + " serving up to "
                         + round2(rs.getDouble("max_m") / 1000.0) + " km away"),
-                sessionId, overshootKm));
+                // sessionId, then the condition's own (it sits in the WHERE), then the
+                // HAVING's threshold - which binds after both because HAVING follows WHERE.
+                issueArgs(sessionId, overshootScope, overshootKm)));
 
         return issues;
     }
@@ -615,6 +650,30 @@ public class GeoAnalysisService {
         List<Object> out = new ArrayList<>();
         out.add(sessionId);
         out.addAll(GlobalFilter.params(scope));
+        return out.toArray();
+    }
+
+    /**
+     * The bindings in the order the query asks for them, with the condition's own spliced
+     * in WHERE IT SITS rather than always last.
+     *
+     * Always-last is what every other helper in this file does, and it is wrong for one of
+     * the three coverage queries: the overshoot detector binds its threshold in a HAVING,
+     * which follows the WHERE the condition lives in. A helper that appended the filter
+     * would have bound the kilometre threshold before the condition's parameters - and
+     * because both are numbers, PostgreSQL would have run it and returned a plausible list
+     * of the wrong intervals. So the call site names the order and this only flattens it.
+     *
+     * A null scope contributes nothing, which is what "no filter" has to mean for a
+     * positional bind list.
+     */
+    private static Object[] issueArgs(Object... parts) {
+        List<Object> out = new ArrayList<>();
+        for (Object part : parts) {
+            if (part == null) continue;
+            if (part instanceof GlobalFilter.Scope sc) out.addAll(GlobalFilter.params(sc));
+            else out.add(part);
+        }
         return out.toArray();
     }
 

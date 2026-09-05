@@ -114,8 +114,9 @@ public class AnalyticsController {
             @PathVariable long id,
             @RequestParam(defaultValue = "-105") double weakRsrpDbm,
             @RequestParam(defaultValue = "0") double poorSinrDb,
-            @RequestParam(defaultValue = "3") double overshootKm) {
-        return geo.coverageIssues(id, weakRsrpDbm, poorSinrDb, overshootKm);
+            @RequestParam(defaultValue = "3") double overshootKm,
+            @RequestParam(required = false) String filter) {
+        return geo.coverageIssues(id, weakRsrpDbm, poorSinrDb, overshootKm, filter);
     }
 
     /**

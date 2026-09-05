@@ -321,8 +321,9 @@ public class AnalysisController {
     public Comparison compare(@RequestParam long a, @RequestParam long b,
                               @RequestParam List<String> kpis,
                               @RequestParam(defaultValue = "SAMPLE") String weightedBy,
-                              @RequestParam(defaultValue = "AS_RECORDED") String domain) {
-        return analysis.compare(a, b, kpis, weightedBy, domain);
+                              @RequestParam(defaultValue = "AS_RECORDED") String domain,
+                              @RequestParam(required = false) String filter) {
+        return analysis.compare(a, b, kpis, weightedBy, domain, filter);
     }
 
     /**
