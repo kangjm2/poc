@@ -240,6 +240,13 @@ public class AnalyticsController {
         String slug = name == null ? "" : name.toLowerCase()
                 .replaceAll("[^a-z0-9]+", "-").replaceAll("(^-|-$)", "");
         if (slug.isBlank()) slug = "measurement-" + id;
-        return slug + (kpi == null ? "" : "-" + kpi.toLowerCase()) + "." + ext;
+        // Blank as well as null. `suffix` returns an EMPTY string for the sample export,
+        // not null, so every sample CSV and GeoJSON this application has ever produced was
+        // named `oulu-city-centre-build-1-4-2-.csv` - a trailing hyphen before the dot.
+        // It opened, it was unique, and nothing looked at a filename until a workbook
+        // document had to be named by the same rule in the browser and the two were
+        // compared.
+        return slug + (kpi == null || kpi.isBlank() ? "" : "-" + kpi.toLowerCase())
+                + "." + ext;
     }
 }

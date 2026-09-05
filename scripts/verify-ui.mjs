@@ -6,7 +6,7 @@
  */
 import { chromium } from 'playwright'
 import { chromiumPath } from '../tools/uxtest/browser.mjs'
-import { mkdirSync } from 'node:fs'
+import { mkdirSync, readFileSync } from 'node:fs'
 
 const BASE = process.env.BASE ?? 'http://127.0.0.1:4173'
 const OUT = process.env.OUT ?? '/tmp/shots2'
@@ -1113,6 +1113,19 @@ check('푸트프린트를 끄면 폴리곤이 사라짐',
   await page.locator('.leaflet-overlay-pane path[fill-opacity="0.1"]').count() === 0)
 
 // ------------------------------------------------------- composed workbooks
+//
+// Cleared FIRST, not only at the end. The cleanup at the bottom of this block runs only if
+// the block finishes, so one crashed run left three workbooks called 'UI check workbook'
+// behind and every following run failed '구성한 워크북이 새로고침을 견딤' - a check about
+// persistence going red because of the run before it. Worse than a false red: the tab
+// selector then matched three buttons and the checks after it drove whichever one Playwright
+// picked. A suite whose colour depends on how the last run ended is not reporting on the code.
+for (const b of await (await page.request.get(`${API_BASE}/api/workbooks`)).json()) {
+  await page.request.delete(`${API_BASE}/api/workbooks/${b.id}`)
+}
+await page.reload({ waitUntil: 'domcontentloaded' })
+await page.waitForTimeout(2500)
+
 const tabsBefore = await page.locator('.workbook-tabs button').count()
 await page.locator('.workbook-tabs button', { hasText: /^\+$/ }).click()
 await page.waitForTimeout(2000)
@@ -1252,6 +1265,248 @@ const mapChecked = await mapDock.locator('input[type=checkbox]:checked').count()
 const mapTotal = await mapDock.locator('input[type=checkbox]').count()
 check('지도 페인은 한 번에 한 레이어',
   mapTotal === 2 && mapChecked === 1, `${mapChecked} of ${mapTotal} ticked`)
+
+// ------------------------------------------- the workbook leaves the tool (2026-09-05)
+//
+// A workbook export is the first artifact this application builds in the BROWSER, so the
+// usual trick - read the anchor's href and trust the server - is gone. These checks take
+// the actual download and read what is in it.
+//
+// The reading rule lives in one function for the same reason `csvParts` does in the
+// scenario suite: three call sites each splitting the file their own way is three chances
+// to assert against the wrong half of it.
+const docParts = (html) => {
+  const pre = html.slice(0, html.indexOf('-->'))
+  const sections = [...html.matchAll(/<section class="wb-pane"[^>]*>([\s\S]*?)<\/section>/g)]
+    .map((m) => m[1])
+  return {
+    preamble: Object.fromEntries(
+      [...pre.matchAll(/^# ([a-z_]+): (.*)$/gm)].map((m) => [m[1], m[2]])),
+    sections,
+    // Every trace in the document, in order, per pane.
+    traces: sections.map((sec) =>
+      [...sec.matchAll(/<path class="trace" d="([^"]*)"/g)].map((m) => m[1])),
+    runs: sections.map((sec) =>
+      [...sec.matchAll(/<path class="route-run"[^>]*stroke="([^"]*)"/g)].map((m) => m[1])),
+    factsRows: sections.map((sec) =>
+      [...sec.matchAll(/<tbody>([\s\S]*?)<\/tbody>/g)]
+        .flatMap((m) => [...m[1].matchAll(/<tr>/g)]).length),
+  }
+}
+
+const takeDownload = async (clickTarget) => {
+  const [dl] = await Promise.all([page.waitForEvent('download'), clickTarget.click()])
+  const at = await dl.path()
+  return { name: dl.suggestedFilename(), text: readFileSync(at, 'utf8') }
+}
+
+// The module a checker can import is the point of the whole design: without it "the export
+// is the same arithmetic as the screen" is a promise. Node runs the repo's TypeScript with
+// no build step from 22.18; on an older Node the import throws, and a probe that could not
+// run is a FAILED check rather than a silently skipped one.
+let panegeom = null
+try {
+  panegeom = await import('../frontend/src/view/geom/panegeom.ts')
+} catch (e) {
+  check('페인 기하 모듈을 Node가 읽음', false, String(e).slice(0, 120))
+}
+
+if (panegeom) {
+  // The chart pane on screen right now: RSRP hidden, SS-SINR drawn.
+  const sid = Number(await page.locator('.toolbar select[aria-label="Measurement"]').inputValue())
+  const seriesPayload = await (await page.request.get(
+    `${API_BASE}/api/sessions/${sid}/series?kpis=SINR&maxPoints=2000`)).json()
+  const cursor = Number(await page.locator('svg[aria-label^="Composed pane"] line')
+    .last().getAttribute('x1').catch(() => 0))
+  const domDs = await page.locator('svg[aria-label^="Composed pane"] path.trace')
+    .evaluateAll((ps) => ps.map((x) => x.getAttribute('d')))
+  const geom = panegeom.composeChartPane({
+    traces: [{ key: 'SINR', color: '#000', series: seriesPayload[0] }],
+    cursorSeq: 0,
+  })
+  const moduleDs = geom.traces.map((t) => t.d)
+  // Character for character. The pane draws in viewBox units, so the string does not
+  // depend on how wide the browser rendered it - which is what makes an exact comparison
+  // legitimate here and not merely convenient.
+  check('화면의 페인이 기하 모듈 그대로를 그림',
+    domDs.length === 1 && moduleDs.length === 1 && domDs[0] === moduleDs[0],
+    `${domDs.length} on screen, ${moduleDs.length} from the module,`
+    + ` ${domDs[0] === moduleDs[0] ? 'identical' : 'DIFFER'} (cursor x1=${cursor})`)
+}
+
+// The click-to-cursor mapping is the FORWARD scale inverted, which it was not: the handler
+// divided by the full SVG width while the plot is inset by the left pad, so on a
+// single-layer pane - where that pad is 44 of 1000 - clicking on a point moved the shared
+// cursor about 4.6% of the drive away from it. This check fails on the code that shipped
+// before today, which is the strongest form of proving a check can fail.
+const paneSvg = page.locator('svg[aria-label^="Composed pane"]').first()
+const svgBox = await paneSvg.boundingBox()
+await paneSvg.click({ position: { x: svgBox.width / 2, y: svgBox.height / 2 } })
+await page.waitForTimeout(900)
+const cursorX = Number(await paneSvg.locator('line').last().getAttribute('x1'))
+check('페인의 커서 역변환이 정변환과 맞음',
+  Math.abs(cursorX - 500) <= 2, `clicked mid-pane, cursor at viewBox x=${cursorX} (want 500)`)
+
+const doc = await takeDownload(
+  page.locator('.workbook-export button', { hasText: 'Export document' }))
+const parts = docParts(doc.text)
+
+// Exact counts, both sides. '>0' would pass on a document that dropped a pane, which is
+// the defect a well-formed file hides best.
+const panesOnScreen = await page.locator('.dock-section:has(h3:text-is("Layers"))').count()
+// Indexed defensively, because a document that DROPPED a pane is exactly the defect this
+// check is aimed at - and `parts.runs[1].length` on a one-section file throws rather than
+// returning false. A thrown check aborts the whole run, and the run then reports zero
+// failures, which reads precisely like green. Measured: injecting the dropped pane made
+// this script exit mid-way with no FAIL line at all.
+const at = (rows, i) => rows[i] ?? (typeof rows[0] === 'number' ? -1 : [])
+check('문서가 화면의 페인 수와 트레이스를 그대로 실음',
+  parts.sections.length === panesOnScreen
+  && at(parts.traces, 0).length === 1 && at(parts.runs, 1).length > 0,
+  `${parts.sections.length} sections vs ${panesOnScreen} panes,`
+  + ` ${at(parts.traces, 0).length} trace, ${at(parts.runs, 1).length} route runs`)
+
+// The document's trace must be the SCREEN's trace, not a redraw that happens to look the
+// same. Same string, or the document is a second plotter.
+const screenDs = await page.locator('svg[aria-label^="Composed pane"] path.trace')
+  .evaluateAll((ps) => ps.map((x) => x.getAttribute('d')))
+check('문서의 트레이스가 화면의 트레이스와 문자까지 같음',
+  at(parts.traces, 0).length === screenDs.length
+  && at(parts.traces, 0).every((d, i) => d === screenDs[i]),
+  `${at(parts.traces, 0).length} in file, ${screenDs.length} on screen`)
+
+// A hidden layer is absent from the picture AND named as absent. Both halves: counts alone
+// pass on a file that leaked one and dropped another, and a colour ban alone passes on a
+// file with no traces at all.
+const hiddenName = 'RSRP (NR SpCell)'
+const beforeOmitted = doc.text.split('class="omitted"')[0]
+check('숨긴 레이어는 그림에 없고, 없다고 적힘',
+  !beforeOmitted.includes(hiddenName) && doc.text.includes(`class="omitted"`)
+  && doc.text.includes(hiddenName),
+  `named in the omitted note: ${doc.text.includes('class="omitted"')}`)
+
+// Every provenance key, in the preamble AND on every pane. A preamble is lost the moment a
+// pane is dragged into a deck, which is the same argument ExportScope makes about forty
+// rows pasted into a sheet.
+const wantKeys = ['format', 'workbook', 'measurement', 'condition', 'generated', 'saved',
+  'contains', 'not_included']
+const missingKeys = wantKeys.filter((k) => !(k in parts.preamble))
+// Two carriers, asserted separately, because they leave by different doors and a section
+// containing the words proves neither. The first version searched the whole section for
+// 'measurement:' and passed when the <figcaption> was deleted outright - the picture's own
+// <desc> carries the same sentence, so the check could not tell which one it had found.
+// The caption is for a reader of the document; the desc travels with a picture pulled out
+// of it. Losing either is a real loss and only one assertion each can see it.
+const carriers = (sec) => ({
+  caption: /<figcaption>[^<]*measurement:[^<]*condition:/.test(sec),
+  desc: /<desc>[^<]*measurement:[^<]*condition:/.test(sec),
+})
+const captioned = parts.sections.filter((sec) => carriers(sec).caption).length
+const described = parts.sections.filter((sec) => carriers(sec).desc).length
+check('출처가 서두와 페인 양쪽에 있음',
+  missingKeys.length === 0 && captioned === parts.sections.length
+  && described === parts.sections.length,
+  `${missingKeys.length ? `missing ${missingKeys.join(',')}` : 'all keys'},`
+  + ` ${captioned}/${parts.sections.length} captions, ${described}/${parts.sections.length}`
+  + ' picture descriptions')
+
+// It says what it is NOT. The reference's own title for p223 is 'Exporting workbooks as
+// PDF/MS Word/MS PowerPoint files', and this file is none of them.
+check('파일이 자기가 무엇이 아닌지 적음',
+  /PDF/.test(parts.preamble.format) && /none of those/.test(parts.preamble.format),
+  parts.preamble.format?.slice(0, 60))
+
+// The tokens, written in. A serialised fragment with no :root resolves var(--cursor) to
+// nothing, so the traces are right and the shared time cursor - the workbook's organising
+// idea - is silently gone. Nothing visual would catch it.
+const varsResolved = (text) => {
+  const used = [...text.matchAll(/var\((--[a-z-]+)\)/g)].map((m) => m[1])
+  return used.every((v) => new RegExp(`${v}\\s*:`).test(text))
+}
+check('그림이 자기 색을 안고 나감',
+  /--cursor\s*:\s*#[0-9a-f]{6}/i.test(doc.text) && varsResolved(doc.text),
+  `${[...doc.text.matchAll(/var\((--[a-z-]+)\)/g)].length} var() uses, all defined:`
+  + ` ${varsResolved(doc.text)}`)
+
+// The per-pane picture is half the deliverable, so it is opened and parsed rather than
+// regexed: an SVG without xmlns does not render at all, and one with a frame and no traces
+// opens blank - the 'plausible empty file' this project refuses PNG over.
+const paneFile = await takeDownload(
+  page.locator('.workbook-export button', { hasText: 'pane 1' }))
+const svgFacts = await page.evaluate((text) => {
+  const doc2 = new DOMParser().parseFromString(text, 'image/svg+xml')
+  const err = doc2.querySelector('parsererror')
+  const root = doc2.documentElement
+  return {
+    parsed: !err,
+    ns: root.getAttribute('xmlns'),
+    w: Number(root.getAttribute('width')), h: Number(root.getAttribute('height')),
+    traces: [...doc2.querySelectorAll('path.trace')].map((p) => p.getAttribute('d')),
+    hasTitle: !!doc2.querySelector('title')?.textContent,
+    desc: doc2.querySelector('desc')?.textContent ?? '',
+  }
+}, paneFile.text)
+check('페인 그림이 홀로 열리는 SVG',
+  svgFacts.parsed && svgFacts.ns === 'http://www.w3.org/2000/svg'
+  && svgFacts.w > 0 && svgFacts.h > 0 && svgFacts.hasTitle
+  && /measurement:/.test(svgFacts.desc),
+  `parsed=${svgFacts.parsed} ns=${!!svgFacts.ns} ${svgFacts.w}x${svgFacts.h}`
+  + ` title=${svgFacts.hasTitle}`)
+check('페인 그림과 문서 속 그림이 같은 기하',
+  svgFacts.traces.length === at(parts.traces, 0).length
+  && svgFacts.traces.every((d, i) => d === at(parts.traces, 0)[i]),
+  `${svgFacts.traces.length} in the .svg, ${at(parts.traces, 0).length} in the document`)
+
+// The map picture drops every hover, and the hover is the only place a run's time, value,
+// bin and sample count are ever stated. A table row per run is what keeps them.
+const domRuns = await page.locator('.leaflet-overlay-pane path.route-run').count()
+check('지도 그림이 사실을 조용히 삼키지 않음',
+  at(parts.factsRows, 1) === at(parts.runs, 1).length && at(parts.factsRows, 1) > 0,
+  `${at(parts.factsRows, 1)} table rows, ${at(parts.runs, 1).length} runs in the file,`
+  + ` ${domRuns} on screen`)
+
+// The filename carries the workbook id, and the measurement's slug is the SERVER's slug -
+// the one rule this design writes in two languages, bound here rather than trusted. A CSV
+// of the same drive is named by AnalyticsController.fileName; if Java and TypeScript ever
+// disagree about what a measurement is called, this goes red.
+const csvHead = await page.request.get(`${API_BASE}/api/sessions/${
+  await page.locator('.toolbar select[aria-label="Measurement"]').inputValue()}/export.csv`)
+const serverName = /filename="([^"]+)"/.exec(csvHead.headers()['content-disposition'])?.[1] ?? ''
+const serverSlug = serverName.replace(/\.csv$/, '')
+// The whole name, not a pattern. The workbook id is in it because `+` names every new
+// workbook 'New workbook' and `workbook.name` has no unique constraint - so without the id
+// two downloads arrive under one filename and the second replaces the first.
+const bookNow = (await (await page.request.get(`${API_BASE}/api/workbooks`)).json())
+  .find((b) => b.name === PROBE)
+const wantName = `${PROBE.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`
+  + `-${bookNow.id}-${serverSlug}.html`
+check('문서 이름이 서버의 측정 슬러그와 같은 규칙', doc.name === wantName,
+  `document "${doc.name}" vs expected "${wantName}" (server said "${serverName}")`)
+
+// An export control on a screen that cannot export is a promise with nothing behind it -
+// the cheap negative half of the same check.
+await page.locator('.workbook-tabs button', { hasText: 'Overview' }).click()
+await page.waitForTimeout(1200)
+const controlsOnBuiltIn = await page.locator('.workbook-export button').count()
+await page.locator('.workbook-tabs button', { hasText: PROBE }).click()
+await page.waitForTimeout(2000)
+const controlsOnWorkbook = await page.locator('.workbook-export button').count()
+check('내보내기는 워크북에만 있음',
+  controlsOnBuiltIn === 0 && controlsOnWorkbook >= 2,
+  `${controlsOnBuiltIn} on a built-in tab, ${controlsOnWorkbook} on the workbook`)
+
+// Exported from an UNSAVED edit, which is the case only a browser-built document can
+// answer honestly: the file carries the pane that was added and says it was not saved. A
+// server-rendered export would draw the last SAVED arrangement and say nothing.
+await page.locator('button', { hasText: '+ Chart pane' }).click()
+await page.waitForTimeout(900)
+const dirtyDoc = await takeDownload(
+  page.locator('.workbook-export button', { hasText: 'Export document' }))
+const dirtyParts = docParts(dirtyDoc.text)
+const panesNow = await page.locator('.dock-section:has(h3:text-is("Layers"))').count()
+check('저장 안 한 편집분도 나가고, 안 했다고 적힘',
+  dirtyParts.sections.length === panesNow && /^no\b/.test(dirtyParts.preamble.saved ?? ''),
+  `${dirtyParts.sections.length} panes vs ${panesNow} on screen, saved="${dirtyParts.preamble.saved}"`)
 
 // The cap is the server's, so the editor asks for it. A dock that kept its own number
 // would keep offering a ninth layer and let the user find the limit by pressing Save.
