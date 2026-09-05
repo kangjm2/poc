@@ -197,4 +197,53 @@ export const DEFECTS = [
                { ...geom, frame: { ...geom.frame, padL: 0, padR: 0 } },
                (e.clientX - r.left) / r.width))`,
   },
+
+  // ── F2/F3 (2026-09-05). The first BACKEND defects in this register: every one of
+  //    D1-D17 lives under frontend/, so a Java mistake has never been provable here.
+  //    `inject.mjs` is path-agnostic already; what these need is a container rebuild in
+  //    the loop, which is why they are grouped and labelled.
+  {
+    id: 'D18-compare-one-sided',
+    kind: 'backend',
+    describes: 'The condition reaches only one side of the comparison. The table still '
+      + 'narrows and still prints a verdict, comparing a subset against a whole drive - '
+      + 'which is exactly what a real regression looks like.',
+    file: 'backend/src/main/java/com/vdt/analyzer/service/AnalysisService.java',
+    find: `            Statistics sb = statistics(idB, name, null, null, weightedBy, domain, filterSpec);`,
+    replace: `            Statistics sb = statistics(idB, name, null, null, weightedBy, domain);`,
+  },
+  {
+    id: 'D19-compare-filter-dropped',
+    kind: 'backend',
+    describes: 'The comparison endpoint accepts the condition and never passes it on. '
+      + 'Every screen still sends it, the coverage list still calls the endpoint '
+      + 'honoured, and the table answers about the whole drive.',
+    file: 'backend/src/main/java/com/vdt/analyzer/api/AnalysisController.java',
+    find: `        return analysis.compare(a, b, kpis, weightedBy, domain, filter);`,
+    replace: `        return analysis.compare(a, b, kpis, weightedBy, domain);`,
+  },
+  {
+    id: 'D20-issues-partial-scope',
+    kind: 'backend',
+    describes: 'Two of the three coverage detectors honour the condition and the third '
+      + 'does not. The total drops, so the screen looks narrowed, while its overshoot '
+      + 'answer is still about the whole drive.',
+    file: 'backend/src/main/java/com/vdt/analyzer/service/GeoAnalysisService.java',
+    find: `                WHERE s.session_id = ?%2$s`,
+    replace: `                WHERE s.session_id = ?%2$.0s`,
+  },
+  {
+    id: 'D21-issues-filtered-after-islanding',
+    kind: 'backend',
+    describes: 'The condition narrows the finished intervals instead of the samples they '
+      + 'are gathered from, so a stretch is kept whole because one sample in it survived '
+      + 'and every interval spans ground the condition excluded.',
+    file: 'backend/src/main/java/com/vdt/analyzer/service/GeoAnalysisService.java',
+    find: `                    WHERE k.session_id = ? AND k.kpi_name = 'RSRP'%1$s
+                ),
+                islands AS (`,
+    replace: `                    WHERE k.session_id = ? AND k.kpi_name = 'RSRP'
+                ),
+                islands AS (`,
+  },
 ]
