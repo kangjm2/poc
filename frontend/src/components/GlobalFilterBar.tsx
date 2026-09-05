@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { api } from '../api/client'
-import type { FilterCoverage } from '../api/types'
+import { useFilterCoverage } from '../view/coverage'
 
 /**
  * The one condition every analytic answers through, and an honest account of its reach.
@@ -24,14 +24,11 @@ export function GlobalFilterBar({ spec, onApply }: {
   const [text, setText] = useState<string | null>(null)
   const [scope, setScope] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
-  const [coverage, setCoverage] = useState<FilterCoverage[]>([])
+  // Shared with the screens below, which print their exemptions from the same list.
+  const coverage = useFilterCoverage()
   const [showReach, setShowReach] = useState(false)
 
   useEffect(() => { setDraft(spec ?? '') }, [spec])
-
-  useEffect(() => {
-    api.filterCoverage().then(setCoverage).catch(() => setCoverage([]))
-  }, [])
 
   // The phrase comes from the server for the same reason the parsing does: two
   // implementations of "what this filter says" is one implementation too many, and the

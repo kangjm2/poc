@@ -2,6 +2,37 @@ import type { Cohort } from '../api/types'
 import { seriesColor } from '../view/paint'
 
 /**
+ * The narrowest axis the strip will draw, by the KPI's unit.
+ *
+ * Spanning the axis over the data alone lets any difference fill the strip. Two builds
+ * 0.67 dB apart were drawn on an axis 0.8 dB wide, so the elbow between them crossed the
+ * whole plot - the same picture a 15 dB regression makes - and a reader who takes the width
+ * of the strip as the size of the change, which is what a strip invites, read a rounding
+ * difference as a result. So the axis is never narrower than a change worth noticing in
+ * that unit; below the floor the empty axis either side is what says the groups are close.
+ */
+const MIN_SPAN: Record<string, number> = { dBm: 3, dB: 3, '%': 5, Mbps: 10, 'pkt/s': 100 }
+
+/**
+ * The drawn range for the readings on a cohort strip, as arithmetic and nothing else.
+ *
+ * A pad of one twentieth, so the extreme drive is a mark inside the plot and not a
+ * half-circle clipped by the frame - which reads as "off the scale" rather than "worst".
+ * Then the floor above: a padded range narrower than the unit's floor is widened about its
+ * own centre, so the marks keep their place and the frame grows around them. A unit the
+ * table does not name gets a tenth of where the data sits, or one whole unit at zero.
+ */
+export function cohortAxis(points: number[], unit: string): { lo: number; hi: number } {
+  const rawLo = Math.min(...points)
+  const rawHi = Math.max(...points)
+  const margin = (rawHi - rawLo || Math.abs(rawHi) || 1) / 20
+  const centre = (rawLo + rawHi) / 2
+  const floor = MIN_SPAN[unit] ?? (Math.abs(centre) / 10 || 1)
+  if (rawHi - rawLo + 2 * margin < floor) return { lo: centre - floor / 2, hi: centre + floor / 2 }
+  return { lo: rawLo - margin, hi: rawHi + margin }
+}
+
+/**
  * One row per cohort, on one shared KPI axis, with every member drive drawn on its row.
  *
  * <h3>Why the members are on the chart and not only in a table</h3>
@@ -49,13 +80,7 @@ export function CohortStrip({ cohorts, unit, decimals, onPick, picked }: {
     ...(c.stats.mean == null ? [] : [c.stats.mean]),
     ...c.members.map((m) => m.mean).filter((v): v is number => v != null),
   ])
-  const rawLo = Math.min(...points)
-  const rawHi = Math.max(...points)
-  // A pad of one twentieth, so the extreme drive is a mark inside the plot and not a
-  // half-circle clipped by the frame - which reads as "off the scale" rather than "worst".
-  const margin = (rawHi - rawLo || Math.abs(rawHi) || 1) / 20
-  const lo = rawLo - margin
-  const hi = rawHi + margin
+  const { lo, hi } = cohortAxis(points, unit)
   const span = hi - lo || 1
   const plotW = W - PAD.left - PAD.right
   const x = (v: number) => PAD.left + ((v - lo) / span) * plotW

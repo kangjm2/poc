@@ -10,9 +10,16 @@ import type { SeqRange, Statistics } from '../api/types'
  * like", which a mean cannot.
  */
 export function StatisticsPanel({
-  sessionId, kpi, unit, range, filterSpec,
+  sessionId, kpi, unit, decimals, range, filterSpec,
 }: {
   sessionId: number | null; kpi: string; unit: string; range?: SeqRange | null
+  /**
+   * The KPI's own decimals. The server rounds every figure to two places, and the
+   * percentiles then LOOK one-place only because they are recorded values; the mean is
+   * the one computed number in the row, so it alone shows the second digit. Printed as
+   * given when absent, so a caller that does not know the catalogue changes nothing.
+   */
+  decimals?: number
   /** A refetch trigger, not a request parameter - the api module carries the filter. */
   filterSpec?: string | null
 }) {
@@ -57,6 +64,8 @@ export function StatisticsPanel({
     .join(' ')
 
   const marks: Array<[string, number | null]> = [['p05', stats.p05], ['p50', stats.p50], ['p95', stats.p95]]
+  const cell = (v: number | null) =>
+    v == null ? '-' : `${decimals == null ? v : v.toFixed(decimals)} ${unit}`
 
   return (
     <>
@@ -97,11 +106,16 @@ export function StatisticsPanel({
             && ' — the mean is in power; the percentiles are unchanged, being order statistics'}
         </div>
         <table className="grid">
-          <thead><tr><th>Min</th><th>p05</th><th>p50</th><th>Mean</th><th>p95</th><th>Max</th></tr></thead>
+          <thead>
+            <tr>
+              <th className="num">Min</th><th className="num">p05</th><th className="num">p50</th>
+              <th className="num">Mean</th><th className="num">p95</th><th className="num">Max</th>
+            </tr>
+          </thead>
           <tbody>
             <tr>
               {[stats.min, stats.p05, stats.p50, stats.mean, stats.p95, stats.max].map((v, i) => (
-                <td key={i} className="num">{v == null ? '-' : `${v} ${unit}`}</td>
+                <td key={i} className="num">{cell(v)}</td>
               ))}
             </tr>
           </tbody>

@@ -7,6 +7,8 @@ import org.springframework.stereotype.Service;
 
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 /** Reads KPI definitions and resolves a value to its colour bin. */
 @Service
@@ -29,6 +31,12 @@ public class KpiCatalog {
     public KpiDefinition require(String name) {
         return repo.findWithThresholds(name).orElseThrow(
                 () -> new IllegalArgumentException("Unknown KPI: " + name));
+    }
+
+    /** Every defined KPI's internal name - the one a sample row, a column and a filter clause carry. */
+    public Set<String> names() {
+        return repo.findAll().stream().map(KpiDefinition::getName)
+                .collect(Collectors.toUnmodifiableSet());
     }
 
     /** The first bin containing the value, or empty when the scale does not cover it. */

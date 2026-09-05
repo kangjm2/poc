@@ -1,5 +1,6 @@
 package com.vdt.analyzer.service;
 
+import com.vdt.analyzer.api.Dtos.Degradation;
 import com.vdt.analyzer.domain.KpiDefinition;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
@@ -111,9 +112,7 @@ public class ProblemSurvey {
                 if (!"CRITICAL".equals(d.severity())) continue;
                 found.add(new Instance(cat, label(cat), d.severity(),
                         d.startSeq(), d.endSeq(), d.latitude(), d.longitude(),
-                        "%s worst %.2f over %d samples".formatted(
-                                def.getDisplayName(), d.worstValue(), d.sampleCount()),
-                        "degradation detector"));
+                        degradationDetail(def, d), "degradation detector"));
             }
         }
 
@@ -135,6 +134,23 @@ public class ProblemSurvey {
         slices.sort(Comparator.comparingInt(Slice::count).reversed());
 
         return new Survey(found.size(), slices, found);
+    }
+
+    /**
+     * "MAC uplink throughput worst 0.7 Mbps over 82 samples".
+     *
+     * The value carries the KPI's own unit and its own precision, both read from the
+     * definition. A bare "worst 0.70" left the reader to guess whether the drive fell to
+     * 0.7 Mbps or 0.7 % - the survey lists throughput and fronthaul causes side by side, so
+     * the guess is a real one - and two fixed decimals on a KPI the instrument records to
+     * one claimed a precision the measurement never had. `Csv.number` is the one place
+     * that already writes a value at a KPI's precision, so the survey cannot disagree with
+     * the export about the same number.
+     */
+    static String degradationDetail(KpiDefinition def, Degradation d) {
+        String unit = def.getUnit() == null || def.getUnit().isBlank() ? "" : " " + def.getUnit();
+        return "%s worst %s%s over %d samples".formatted(def.getDisplayName(),
+                Csv.number(d.worstValue(), def.getDecimals()), unit, d.sampleCount());
     }
 
     /**

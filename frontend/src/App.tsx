@@ -32,6 +32,7 @@ import { KeySheet } from './components/KeySheet'
 import { SessionFilter } from './components/SessionFilter'
 import { GlobalFilterBar } from './components/GlobalFilterBar'
 import { bindingFor, isTypingTarget } from './view/keymap'
+import { exemptAmong, useFilterCoverage } from './view/coverage'
 import { PRIORITY, dismissTop, useDismissable } from './view/dismiss'
 import type { Correction } from './view/state'
 import { encodeView, parseView, reconcile } from './view/state'
@@ -48,8 +49,8 @@ import { describeLayers } from './view/maplayers'
  * `isolates` says whether this screen draws anything the colour scale paints, and so
  * whether clicking a legend band can do what the legend says it does.
  *
- * `reads` says which toolbar groups this screen actually consumes. Same reason, same
- * shape: the toolbar cannot see the screen either. Before this column every group was
+ * `reads` says which map-control groups this screen actually consumes. Same reason, same
+ * shape: the control row cannot see the screen either. Before this column every group was
  * offered on every tab while three tabs consumed them, so "Ask an area" latched to
  * "Drawing…" on screens with no map, "Area bins" fetched tiles Mobility never drew,
  * "Distance bins" wrote a dead `ds=` into a shared link, and "Colour by: Serving cell"
@@ -57,32 +58,56 @@ import { describeLayers } from './view/maplayers'
  * ignored is worse than one that is absent - the user concludes the data has nothing to
  * say.
  *
- * It is a column here rather than a check inside the legend or the toolbar because
+ * It is a column here rather than a check inside the legend or the control row because
  * neither can see the screen. Before these columns the dock offered isolation on all
  * fourteen tabs while four honoured it: on the other ten the legend answered a click with
  * "the rest of the drive is drawn grey" over a screen that had no drive on it. Adding a
  * screen now means answering both questions in the same row that names it.
+ *
+ * `analytics` says which session analytics the screen's panels present, as the path tails
+ * api/client.ts uses. The global filter bar cannot see the screen either: it said "Reach:
+ * 23 of 29" while Problem Survey showed the whole drive's 34 problems under it with
+ * nothing on the panel to say it was one of the six (docs/ux-audit.md S2-1). The server
+ * already names every analytic as honoured or exempt, with the reason; this column is what
+ * lets the screen look itself up in that list and say so above its own panels. It names
+ * what the panels are ABOUT - not the cell sites and event pins every map carries, nor
+ * the cursor's snapshot in the right dock, which are on every screen and are not a claim
+ * about the drive. Problem Survey lists only its survey: its context chart is deliberately
+ * unfiltered with it (api.seriesUnfiltered), so it stands under the same statement.
  */
 type ToolGroup = 'colour' | 'areaBins' | 'distanceBins' | 'area' | 'footprints'
 const WORKBOOKS = [
   { id: 'overview', label: 'Overview', isolates: true,
-    reads: ['colour', 'areaBins', 'distanceBins', 'area', 'footprints'] },
-  { id: 'radio', label: 'Radio Quality', isolates: false, reads: [] },
-  { id: 'throughput', label: 'Throughput', isolates: false, reads: [] },
-  { id: 'fronthaul', label: 'Fronthaul', isolates: false, reads: [] },
-  { id: 'cells', label: 'Cells', isolates: true, reads: [] },
-  { id: 'neighbours', label: 'Monitored Set', isolates: false, reads: [] },
+    reads: ['colour', 'areaBins', 'distanceBins', 'area', 'footprints'],
+    analytics: ['/track', '/series', '/bins', '/distance-bins', '/area-statistics',
+                '/cell-footprints', '/serving-lines'] },
+  { id: 'radio', label: 'Radio Quality', isolates: false, reads: [], analytics: ['/series'] },
+  { id: 'throughput', label: 'Throughput', isolates: false, reads: [], analytics: ['/series'] },
+  { id: 'fronthaul', label: 'Fronthaul', isolates: false, reads: [], analytics: ['/series'] },
+  // The map here is about where the masts are, so the reference rows are its subject.
+  { id: 'cells', label: 'Cells', isolates: true, reads: [],
+    analytics: ['/track', '/cells', '/cell-locator', '/cell-breakdown'] },
+  { id: 'neighbours', label: 'Monitored Set', isolates: false, reads: [],
+    analytics: ['/monitored-set', '/neighbour-breakdown', '/pilot-pollution'] },
   // No area bins: tiles REPLACE the route, and this map exists for the fan of lines from
   // the cursor to the monitored set. Drawing tiles here would delete the reason for it.
-  { id: 'mobility', label: 'Mobility', isolates: true, reads: ['colour', 'footprints'] },
-  { id: 'signaling', label: 'L3 Signalling', isolates: false, reads: [] },
-  { id: 'problems', label: 'Problem Survey', isolates: false, reads: [] },
-  { id: 'degradation', label: 'Degradation', isolates: false, reads: [] },
+  { id: 'mobility', label: 'Mobility', isolates: true, reads: ['colour', 'footprints'],
+    analytics: ['/track', '/monitored-set', '/cells', '/events'] },
+  { id: 'signaling', label: 'L3 Signalling', isolates: false, reads: [],
+    analytics: ['/messages'] },
+  { id: 'problems', label: 'Problem Survey', isolates: false, reads: [],
+    analytics: ['/problem-survey'] },
+  { id: 'degradation', label: 'Degradation', isolates: false, reads: [],
+    analytics: ['/degradations', '/series'] },
   { id: 'coverage', label: 'Coverage Issues', isolates: true,
-    reads: ['colour', 'areaBins', 'footprints'] },
-  { id: 'statistics', label: 'Statistics', isolates: false, reads: [] },
-  { id: 'fieldtolab', label: 'Field-to-Lab', isolates: false, reads: [] },
-  { id: 'spatialdiff', label: 'Compare on the Ground', isolates: false, reads: [] },
+    reads: ['colour', 'areaBins', 'footprints'],
+    analytics: ['/track', '/coverage-issues', '/bins', '/cell-footprints', '/serving-lines'] },
+  { id: 'statistics', label: 'Statistics', isolates: false, reads: [],
+    analytics: ['/statistics'] },
+  { id: 'fieldtolab', label: 'Field-to-Lab', isolates: false, reads: [],
+    analytics: ['/field-to-lab'] },
+  { id: 'spatialdiff', label: 'Compare on the Ground', isolates: false, reads: [],
+    analytics: ['/spatial-diff'] },
 ] as const
 type BuiltInId = (typeof WORKBOOKS)[number]['id']
 /**
@@ -112,6 +137,9 @@ const RATES = [1, 4, 16, 64]
  * playback rate is 64/s; without this, either would multiply the request rate by eight.
  */
 const CURSOR_FETCH_MS = 125
+
+/** The empty track, one instance: RouteMap's route effect keys on the array's identity. */
+const NO_TRACK: TrackPoint[] = []
 
 type WorkbookId = BuiltInId | `wb:${number}`
 
@@ -231,7 +259,23 @@ export function App() {
   const [workbooks, setWorkbooks] = useState<Workbook[]>([])
   const [issues, setIssues] = useState<CoverageIssue[]>([])
 
-  const [track, setTrack] = useState<TrackPoint[]>([])
+  /**
+   * The route, together with the drive it was fetched for.
+   *
+   * RouteMap's fitOnce frames a drive once and guards only on an EMPTY track - it trusts
+   * this component to hand it nothing while a measurement switch is in flight. Held as a
+   * bare array, the points of the drive being left survived the switch until the new
+   * response landed: the map framed the OLD geography under the new frameKey, stamped it
+   * done, and then refused the new track - the highway opened with its top edge above the
+   * map. The tag lets `track` go empty in the SAME render that moves `sessionId`, which an
+   * effect cannot do: a child's effects run before its parent's, so a clearing effect here
+   * would fire one render after the map had already stamped. Nothing else empties it - a
+   * KPI, scale, area or filter change keeps the current points on screen until their
+   * replacement arrives, and the frame stays where the user left it.
+   */
+  const [trackOf, setTrackOf] =
+    useState<{ sessionId: number; points: TrackPoint[] } | null>(null)
+  const track = trackOf?.sessionId === sessionId ? trackOf.points : NO_TRACK
   const [cells, setCells] = useState<CellRef[]>([])
   const [series, setSeries] = useState<Series[]>([])
   const [dist, setDist] = useState<Distribution | null>(null)
@@ -435,7 +479,8 @@ export function App() {
 
   useEffect(() => {
     if (sessionId == null) return
-    api.track(sessionId, kpi, undefined, areaSpec).then(setTrack).catch(fail)
+    api.track(sessionId, kpi, undefined, areaSpec)
+      .then((points) => setTrackOf({ sessionId, points })).catch(fail)
   }, [sessionId, kpi, scaleVersion, areaSpec, filterSpec, fail])
 
   // The drawn area's statistics, on the same dependencies as the route it describes. The
@@ -710,15 +755,23 @@ export function App() {
   }
 
   /**
-   * Whether the screen on show consumes a toolbar group. One lookup, so a control is
+   * Whether the screen on show consumes a map-control group. One lookup, so a control is
    * offered exactly where something answers it.
    */
-  const tabReads = (g: ToolGroup) => {
-    const row = WORKBOOKS.find((w) => w.id === workbook)
+  const tabRow = WORKBOOKS.find((w) => w.id === workbook)
+  const tabReads = (g: ToolGroup) => (
     // `as const` narrows each row's list to its own literal tuple, so the widening is
     // here rather than on the table - the table is meant to be read, not annotated.
-    return (row?.reads as readonly ToolGroup[] | undefined)?.includes(g) ?? false
-  }
+    (tabRow?.reads as readonly ToolGroup[] | undefined)?.includes(g) ?? false
+  )
+
+  /**
+   * The analytics on this screen that the condition in force does not reach, with the
+   * server's reason for each. Empty with no condition, on a screen the condition reaches
+   * entirely, and on a composed workbook - whose panes are not in the table.
+   */
+  const coverage = useFilterCoverage()
+  const exemptHere = filterSpec && tabRow ? exemptAmong(coverage, tabRow.analytics) : []
 
   /**
    * The one place a layer id meets the state that controls it.
@@ -984,8 +1037,8 @@ export function App() {
             {/* Close clears the shape, not just the answer. The panel now follows the
                 shape - measurement, KPI and filter all re-ask it - so hiding the answer
                 while keeping the question drawn would have the next KPI change bring it
-                straight back. "Clear area" in the toolbar is the same act from the other
-                end of the screen. */}
+                straight back. "Clear area" in the row above the map is the same act from
+                outside the panel. */}
             {areaStats && (
               <AreaStatsPanel data={areaStats}
                               onClose={() => { setAreaSpec(null); setAreaStats(null) }}
@@ -1202,6 +1255,115 @@ export function App() {
     }
   }
 
+  const deviceSummary = session
+    ? `${session.device} · ${session.technology}${session.scenario ? ` · ${session.scenario}` : ''}`
+    : undefined
+
+  /**
+   * The second tier: what the map is asked to show, above the map. These groups sat in
+   * the toolbar until a map tab carried five of them, which at 1680 px pushed Export and
+   * Delete past the right edge and made the toolbar's height change with the tab. The
+   * toolbar is now the same single line on every screen, and a control sits over the
+   * picture it changes. Shown on a screen that reads none of them only while an area is
+   * set, so the way out of one stays reachable from everywhere.
+   */
+  const areaSet = areaSpec != null && !drawingArea
+  const mapControls = ((tabRow?.reads.length ?? 0) > 0 || areaSet) && (
+    <div className="map-controls">
+      {/* Drawing is offered only where a map takes it. `Clear area` is not: an
+          area narrows the track fetch on every screen, so the way out of one has
+          to be reachable from every screen too. */}
+      {(tabReads('area') || areaSet) && (
+      <div className="group">
+        {tabReads('area') && (
+          <button className={drawingArea ? 'on' : undefined}
+                  title="Draw an area on the map and get its statistics"
+                  onClick={() => { setDrawingArea((v) => !v); setAreaStats(null) }}>
+            {drawingArea ? 'Drawing…' : 'Ask an area'}
+          </button>
+        )}
+        {areaSet && (
+          <button title="Colour the whole drive again"
+                  onClick={() => { setAreaSpec(null); setAreaStats(null) }}>
+            Clear area
+          </button>
+        )}
+      </div>
+      )}
+      {tabReads('colour') && (
+      <div className="group">
+        <label>Colour by</label>
+        <select value={colorBy} aria-label="Colour by"
+                title="What the route's colour means"
+                onChange={(e) => { setColorBy(e.target.value as ColorBy); e.currentTarget.blur() }}>
+          <option value="kpi">KPI value</option>
+          <option value="pci">Serving cell (PCI)</option>
+        </select>
+      </div>
+      )}
+      {tabReads('areaBins') && (
+      <div className="group">
+        <label>Area bins</label>
+        <select value={binSize} aria-label="Area bins"
+                onChange={(e) => { setBinSize(Number(e.target.value)); e.currentTarget.blur() }}>
+          <option value={0}>off (raw route)</option>
+          <option value={50}>50 m</option>
+          <option value={150}>150 m</option>
+          <option value={500}>500 m</option>
+        </select>
+        {binSize > 0 && (
+          <select value={binStat} aria-label="Bin statistic"
+                  title="Which statistic of a tile's samples decides its colour"
+                  onChange={(e) => { setBinStat(e.target.value); e.currentTarget.blur() }}>
+            <option value="AVERAGE">average</option>
+            <option value="MINIMUM">minimum</option>
+            <option value="MAXIMUM">maximum</option>
+          </select>
+        )}
+      </div>
+      )}
+      {tabReads('distanceBins') && (
+      <div className="group">
+        <label title="Averages per unit of road travelled, so a stop at a light stops
+               dominating the average">Distance bins</label>
+        <select value={distanceStep}
+                aria-label="Distance bins"
+                onChange={(e) => { setDistanceStep(Number(e.target.value)); e.currentTarget.blur() }}>
+          <option value={0}>off</option>
+          <option value={50}>50 m</option>
+          <option value={100}>100 m</option>
+          <option value={250}>250 m</option>
+        </select>
+      </div>
+      )}
+      {tabReads('footprints') && (
+      <div className="group">
+        <label title="The outline of where each cell was measured">
+          Footprints</label>
+        <button onClick={() => setShowFootprints((v) => !v)}
+                style={showFootprints ? { fontWeight: 600 } : undefined}>
+          {showFootprints ? 'on' : 'off'}
+        </button>
+        {showFootprints && (
+          <select value={footprintBasis} aria-label="Footprint basis"
+                  title="Where the cell served, or where it was among the three strongest"
+                  onChange={(e) => { setFootprintBasis(e.target.value); e.currentTarget.blur() }}>
+            <option value="SERVING">where it served</option>
+            <option value="TOP3">where it was top 3</option>
+          </select>
+        )}
+        {showFootprints && (
+          <input className="footprint-cells" value={footprintCells}
+                 aria-label="Footprint cells"
+                 placeholder="all cells — try 3,10-30,42,100-"
+                 title="Comma-separated PCIs and ranges, the reference's own syntax (UC1 p67)"
+                 onChange={(e) => setFootprintCells(e.target.value)} />
+        )}
+      </div>
+      )}
+    </div>
+  )
+
   return (
     <div className="app">
       <div className="toolbar">
@@ -1218,9 +1380,9 @@ export function App() {
         </div>
         {mode === 'analyze' && (
           <>
-            <div className="group">
+            <div className="group session">
               <label>Measurement</label>
-              <select value={sessionId ?? ''} aria-label="Measurement"
+              <select value={sessionId ?? ''} aria-label="Measurement" title={session?.name}
                       onChange={(e) => { setSessionId(Number(e.target.value)); e.currentTarget.blur() }}>
                 {sessions.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
               </select>
@@ -1235,95 +1397,6 @@ export function App() {
                 {defs.map((d) => <option key={d.name} value={d.name}>{d.displayName}</option>)}
               </select>
             </div>
-            <div className="group">
-              {/* Drawing is offered only where a map takes it. `Clear area` is not: an
-                  area narrows the track fetch on every screen, so the way out of one has
-                  to be reachable from every screen too. */}
-              {tabReads('area') && (
-                <button className={drawingArea ? 'on' : undefined}
-                        title="Draw an area on the map and get its statistics"
-                        onClick={() => { setDrawingArea((v) => !v); setAreaStats(null) }}>
-                  {drawingArea ? 'Drawing…' : 'Ask an area'}
-                </button>
-              )}
-              {areaSpec && !drawingArea && (
-                <button title="Colour the whole drive again"
-                        onClick={() => { setAreaSpec(null); setAreaStats(null) }}>
-                  Clear area
-                </button>
-              )}
-            </div>
-            {tabReads('colour') && (
-            <div className="group">
-              <label>Colour by</label>
-              <select value={colorBy} aria-label="Colour by"
-                      title="What the route's colour means"
-                      onChange={(e) => { setColorBy(e.target.value as ColorBy); e.currentTarget.blur() }}>
-                <option value="kpi">KPI value</option>
-                <option value="pci">Serving cell (PCI)</option>
-              </select>
-            </div>
-            )}
-            {tabReads('areaBins') && (
-            <div className="group">
-              <label>Area bins</label>
-              <select value={binSize} aria-label="Area bins"
-                      onChange={(e) => { setBinSize(Number(e.target.value)); e.currentTarget.blur() }}>
-                <option value={0}>off (raw route)</option>
-                <option value={50}>50 m</option>
-                <option value={150}>150 m</option>
-                <option value={500}>500 m</option>
-              </select>
-              {binSize > 0 && (
-                <select value={binStat} aria-label="Bin statistic"
-                        title="Which statistic of a tile's samples decides its colour"
-                        onChange={(e) => { setBinStat(e.target.value); e.currentTarget.blur() }}>
-                  <option value="AVERAGE">average</option>
-                  <option value="MINIMUM">minimum</option>
-                  <option value="MAXIMUM">maximum</option>
-                </select>
-              )}
-            </div>
-            )}
-            {tabReads('distanceBins') && (
-            <div className="group">
-              <label title="Averages per unit of road travelled, so a stop at a light stops
-                     dominating the average">Distance bins</label>
-              <select value={distanceStep}
-                      aria-label="Distance bins"
-                      onChange={(e) => { setDistanceStep(Number(e.target.value)); e.currentTarget.blur() }}>
-                <option value={0}>off</option>
-                <option value={50}>50 m</option>
-                <option value={100}>100 m</option>
-                <option value={250}>250 m</option>
-              </select>
-            </div>
-            )}
-            {tabReads('footprints') && (
-            <div className="group">
-              <label title="The outline of where each cell was measured">
-                Footprints</label>
-              <button onClick={() => setShowFootprints((v) => !v)}
-                      style={showFootprints ? { fontWeight: 600 } : undefined}>
-                {showFootprints ? 'on' : 'off'}
-              </button>
-              {showFootprints && (
-                <select value={footprintBasis} aria-label="Footprint basis"
-                        title="Where the cell served, or where it was among the three strongest"
-                        onChange={(e) => { setFootprintBasis(e.target.value); e.currentTarget.blur() }}>
-                  <option value="SERVING">where it served</option>
-                  <option value="TOP3">where it was top 3</option>
-                </select>
-              )}
-              {showFootprints && (
-                <input className="footprint-cells" value={footprintCells}
-                       aria-label="Footprint cells"
-                       placeholder="all cells — try 3,10-30,42,100-"
-                       title="Comma-separated PCIs and ranges, the reference's own syntax (UC1 p67)"
-                       onChange={(e) => setFootprintCells(e.target.value)} />
-              )}
-            </div>
-            )}
             <div className="group">
               <label>Export</label>
               {sessionId != null && (
@@ -1348,8 +1421,11 @@ export function App() {
           </>
         )}
         <span className="spacer" />
-        {session && <span className="dim">{session.device} · {session.technology}
-          {session.scenario ? ` · ${session.scenario}` : ''}</span>}
+        {/* The one item here allowed to lose width. The full text stays in its title, and
+            a shortened summary costs less than a Delete button pushed off the screen. */}
+        {session && (
+          <span className="dim summary" title={deviceSummary}>{deviceSummary}</span>
+        )}
       </div>
 
       {/* Above the panels rather than inside one, because it governs all of them.
@@ -1472,6 +1548,20 @@ export function App() {
             </div>
 
             <div className="center">
+              {mapControls}
+              {/* Where the numbers are read, in the bar's own colour: the bar says the
+                  condition is in force and the panel below shows the whole drive, and
+                  without this line nothing between them says which one to believe. */}
+              {exemptHere.length > 0 && (
+                <div className="filter-exempt-note">
+                  <b>Whole drive</b> &mdash; not narrowed by the condition above:{' '}
+                  {exemptHere.map((c, i) => (
+                    <span key={c.path}>
+                      {i > 0 && '; '}<code>{c.path}</code>, {c.note}
+                    </span>
+                  ))}
+                </div>
+              )}
               <div className="panels">{renderWorkbook()}</div>
               <div className="workbook-tabs">
                 {WORKBOOKS.map((w) => (

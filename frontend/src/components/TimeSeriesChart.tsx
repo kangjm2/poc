@@ -1,5 +1,8 @@
 import { useMemo, useRef, useState } from 'react'
 import type { EventType, NetworkEvent, Series, Threshold } from '../api/types'
+import { hasValue } from '../view/geom/panegeom'
+import { stepTrace } from '../view/geom/steppath'
+import { tickLabel, yDomain } from '../view/geom/yaxis'
 
 interface Props {
   series: Series
@@ -83,20 +86,15 @@ export function TimeSeriesChart({
     // of the entire session - technically correct and useless for reading the moment.
     const inWindow = (seq: number) =>
       (winFrom == null || seq >= winFrom) && (winTo == null || seq <= winTo)
-    const pts = series.points.filter((p) => p.value !== null && inWindow(p.seq))
+    const pts = series.points.filter(hasValue).filter((p) => inWindow(p.seq))
     if (pts.length === 0) {
       return {
         path: '', area: '', yTicks: [], xTicks: [], min: 0, max: 1,
         seqMin: 0, seqMax: 1, x: noScale, y: noScale,
       }
     }
-    const values = pts.map((p) => p.value as number)
-    let lo = Math.min(...values)
-    let hi = Math.max(...values)
-    if (lo === hi) { lo -= 1; hi += 1 }
-    const span = hi - lo
-    lo -= span * 0.08
-    hi += span * 0.08
+    const values = pts.map((p) => p.value)
+    const { lo, hi } = yDomain(Math.min(...values), Math.max(...values))
 
     // The window, when one is given, overrides the series extent - that is what turns
     // this into a context view around a single moment without a second chart component.
@@ -108,19 +106,10 @@ export function TimeSeriesChart({
     const y = (v: number) =>
       PAD.top + (1 - (v - lo) / (hi - lo)) * (height - PAD.top - PAD.bottom)
 
-    let d = ''
-    let prevY: number | null = null
-    for (const p of pts) {
-      const px = x(p.seq)
-      const py = y(p.value as number)
-      if (d === '') d = `M ${px.toFixed(2)} ${py.toFixed(2)}`
-      else d += ` L ${px.toFixed(2)} ${(prevY as number).toFixed(2)} L ${px.toFixed(2)} ${py.toFixed(2)}`
-      prevY = py
-    }
-    const baseline = y(lo)
-    const a = d === '' ? '' :
-      `${d} L ${x(pts[pts.length - 1].seq).toFixed(2)} ${baseline.toFixed(2)} ` +
-      `L ${x(pts[0].seq).toFixed(2)} ${baseline.toFixed(2)} Z`
+    // Where the samples are not, the trace is not - see steppath.ts. Under a filter the
+    // points here are the ones the condition kept, and a path through them alone drew a
+    // removed stretch as a steady value that was never measured.
+    const { line: d, area: a } = stepTrace(pts, x, y, y(lo))
 
     const yt = Array.from({ length: 5 }, (_, i) => {
       const v = lo + ((hi - lo) * i) / 4
@@ -284,7 +273,7 @@ export function TimeSeriesChart({
             <line x1={PAD.left} x2={width - PAD.right} y1={t.y} y2={t.y}
                   stroke="#eeeef2" strokeDasharray="2 2" />
             <text x={PAD.left - 5} y={t.y + 3} textAnchor="end" fontSize="9" fill="#666">
-              {t.v.toFixed(Math.abs(max - min) < 5 ? 1 : 0)}
+              {tickLabel(t.v, Math.abs(max - min) < 5 ? 1 : 0)}
             </text>
           </g>
         ))}
@@ -312,9 +301,12 @@ export function TimeSeriesChart({
                 fill="#30578d" opacity={0.16} />
         )}
         {filled && area && <path d={area} fill="var(--area-fill)" opacity={0.85} />}
+        {/* Round caps so a kept sample with no neighbour - one survivor between two
+            filtered-out stretches - shows as a dot: stepTrace gives it a zero-length
+            segment, and butt caps draw nothing for those. */}
         {path && (
           <path d={path} fill="none" stroke={filled ? 'var(--area-line)' : color}
-                strokeWidth={1.2} vectorEffect="non-scaling-stroke" />
+                strokeWidth={1.2} strokeLinecap="round" vectorEffect="non-scaling-stroke" />
         )}
         {marks.map((e) => {
           const t = eventTypes?.get(e.eventType)

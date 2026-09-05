@@ -36,6 +36,10 @@ export function FieldToLabPanel({ sessionId, onGenerated }: {
 
   const { session, route, carriers, derived } = data
   const n = (v: number | null | undefined, d = 1) => (v == null ? '-' : v.toFixed(d))
+  // Whole km/h, because the rationale below is written by the server at whole km/h
+  // ("Peak 15 km/h"), and a table beside it saying 14.7 reads as a second measurement of
+  // the same drive. A one-fix-a-second GPS speed does not carry the tenth anyway.
+  const kmh = (v: number | null) => `${n(v, 0)} km/h`
 
   const generate = async () => {
     if (sessionId == null) return
@@ -60,8 +64,8 @@ export function FieldToLabPanel({ sessionId, onGenerated }: {
                 <td>{new Date(session.startedAt).toISOString().replace('T', ' ').slice(0, 19)}</td></tr>
               <tr><th>Duration</th><td>{Math.round(route.sampleCount / 60)} min</td></tr>
               <tr><th>Distance</th><td>{n(route.distanceKm, 2)} km</td></tr>
-              <tr><th>Average speed</th><td>{n(route.avgSpeedKmh)} km/h</td></tr>
-              <tr><th>Peak speed</th><td>{n(route.maxSpeedKmh)} km/h</td></tr>
+              <tr><th>Average speed</th><td>{kmh(route.avgSpeedKmh)}</td></tr>
+              <tr><th>Peak speed</th><td>{kmh(route.maxSpeedKmh)}</td></tr>
               <tr><th>Samples</th><td>{route.sampleCount}</td></tr>
             </tbody>
           </table>

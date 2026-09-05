@@ -73,7 +73,7 @@ export function CellLocatorPanel({ sessionId, estimates, onPick, minScore, onMin
               <th className="num" title="How far the estimate is from the cell reference.
                    The reference is not necessarily the right one">Off by</th>
               <th className="num" title="Strongest sample - how close the drive got, which
-                   is the ceiling on how well a centroid can place the site">Best</th>
+                   is the ceiling on how well a centroid can place the site">Best (dBm)</th>
               <th className="num">Samples</th>
               <th className="num" title="Samples within 8 dB of the best, which are the
                    ones the position is computed from">Near</th>

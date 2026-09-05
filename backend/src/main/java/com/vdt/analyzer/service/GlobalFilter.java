@@ -2,6 +2,7 @@ package com.vdt.analyzer.service;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
 
 /**
  * A filter that narrows which samples of a drive every analytic may see.
@@ -68,8 +69,32 @@ public final class GlobalFilter {
      *
      * Both key columns are NOT NULL, so the row constructor's three-valued semantics never
      * arise, and every honoured caller aliases a real table that carries session_id.
+     *
+     * This form does not check a KPI NAME against the catalogue. It has no catalogue in
+     * hand, and neither do the twenty analytics that call it - they are handed a spec the
+     * client has already put through `/global-filter/describe`, which uses the checked
+     * form below. Nothing here is registered at startup to make the check possible, because
+     * this codebase has no static registry of the kind and one rule is not worth the first.
+     * An unknown name that did reach an analytic binds as a parameter and selects nothing,
+     * so the cost is an empty result rather than a wrong one; the 400 belongs where the
+     * condition is typed.
      */
     public static Scope scope(String spec, SessionSet set, String alias) {
+        return scope(spec, set, alias, null);
+    }
+
+    /**
+     * The same, refusing a `kpi:` clause whose NAME is not one of `knownKpis`.
+     *
+     * The grammar alone accepted `kpi:NOPE:>=:0`: the operator is on the allow-list, the
+     * number parses, and the name is bound as a parameter that matches no row - so the bar
+     * read "In force: NOPE >= 0" over panels that all showed zero samples, and nothing on
+     * the screen said it was the condition, not the drive, that was empty. The match is
+     * exact, as `kpi_name = ?` is exact: `rsrp` selects nothing either.
+     *
+     * A null `knownKpis` means unchecked, which is what the three-argument form is.
+     */
+    public static Scope scope(String spec, SessionSet set, String alias, Set<String> knownKpis) {
         if (spec == null || spec.isBlank()) return null;
 
         List<String> clauses = new ArrayList<>();
@@ -101,6 +126,11 @@ public final class GlobalFilter {
                     throw new IllegalArgumentException("Unknown operator: " + op);
                 }
                 double value = Double.parseDouble(bits[2].trim());
+                // After the grammar, so a typo in the name and a typo in the operator are
+                // reported one at a time in the order a reader would fix them.
+                if (knownKpis != null && !knownKpis.contains(name)) {
+                    throw new IllegalArgumentException("Unknown KPI: " + name);
+                }
                 // The operator comes from the allow-list above and is emitted as a constant,
                 // never interpolated from the request - the same rule the expression parser
                 // and the workbench compiler follow.

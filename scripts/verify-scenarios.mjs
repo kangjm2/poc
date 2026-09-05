@@ -392,7 +392,7 @@ scenario('S5 · Coverage optimization')
     /No fronthaul counters in this session/.test(fhEmpty))
   await openWorkbook('Overview')
 
-  await page.locator('.toolbar select[aria-label="Area bins"]').selectOption('150')
+  await page.locator('.map-controls select[aria-label="Area bins"]').selectOption('150')
   await page.waitForTimeout(1800)
   const mapTitle = await page.locator('.panel > header .title').first().innerText()
   const shapes = await page.locator('.leaflet-overlay-pane path').count()
@@ -423,7 +423,7 @@ scenario('S5 · Coverage optimization')
   step('an unknown KPI is refused rather than exported as nulls',
     badKpi.status() === 400, `HTTP ${badKpi.status()}`)
 
-  await page.locator('.toolbar select[aria-label="Area bins"]').selectOption('0')
+  await page.locator('.map-controls select[aria-label="Area bins"]').selectOption('0')
   await page.waitForTimeout(900)
 }
 
@@ -1246,7 +1246,7 @@ scenario('S16 · A complaint about a place, not a time')
   await openWorkbook('Overview')
   await page.waitForSelector('.leaflet-overlay-pane path.route-run')
 
-  await page.locator('.toolbar button', { hasText: 'Ask an area' }).click()
+  await page.locator('.map-controls button', { hasText: 'Ask an area' }).click()
   await page.waitForTimeout(400)
   step('drawing mode is announced on the map',
     (await page.locator('.map.drawing').count()) > 0
@@ -2035,11 +2035,11 @@ scenario('S20 · One condition, every screen')
     (await bar.innerText()).replace(/\n/g, ' / ').slice(0, 90))
 
   // Walk the screens that fetch, so the recording covers more than one endpoint.
-  await page.locator('.toolbar select[aria-label="Area bins"]').selectOption('150')
+  await page.locator('.map-controls select[aria-label="Area bins"]').selectOption('150')
   await page.waitForTimeout(1400)
-  await page.locator('.toolbar select[aria-label="Area bins"]').selectOption('0')
+  await page.locator('.map-controls select[aria-label="Area bins"]').selectOption('0')
   await page.waitForTimeout(900)
-  await page.locator('.toolbar .group:has(label:text("Footprints")) button').click()
+  await page.locator('.map-controls .group:has(label:text("Footprints")) button').click()
   await page.waitForTimeout(1400)
   await openWorkbook('Cells')
   await page.waitForTimeout(900)
@@ -3125,7 +3125,7 @@ scenario('S25 · Four things the manual asks for before it draws')
   // have made this check pass on a route polyline count.
   await openWorkbook('Coverage Issues')
   await page.waitForTimeout(1200)
-  await page.locator('.toolbar .group:has(label:text("Footprints")) button').click()
+  await page.locator('.map-controls .group:has(label:text("Footprints")) button').click()
   await page.waitForTimeout(1800)
   const hulls = () => page.locator('path.footprint-hull').count()
   const allCells = (await apiGet(`/api/sessions/${cityA}/cell-footprints?basis=SERVING`))
@@ -3174,7 +3174,7 @@ scenario('S25 · Four things the manual asks for before it draws')
     `${lo}-${lo} -> ${single}, ${hi}- -> ${openEnded}, typo -> `
     + `"${badNote.replace(/\n/g, ' ').match(/ignored[^—]*/)?.[0]?.slice(0, 40) ?? 'no notice'}"`)
   await page.locator('input[aria-label="Footprint cells"]').fill('')
-  await page.locator('.toolbar .group:has(label:text("Footprints")) button').click()
+  await page.locator('.map-controls .group:has(label:text("Footprints")) button').click()
   await page.waitForTimeout(800)
 
   // ── UC16 p158-162. `Measurement Group 1` AND `Measurement Group 2`, each with its own
@@ -3257,11 +3257,11 @@ scenario('S26 · A control is offered only where something answers it')
   const shown = async () => {
     const out = []
     for (const [label] of GROUPS) {
-      out.push(await page.locator(`.toolbar [aria-label="${label}"]`).count() > 0)
+      out.push(await page.locator(`.map-controls [aria-label="${label}"]`).count() > 0)
     }
     return out
   }
-  const areaShown = () => page.locator('.toolbar button', { hasText: /Ask an area|Drawing/ })
+  const areaShown = () => page.locator('.map-controls button', { hasText: /Ask an area|Drawing/ })
     .count()
 
   await selectSession(CITY_A)
@@ -3269,7 +3269,7 @@ scenario('S26 · A control is offered only where something answers it')
   await page.waitForTimeout(1400)
   // Footprints has to be ON for its basis select to exist, so the group is read through a
   // control that is present whenever the group is.
-  await page.locator('.toolbar .group:has(label:text("Footprints")) button').click()
+  await page.locator('.map-controls .group:has(label:text("Footprints")) button').click()
   await page.waitForTimeout(1200)
   const onOverview = await shown()
   step('Overview offers all four of the groups its own row claims',
@@ -3764,9 +3764,9 @@ scenario('S30 · The analysis leaves the tool, saying what it is')
   //    which is where §1.5.15 says the defect actually lives.
   await selectSession(CITY_A)
   await openWorkbook('Overview')
-  await page.locator('.toolbar select[aria-label="Area bins"]').selectOption('150')
+  await page.locator('.map-controls select[aria-label="Area bins"]').selectOption('150')
   await page.waitForTimeout(1500)
-  const statSelect = page.locator('.toolbar select[aria-label="Bin statistic"]')
+  const statSelect = page.locator('.map-controls select[aria-label="Bin statistic"]')
   if (await statSelect.count() > 0) {
     await statSelect.selectOption('MINIMUM')
     await page.waitForTimeout(1500)

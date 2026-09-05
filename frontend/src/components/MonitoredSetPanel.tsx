@@ -262,8 +262,8 @@ export function MonitoredSetPage({ sessionId, set, onJump }: {
                 <th className="num">Served</th>
                 <th className="num" title="95th percentile - the peak is pinned to the
                      -55 dBm measurement ceiling wherever the route passes a site">
-                  p95</th>
-                <th className="num">Mean</th>
+                  p95 (dBm)</th>
+                <th className="num">Mean (dBm)</th>
               </tr>
             </thead>
             <tbody>
@@ -324,7 +324,7 @@ export function MonitoredSetPage({ sessionId, set, onJump }: {
             <table className="grid">
               <thead>
                 <tr><th>From</th><th className="num">Samples</th>
-                  <th className="num">Cells</th><th className="num">Best RSRP</th>
+                  <th className="num">Cells</th><th className="num">Best RSRP (dBm)</th>
                   <th>PCIs</th></tr>
               </thead>
               <tbody>

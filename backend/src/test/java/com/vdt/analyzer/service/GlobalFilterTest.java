@@ -3,8 +3,10 @@ package com.vdt.analyzer.service;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
+import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -101,6 +103,30 @@ class GlobalFilterTest {
                     () -> scope("kpi:RSRP:" + bad + ":-100"),
                     "operator '" + bad + "' should be refused");
         }
+    }
+
+    @Test
+    void aKpiTheCatalogueDoesNotKnowIsRefusedByName() {
+        // The grammar accepted `kpi:NOPE:>=:0` - the name binds as a parameter and matches
+        // no row - so the bar read "In force: NOPE >= 0" over panels all showing zero
+        // samples. With the catalogue in hand the parser must say which word is wrong.
+        Set<String> known = Set.of("RSRP", "RSRQ");
+        GlobalFilter.Scope ok = GlobalFilter.scope("kpi:RSRP:>=:-100", SessionSet.one(7L), "k", known);
+        assertEquals(List.of(7L, "RSRP", -100.0), ok.params());
+
+        IllegalArgumentException e = assertThrows(IllegalArgumentException.class,
+                () -> GlobalFilter.scope("kpi:NOPE:>=:0", SessionSet.one(7L), "k", known));
+        assertEquals("Unknown KPI: NOPE", e.getMessage());
+        // Exact, as `kpi_name = ?` is exact: a lower-case name would select nothing too.
+        assertThrows(IllegalArgumentException.class,
+                () -> GlobalFilter.scope("kpi:rsrp:>=:-100", SessionSet.one(7L), "k", known));
+        // And when it is one clause among valid ones, for the same reason nonsense is.
+        assertThrows(IllegalArgumentException.class,
+                () -> GlobalFilter.scope("cell:101;kpi:NOPE:>=:0", SessionSet.one(7L), "k", known));
+
+        // Without a catalogue the parser cannot know, and says so by not checking: the
+        // analytics call this form on a spec `describe` has already refused or passed.
+        assertNotNull(scope("kpi:NOPE:>=:0"));
     }
 
     @Test

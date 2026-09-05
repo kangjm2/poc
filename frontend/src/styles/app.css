@@ -40,6 +40,12 @@ button, select, input { font-family: inherit; font-size: inherit; color: inherit
 .app { display: flex; flex-direction: column; height: 100%; }
 
 /* ---------------------------------------------------------------- toolbar */
+/* One line that always fits. Nothing here wraps or shrinks except the two items that can
+   lose width without losing their function: the measurement name (the list still opens
+   in full) and the device summary (its full text stays in the title). Everything else is
+   a button or a link, and a clipped "Expor" is a control that cannot be found - which is
+   what a map tab used to do to Export and Delete at 1680 px before the map's own controls
+   moved to the `.map-controls` row. */
 .toolbar {
   display: flex; align-items: center; gap: 16px;
   padding: 6px 10px;
@@ -47,13 +53,28 @@ button, select, input { font-family: inherit; font-size: inherit; color: inherit
   border-bottom: 1px solid var(--border);
   flex: 0 0 auto;
 }
+.toolbar > * { flex: 0 0 auto; white-space: nowrap; }
+.toolbar .group.session { flex-shrink: 1; min-width: 0; }
+.toolbar .group.session select { flex: 1 1 auto; min-width: 120px; }
+.toolbar .summary { flex-shrink: 4; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .toolbar .brand { font-weight: 700; letter-spacing: .2px; margin-right: 4px; }
-.toolbar .group { display: flex; align-items: center; gap: 6px; }
-.toolbar label { color: var(--text-dim); }
-.toolbar select {
+.toolbar .group, .map-controls .group { display: flex; align-items: center; gap: 6px; }
+.toolbar label, .map-controls label { color: var(--text-dim); }
+.toolbar select, .map-controls select {
   padding: 3px 6px; border: 1px solid var(--border); background: #fff; border-radius: 2px;
 }
 .toolbar .spacer { flex: 1; }
+
+/* What the map is asked to show, in a row over the map rather than in the toolbar. A
+   screen with no map offers none of these (WORKBOOKS.reads), so the toolbar stays the same
+   height on every tab. This row may wrap: nothing on it is the way to a file or a delete. */
+.map-controls {
+  display: flex; align-items: center; gap: 4px 16px; flex-wrap: wrap;
+  padding: 4px 10px;
+  background: var(--toolbar);
+  border-bottom: 1px solid var(--border);
+  flex: 0 0 auto;
+}
 
 .mode-tabs { display: flex; gap: 2px; }
 .mode-tabs button {
@@ -105,7 +126,7 @@ button, select, input { font-family: inherit; font-size: inherit; color: inherit
   display: flex; flex-direction: column;
 }
 .panel > header {
-  display: flex; align-items: center; justify-content: space-between;
+  display: flex; align-items: center; justify-content: space-between; gap: 8px;
   padding: 3px 8px;
   background: var(--panel-header);
   border-bottom: 1px solid var(--border-soft);
@@ -149,6 +170,9 @@ table.grid th, table.grid td {
 }
 table.grid th { background: #f7f7fa; font-weight: 600; position: sticky; top: 0; }
 table.grid td.num { text-align: right; font-variant-numeric: tabular-nums; }
+/* A numeric column's header sits over its digits, not over the gap to their left: with
+   left-aligned headers every value on Statistics stood under the wrong name. */
+table.grid th.num { text-align: right; }
 /* Full-cell fills, matching how the reference tool flags a breached threshold. */
 td.sev-CRITICAL { background: var(--critical-bg); color: #fff; font-weight: 600; }
 td.sev-WARNING  { background: var(--warning-bg); color: #262626; }
@@ -232,7 +256,7 @@ td.sev-WARNING  { background: var(--warning-bg); color: #262626; }
 .config-card table.grid td { padding: 2px 8px; }
 .config-card ul { font-size: 11px; padding: 6px 6px 6px 22px; }
 
-.toolbar input[type="text"], .toolbar input:not([type]) {
+.toolbar input[type="text"], .toolbar input:not([type]), .map-controls input:not([type]) {
   padding: 3px 6px; border: 1px solid var(--border); border-radius: 2px;
 }
 .panel button {
@@ -288,6 +312,11 @@ td.sev-WARNING  { background: var(--warning-bg); color: #262626; }
 .globalfilter .gf-reach-list {
   flex-basis: 100%; display: flex; gap: 24px; padding: 6px 0 2px;
   border-top: 1px dashed var(--border); margin-top: 4px;
+  /* The scope line below is a 100%-basis child that exists only while a filter is in
+     force. Without wrap it shares this row with the two columns and squeezes them to
+     zero width - the whole app collapsed under the bar the first time Reach was opened
+     with a condition applied (docs/ux-audit.md S1-1). */
+  flex-wrap: wrap;
 }
 .globalfilter .gf-scope {
   flex-basis: 100%; color: #6b5310; padding-bottom: 4px;
@@ -297,6 +326,15 @@ td.sev-WARNING  { background: var(--warning-bg); color: #262626; }
 .globalfilter .gf-reach-list ul { margin: 0; padding-left: 16px; }
 .globalfilter .gf-reach-list li { color: #5a5f66; line-height: 1.5; }
 .globalfilter .gf-reach-list code { color: #24303c; }
+/* The bar's amber again, directly over the panels it is about: a screen whose numbers the
+   condition never reached says so where those numbers are read, in the same language the
+   bar used to say it is in force. */
+.filter-exempt-note {
+  flex: 0 0 auto;
+  padding: 5px 12px; font-size: 12px; line-height: 1.5; color: #6b5310;
+  background: #fff3d6; border-bottom: 1px solid #e0c477;
+}
+.filter-exempt-note code { color: #24303c; background: #f6efd8; padding: 0 3px; }
 
 .session-notes {
   padding: 4px 12px; font-size: 12px; color: #5a5f66;
@@ -543,7 +581,7 @@ kbd {
   background: transparent;
   border: 1px dashed var(--text-dim);
 }
-.toolbar .group button.on { background: #dce8f6; border-color: #7fa5cd; }
+.toolbar .group button.on, .map-controls .group button.on { background: #dce8f6; border-color: #7fa5cd; }
 
 /* Looking at one node's output without publishing a KPI to see it. */
 .node-preview { border-top: 1px solid var(--border); padding-top: 8px; margin-top: 4px; }

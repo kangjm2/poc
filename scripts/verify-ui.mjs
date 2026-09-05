@@ -488,7 +488,7 @@ await page.waitForTimeout(900)
 // Identity colouring. The witness is the SERVING CELL count from the API, not the number
 // of colours drawn - a palette bug that gave every cell the same colour would still draw
 // "some colours".
-await page.locator('.toolbar select[aria-label="Colour by"]').selectOption('pci')
+await page.locator('.map-controls select[aria-label="Colour by"]').selectOption('pci')
 await page.waitForTimeout(1800)
 const pciCensus = await strokeCensus()
 const bd = await (await page.request.get(
@@ -511,7 +511,7 @@ check('PCI 범례가 서빙 셀을 나열',
 check('정체성 색임을 명시',
   /no pass\/fail implied/.test(await page.locator('.dock.right .legend-note').first().innerText()))
 
-await page.locator('.toolbar select[aria-label="Colour by"]').selectOption('kpi')
+await page.locator('.map-controls select[aria-label="Colour by"]').selectOption('kpi')
 await page.waitForTimeout(1500)
 
 // 4. shared time cursor: moving it must change the readout AND the grid
@@ -592,14 +592,14 @@ check('네트워크(DU) 측 KPI 노출', /Network Side/.test(treeText) && /PRB u
 
 // 17. area binning replaces the raw route with tiles
 const segBefore = await page.locator('path.leaflet-interactive').count()
-await page.locator('.toolbar select[aria-label="Area bins"]').selectOption('150')
+await page.locator('.map-controls select[aria-label="Area bins"]').selectOption('150')
 await page.waitForTimeout(1600)
 const rects = await page.locator('.leaflet-overlay-pane path').count()
 const mapTitle = await page.locator('.panel > header .title').first().innerText()
 check('영역 비닝(area binning) 렌더링', /area bins/.test(mapTitle) && rects > 0,
   `${segBefore} segments -> ${rects} shapes, title="${mapTitle}"`)
 await page.screenshot({ path: `${OUT}/09-area-bins.png` })
-await page.locator('.toolbar select[aria-label="Area bins"]').selectOption('0')
+await page.locator('.map-controls select[aria-label="Area bins"]').selectOption('0')
 await page.waitForTimeout(900)
 
 // 18. coverage issue detection
@@ -1037,7 +1037,7 @@ await page.waitForTimeout(1200)
 await page.locator('.tree .kpi', { hasText: 'RSRP (NR SpCell)' }).click()
 await page.waitForTimeout(1800)
 
-await page.selectOption('.toolbar .group:has(label:text-is("Distance bins")) select', '100')
+await page.selectOption('.map-controls .group:has(label:text-is("Distance bins")) select', '100')
 await page.waitForTimeout(2000)
 const distBars = await page.locator('.panel:has(.title:text-matches("Distance profile")) svg rect')
   .count()
@@ -1053,7 +1053,7 @@ check('거리 축이 실제 주행거리와 일치',
   Math.abs(profileKm - f2l.route.distanceKm) < 0.15,
   `profile ${profileKm} km vs route ${f2l.route.distanceKm.toFixed(2)} km`)
 
-await page.selectOption('.toolbar .group:has(label:text-is("Distance bins")) select', '0')
+await page.selectOption('.map-controls .group:has(label:text-is("Distance bins")) select', '0')
 await page.waitForTimeout(800)
 check('거리 비닝을 끄면 패널이 사라짐',
   await page.locator('.panel:has(.title:text-matches("Distance profile"))').count() === 0)
@@ -1062,14 +1062,14 @@ check('거리 비닝을 끄면 패널이 사라짐',
 // mean with nothing on screen saying so. Switching to the minimum must repaint AND the
 // header must say which - a switch that changed the colours while the caption still read
 // "[Average]" would be the same defect the P0 round removed six times.
-await page.locator('.toolbar select[aria-label="Area bins"]').selectOption('150')
+await page.locator('.map-controls select[aria-label="Area bins"]').selectOption('150')
 await page.waitForTimeout(2500)
 const tileColours = () => page.locator('.leaflet-overlay-pane path[fill-opacity="0.65"]')
   .evaluateAll((ps) => ps.map((p) => (p.getAttribute('fill') ?? '').toLowerCase()).join(','))
 const binTitle = () => page.locator('.map-panel header .title').innerText()
 const avgColours = await tileColours()
 const avgTitle = await binTitle()
-await page.locator('.toolbar select[aria-label="Bin statistic"]').selectOption('MINIMUM')
+await page.locator('.map-controls select[aria-label="Bin statistic"]').selectOption('MINIMUM')
 await page.waitForTimeout(2500)
 const minColours = await tileColours()
 const minTitle = await binTitle()
@@ -1079,11 +1079,11 @@ check('타일을 칠하는 통계를 고를 수 있음',
 check('그리고 화면이 어느 통계인지 말함',
   /\[Average\]/.test(avgTitle) && /\[Minimum\]/.test(minTitle),
   `"${avgTitle.trim()}"`)
-await page.locator('.toolbar select[aria-label="Bin statistic"]').selectOption('AVERAGE')
-await page.locator('.toolbar select[aria-label="Area bins"]').selectOption('0')
+await page.locator('.map-controls select[aria-label="Bin statistic"]').selectOption('AVERAGE')
+await page.locator('.map-controls select[aria-label="Area bins"]').selectOption('0')
 await page.waitForTimeout(1500)
 
-await page.locator('.toolbar .group:has(label:text-is("Footprints")) button').click()
+await page.locator('.map-controls .group:has(label:text-is("Footprints")) button').click()
 await page.waitForTimeout(2500)
 const polys = await page.locator('.leaflet-overlay-pane path[fill-opacity="0.1"]').count()
 check('셀 커버리지 폴리곤', polys >= 3, `${polys} polygons`)
@@ -1099,15 +1099,15 @@ const hullArea = () => page.locator('.leaflet-overlay-pane path[fill-opacity="0.
     const b = p.getBBox(); return sum + b.width * b.height
   }, 0))
 const servingArea = await hullArea()
-await page.locator('.toolbar select[aria-label="Footprint basis"]').selectOption('TOP3')
+await page.locator('.map-controls select[aria-label="Footprint basis"]').selectOption('TOP3')
 await page.waitForTimeout(2500)
 const topArea = await hullArea()
 check('세 번째로 강했던 곳까지 포함하면 푸트프린트가 넓어짐',
   servingArea > 0 && topArea > servingArea * 1.05,
   `serving ${servingArea.toFixed(0)} -> top3 ${topArea.toFixed(0)}`)
-await page.locator('.toolbar select[aria-label="Footprint basis"]').selectOption('SERVING')
+await page.locator('.map-controls select[aria-label="Footprint basis"]').selectOption('SERVING')
 await page.waitForTimeout(2000)
-await page.locator('.toolbar .group:has(label:text-is("Footprints")) button').click()
+await page.locator('.map-controls .group:has(label:text-is("Footprints")) button').click()
 await page.waitForTimeout(1200)
 check('푸트프린트를 끄면 폴리곤이 사라짐',
   await page.locator('.leaflet-overlay-pane path[fill-opacity="0.1"]').count() === 0)

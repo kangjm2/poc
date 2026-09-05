@@ -10,6 +10,7 @@ import com.vdt.analyzer.service.AnalysisService;
 import com.vdt.analyzer.service.CohortService;
 import com.vdt.analyzer.service.EventTypeCatalog;
 import com.vdt.analyzer.service.FieldToLabService;
+import com.vdt.analyzer.service.KpiCatalog;
 import com.vdt.analyzer.service.SpatialDiffService;
 import com.vdt.analyzer.service.MonitoredSetService;
 import com.vdt.analyzer.service.ProblemSurvey;
@@ -33,13 +34,14 @@ public class AnalysisController {
     private final AreaStatsService areaStats;
     private final SpatialDiffService spatialDiff;
     private final CohortService cohorts;
+    private final KpiCatalog catalog;
 
     public AnalysisController(AnalysisService analysis, CellRefRepo cells,
                               MessageRepo messages,
                               ProblemSurvey problems, FieldToLabService fieldToLab,
                               MonitoredSetService monitored, EventTypeCatalog eventTypes,
                               AreaStatsService areaStats, SpatialDiffService spatialDiff,
-                              CohortService cohorts) {
+                              CohortService cohorts, KpiCatalog catalog) {
         this.analysis = analysis;
         this.cells = cells;
         this.messages = messages;
@@ -50,6 +52,7 @@ public class AnalysisController {
         this.areaStats = areaStats;
         this.spatialDiff = spatialDiff;
         this.cohorts = cohorts;
+        this.catalog = catalog;
     }
 
     /**
@@ -71,13 +74,16 @@ public class AnalysisController {
      * The client could format the phrase itself, and then two implementations of "what
      * this filter says" would exist and one of them would be the wrong one. It also gives
      * the filter bar a real validation: the same parser that runs the queries decides
-     * whether the typed condition is a condition at all.
+     * whether the typed condition is a condition at all - and, here only, whether the KPI
+     * it names exists. The analytics do not ask; see `GlobalFilter.scope` for why this is
+     * the one place that can.
      */
     @GetMapping("/global-filter/describe")
     public Map<String, Object> describeFilter(@RequestParam(required = false) String filter) {
         // Parsed against a session id that is never used, purely to reach the same
         // validation the analytics reach - a spec that parses here parses there.
-        com.vdt.analyzer.service.GlobalFilter.scope(filter, 0L, "s");
+        com.vdt.analyzer.service.GlobalFilter.scope(filter,
+                com.vdt.analyzer.service.SessionSet.one(0L), "s", catalog.names());
         String text = com.vdt.analyzer.service.GlobalFilter.describe(filter);
         return Map.of("active", text != null, "text", text == null ? "" : text,
                 "scope", com.vdt.analyzer.service.GlobalFilter.PER_MEASUREMENT);
