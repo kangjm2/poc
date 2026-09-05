@@ -17,9 +17,11 @@
  *   S9  Colour scale personalisation (edit the bins -> every view repaints -> reset)
  *   S10 Unconfigured KPI            (auto scale: readable, stable under filtering, honest)
  *   S11 Lossless import             (unknown columns become KPIs, analysable straight away)
+ *   S31 Workbook export             (the arrangement leaves as a document, saying its condition)
  *
  * Scale beyond the seed is covered separately by scripts/load-test.sh.
  */
+import { readFileSync } from 'node:fs'
 import { chromium } from 'playwright'
 import { chromiumPath } from '../tools/uxtest/browser.mjs'
 
@@ -3817,6 +3819,99 @@ scenario('S30 · The analysis leaves the tool, saying what it is')
 
   await page.goto(BASE, { waitUntil: 'domcontentloaded' })
   await page.waitForTimeout(2500)
+}
+
+// ─── S31 · The workbook itself leaves the tool ───────────────────────────────
+//
+// p223, `Exporting workbooks`: the reference exports the arrangement a user composed, as a
+// document and as one picture per page. Every other export in this application is a table
+// the SERVER writes, so this is the first artifact built in the browser - which is exactly
+// why it needs a journey rather than a unit check. The question is not "does a file come
+// out" but "does the file say the same thing the screen was saying", and the sharpest form
+// of that is the CONDITION: a document of a filtered drive that does not name its filter
+// reads as a document of the whole drive, and nothing in it looks wrong.
+scenario('S31 · The workbook itself leaves the tool')
+{
+  const sid = sessions.find((x) => x.name === CITY_A).id
+  const spec = 'kpi:RSRQ:>=:-12'
+  // The server's own words for the condition. The document must print THESE, not a
+  // sentence of its own: there are already three places that phrase a filter and
+  // /global-filter/describe exists so a fourth cannot appear.
+  const said = await apiGet(`/api/global-filter/describe?filter=${encodeURIComponent(spec)}`)
+
+  const book = await (await page.request.post(`${API}/api/workbooks`, {
+    data: {
+      id: null,
+      name: 'S31 export book',
+      panes: [{ kind: 'CHART', title: null, layers: [{ kpiName: 'RSRP', visible: true }] }],
+    },
+    headers: { 'content-type': 'application/json' },
+  })).json()
+
+  await page.goto(BASE, { waitUntil: 'domcontentloaded' })
+  await page.waitForSelector('.statusbar', { timeout: 20000 })
+  await page.waitForTimeout(2500)
+  await page.locator('.toolbar select[aria-label="Measurement"]').selectOption(String(sid))
+  await page.waitForTimeout(2000)
+  await page.locator('#gf-spec').fill(spec)
+  await page.locator('.globalfilter button', { hasText: 'Apply' }).click()
+  await page.waitForTimeout(2500)
+  await openWorkbook('S31 export book')
+  await page.waitForTimeout(2500)
+
+  const [dl] = await Promise.all([
+    page.waitForEvent('download'),
+    page.locator('.workbook-export button', { hasText: 'Export document' }).click(),
+  ])
+  const html = readFileSync(await dl.path(), 'utf8')
+
+  step('the document exists and is the workbook that was open',
+    html.includes('# workbook: S31 export book') && /<section class="wb-pane"/.test(html),
+    `${(html.match(/<section class="wb-pane"/g) || []).length} pane(s), ${html.length} bytes`)
+
+  // Verbatim, both strings. A document that formatted 'RSRQ >= -12' itself would look
+  // identical to a reader and be the fourth author of one sentence.
+  step("the condition is the SERVER's sentence, character for character",
+    said.text.length > 0 && html.includes(`# condition: ${said.text}`)
+    && html.includes(said.scope),
+    `server said "${said.text}" / "${said.scope}"`)
+
+  // And on the pane, not only above it. A pane dragged into a deck is a row pasted into a
+  // sheet: the preamble does not travel with it, which is the whole of ExportScope's
+  // argument applied to a picture.
+  const sections = [...html.matchAll(/<section class="wb-pane"[^>]*>([\s\S]*?)<\/section>/g)]
+    .map((m) => m[1])
+  // Escaped, because the pane's caption is document TEXT and the condition contains '>'.
+  // The first version compared the raw sentence and went red on healthy code - the
+  // preamble passed only because it sits inside a comment, which is a difference between
+  // the two places, not a difference in what they say.
+  const saidHtml = said.text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+  step('every pane repeats the condition, because a preamble does not travel with one',
+    sections.length > 0 && sections.every((sec) => sec.includes(saidHtml)),
+    `${sections.filter((sec) => sec.includes(saidHtml)).length}/${sections.length} panes`)
+
+  // The filtered drive really is a different drive. Without this the two steps above would
+  // pass on a document that printed the right sentence over the whole drive's data - the
+  // shape of defect this repository has already shipped once, in /distance-bins.
+  const all = await apiGet(`/api/sessions/${sid}/series?kpis=RSRP&maxPoints=2000`)
+  const kept = await apiGet(
+    `/api/sessions/${sid}/series?kpis=RSRP&maxPoints=2000&filter=${encodeURIComponent(spec)}`)
+  // Counted out of the trace's own `d`, not out of the file. `(html.match(/L /g))` was the
+  // first version and it counted two more than it should: the phrase 'HTML with' in the
+  // format line contains an 'L ' and the line appears twice. Measuring the container
+  // instead of the contents, which is §1.5.6 in a new costume.
+  const traceD = /<path class="trace" d="([^"]*)"/.exec(html)?.[1] ?? ''
+  const drawn = (traceD.match(/L /g) || []).length + (traceD.startsWith('M') ? 1 : 0)
+  const keptWithValue = kept[0].points.filter((p) => p.value != null).length
+  step('and the picture is of the narrowed drive, not of the whole one',
+    kept[0].points.length < all[0].points.length && drawn === keptWithValue,
+    `${all[0].points.length} recorded, ${kept[0].points.length} under the condition`
+    + ` (${keptWithValue} with a reading), ${drawn} points drawn`)
+
+  await page.request.delete(`${API}/api/workbooks/${book.id}`)
+  await page.locator('.globalfilter button', { hasText: 'Clear' }).click().catch(() => {})
+  await page.goto(BASE, { waitUntil: 'domcontentloaded' })
+  await page.waitForTimeout(2000)
 }
 
 const appErrors = errors.filter((e) =>

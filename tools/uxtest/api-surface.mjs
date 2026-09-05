@@ -224,10 +224,48 @@ try {
   renderedNote = `could not probe the running UI: ${e.message}`
 }
 
+// ------------------------------------------- 4. the geometry modules stay importable
+//
+// `verify-ui` proves the exported document is the same arithmetic as the screen by
+// importing view/geom in Node and comparing what it returns against what the browser drew.
+// That only works while those modules stay free of the DOM and while their runtime imports
+// carry an explicit extension - Node's type stripping resolves neither `document` nor a
+// bare '../paint'. Both are one-line mistakes to make and neither announces itself: the
+// import throws inside a try, and a check that could not load is a check that is not
+// there. So the conditions the check DEPENDS on are asserted here, where they are static.
+//
+// The third rule is the tripwire in the other direction: if the pane's geometry is ever
+// pasted back into the component, the export becomes a second plotter and every comparison
+// above starts comparing a copy with itself.
+// Scoped to the modules a checker can actually import, which is not all of view/doc:
+// `build.ts` fetches and `project.ts` and `tokens.ts` are browser-only by design - Leaflet
+// and getComputedStyle - and saying so here is the point. The other three are pure string
+// functions and belong on this list whether or not a check imports them today, because the
+// day one does, the constraint has to already hold.
+const NODE_IMPORTABLE = /\/view\/geom\/|\/view\/doc\/(workbookdoc|scope|naming)\.ts$/
+const geomFiles = srcFiles.filter((f) => NODE_IMPORTABLE.test(f))
+const domInGeom = geomFiles
+  .filter((f) => /\b(document\.|window\.|getComputedStyle)/.test(read(f)))
+  .map((f) => f.replace(/^.*\/frontend\//, 'frontend/'))
+const extensionlessImports = geomFiles.flatMap((f) => {
+  const text = read(f)
+  // `import type` is erased before Node sees it, so only runtime imports are constrained.
+  return [...text.matchAll(/^import\s+(?!type\b)[^\n]*?from\s+'(\.[^']*)'/gm)]
+    .filter((m) => !/\.(ts|tsx|js|json)$/.test(m[1]))
+    .map((m) => `${f.replace(/^.*\/frontend\//, 'frontend/')} -> ${m[1]}`)
+})
+const composedText = read(srcFiles.find((f) => f.endsWith('ComposedWorkbook.tsx')))
+const relocalised = [
+  ...(/\bPAD_[A-Z]/.test(composedText) ? ['a PAD_ constant'] : []),
+  ...(/Math\.min\(\.\.\.pts/.test(composedText) ? ['a per-trace min/max'] : []),
+  ...(/=>\s*`\$\{i === 0 \? 'M' : 'L'\}/.test(composedText) ? ["a path 'd' builder"] : []),
+]
+
 // ---------------------------------------------------------------- report
 const problems =
   unreachedEndpoints.length + unusedClientMethods.length + kpiGaps.length
   + (probeFailed ? 1 : 0) + unread.length + unaudited.length
+  + domInGeom.length + extensionlessImports.length + relocalised.length
 
 console.log('API surface coverage')
 console.log(`  endpoints declared:      ${mappings.length}`)
@@ -235,6 +273,9 @@ console.log(`  client methods declared: ${clientMethods.length}`)
 console.log(`  global-filter coverage:  ${analyticPaths.length} session analytics,`
             + ` ${analyticPaths.length - unaudited.length} named in GlobalFilter.coverage()`)
 console.log(`  KPI reachability:        ${renderedNote}`)
+console.log(`  geometry modules:        ${geomFiles.length} a checker may import in Node,`
+            + ` ${domInGeom.length} touching the DOM,`
+            + ` ${extensionlessImports.length} import(s) Node cannot resolve`)
 if (unreachedEndpoints.length) {
   console.log('\n  endpoints no client method calls:')
   for (const e of unreachedEndpoints) console.log(`    ${e.method} ${e.path}`)
@@ -260,6 +301,19 @@ if (unread.length) {
   console.log('\n  mapping annotations this script could not read'
               + ' - the endpoint surface below is incomplete:')
   for (const u of unread) console.log(`    ${u}`)
+}
+if (domInGeom.length) {
+  console.log('\n  view/geom must stay DOM-free - a checker imports it in Node:')
+  for (const f of domInGeom) console.log(`    ${f}`)
+}
+if (extensionlessImports.length) {
+  console.log('\n  runtime imports Node cannot resolve without an extension:')
+  for (const f of extensionlessImports) console.log(`    ${f}`)
+}
+if (relocalised.length) {
+  console.log('\n  pane geometry has moved back into ComposedWorkbook.tsx,'
+              + ' so the export is now a second plotter:')
+  for (const f of relocalised) console.log(`    ${f}`)
 }
 if (probeFailed) console.log('\n  the KPI reachability probe did not run: 2 of 3 checks ran')
 console.log(`\n${problems === 0 ? 'no gaps' : `${problems} gap(s)`}`)

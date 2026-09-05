@@ -1,9 +1,10 @@
 import { Fragment, useEffect, useState } from 'react'
 import { api } from '../api/client'
 import { RouteMap } from './RouteMap'
-import { SERIES_PALETTE } from '../view/paint'
+import { composeChartPane, paneTraceColor, seqAtFraction } from '../view/geom/panegeom'
+import { WorkbookExport } from './WorkbookExport'
 import type {
-  CellRef, KpiDefinition, Series, SeriesPoint, SessionSummary, TrackPoint, Workbook,
+  CellRef, KpiDefinition, Series, SessionSummary, TrackPoint, Workbook,
   WorkbookLimits, WorkbookPane,
 } from '../api/types'
 
@@ -22,15 +23,6 @@ import type {
  * trace without forgetting it - so flicking a comparison series on and off costs a tick,
  * not a re-add.
  */
-
-/**
- * Trace colours, distinct at a glance and stable per layer position.
- *
- * Read from `view/paint` rather than declared here since the cohort strip and the CDF
- * overlay paint ordered series too: three copies of one list would have drifted the first
- * time somebody added a ninth colour to whichever one they were looking at.
- */
-const TRACE = SERIES_PALETTE
 
 function LayersDock({ pane, defs, sessions, maxLayers, onChange, onRemove }: {
   pane: WorkbookPane
@@ -84,7 +76,10 @@ function LayersDock({ pane, defs, sessions, maxLayers, onChange, onRemove }: {
                      })} />
               <span style={{
                 width: 9, height: 9, borderRadius: 2, flex: '0 0 auto',
-                background: pane.kind === 'CHART' ? TRACE[i % TRACE.length] : '#999',
+                // The same call the chart makes, so the dock's swatch and the trace it
+                // stands for cannot be two opinions about which colour this layer is.
+                background: pane.kind === 'CHART'
+                  ? paneTraceColor(pane.layers, l.kpiName) : '#999',
                 opacity: l.visible ? 1 : 0.25,
               }} />
               <span style={{ flex: 1, opacity: l.visible ? 1 : 0.5 }}>
@@ -301,6 +296,22 @@ export function ComposedWorkbook({
               {busy ? 'Saving…' : 'Save'}
             </button>
             <button onClick={remove} disabled={busy}>Delete workbook</button>
+            {/* Built from the DRAFT, so what leaves is what is on the screen - including
+                edits not yet saved, which the file says of itself rather than refusing. */}
+            <WorkbookExport paneCount={draft.panes.length}
+                            build={() => ({
+                              workbook: draft,
+                              dirty,
+                              sessionId,
+                              sessions,
+                              defs,
+                              series,
+                              tracks,
+                              trackKey,
+                              cursorSeq,
+                              filterSpec,
+                              generatedAt: new Date().toISOString(),
+                            })} />
           </span>
         </header>
         {error && <div className="error">{error}</div>}
@@ -368,8 +379,7 @@ export function ComposedWorkbook({
                     defs.find((d) => d.name === l.kpiName)?.displayName ?? l.kpiName).join(' · ')}
                   series={visible.map((l) => ({
                     s: series.find((x) => x.kpi === l.kpiName),
-                    color: TRACE[pane.layers.findIndex((p) => p.kpiName === l.kpiName)
-                                 % TRACE.length],
+                    color: paneTraceColor(pane.layers, l.kpiName),
                     key: l.kpiName,
                   })).filter((x) => x.s)}
                   cursorSeq={cursorSeq} onCursorChange={onCursorChange} />
@@ -393,10 +403,11 @@ export function ComposedWorkbook({
  * case: the user put these traces together precisely to compare them, so they share an axis
  * and are told apart by colour rather than by being in different boxes.
  *
- * Each trace is normalised to the pane's shared axis by its own min/max. That is the honest
- * way to put RSRP in dBm beside a percentage - the alternative is a second axis, which
- * invites reading a crossing point as meaningful when it is an artefact of two scales. The
- * axis therefore shows no numbers, and each layer's real range is printed in the legend.
+ * Nothing here computes. Every number and every printed string comes from
+ * `composeChartPane`, and this function turns that object into SVG elements - because the
+ * document export turns the SAME object into SVG text, and a pane that plotted itself here
+ * would be plotted a second time there. See view/geom/panegeom.ts for why that matters
+ * more than the few lines it costs.
  */
 function MultiSeriesChart({ title, series, cursorSeq, onCursorChange }: {
   title: string
@@ -404,13 +415,11 @@ function MultiSeriesChart({ title, series, cursorSeq, onCursorChange }: {
   cursorSeq: number
   onCursorChange: (seq: number) => void
 }) {
-  const W = 1000, H = 200, PAD_R = 8, PAD_T = 10, PAD_B = 18
-  // A null value means the KPI had no reading at that sample. Dropped rather than drawn:
-  // plotting it as zero would put a fabricated dip in the trace.
-  const withData = series
-    .map((x) => ({ ...x, pts: (x.s?.points ?? []).filter(hasValue) }))
-    .filter((x) => x.s && x.pts.length > 0)
-  if (withData.length === 0) {
+  const geom = composeChartPane({
+    traces: series.map((x) => ({ key: x.key, color: x.color, series: x.s })),
+    cursorSeq,
+  })
+  if (geom.empty) {
     return (
       <div className="panel">
         <header><span className="title">{title}</span></header>
@@ -418,84 +427,61 @@ function MultiSeriesChart({ title, series, cursorSeq, onCursorChange }: {
       </div>
     )
   }
-  // With one trace the pane can carry a real axis, because there is only one unit on it.
-  // With several there is no honest shared axis - RSRP in dBm beside a percentage - so each
-  // is normalised to its own range and the axis carries no numbers at all. A second y axis
-  // was the alternative and is worse: it invites reading a crossing point as meaningful
-  // when it is an artefact of two scales chosen independently.
-  const single = withData.length === 1
-  const soleLo = single ? Math.min(...withData[0].pts.map((p) => p.value)) : 0
-  const soleHi = single ? Math.max(...withData[0].pts.map((p) => p.value)) : 0
-
-  const maxSeq = Math.max(...withData.map((x) => x.pts[x.pts.length - 1].seq))
-  // Room for tick labels only when there is an axis worth labelling.
-  const PAD_L = single ? 44 : 8
-  const x = (seq: number) => PAD_L + (seq / Math.max(1, maxSeq)) * (W - PAD_L - PAD_R)
+  const { frame } = geom
 
   return (
     <div className="panel">
       <header>
         <span className="title">{title}</span>
         <span className="meta" style={{ marginLeft: 'auto' }}>
-          {single ? `single layer — ${withData[0].s!.unit || 'true'} scale`
-                  : `${withData.length} layers — each normalised to its own range`}
+          {geom.single ? `single layer — ${geom.traces[0].unit || 'true'} scale`
+                       : `${geom.traces.length} layers — each normalised to its own range`}
         </span>
       </header>
-      <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none"
+      <svg viewBox={`0 0 ${frame.w} ${frame.h}`} preserveAspectRatio="none"
            style={{ width: '100%', height: 200, display: 'block', cursor: 'crosshair' }}
            role="img" aria-label={`Composed pane: ${title}`}
            onClick={(e) => {
-             const r = (e.target as SVGElement).ownerSVGElement!.getBoundingClientRect()
-             const frac = (e.clientX - r.left) / r.width
-             onCursorChange(Math.round(Math.max(0, Math.min(1, frac)) * maxSeq))
+             // currentTarget, not target. The handler is on the <svg>, but the CLICK lands
+             // on whatever is under the pointer - and when that is the svg itself,
+             // `ownerSVGElement` is null and this threw. Clicking a bare part of a
+             // composed pane has always crashed the handler; nothing exercised it until an
+             // export check had to put the cursor somewhere exact.
+             const r = e.currentTarget.getBoundingClientRect()
+             // Through the geometry's own inverse. Mapping the click across the full width
+             // ignored the left pad the plot is inset by, which put the cursor about 4.6%
+             // of the drive away from the point clicked on a single-layer pane.
+             onCursorChange(seqAtFraction(geom, (e.clientX - r.left) / r.width))
            }}>
-        {single && [soleHi, (soleHi + soleLo) / 2, soleLo].map((v, i) => {
-          const yy = PAD_T + (1 - (v - soleLo) / Math.max(1e-9, soleHi - soleLo))
-                     * (H - PAD_T - PAD_B)
-          return (
-            <g key={i}>
-              <line x1={PAD_L} x2={W - PAD_R} y1={yy} y2={yy} stroke="#ececf0"
-                    vectorEffect="non-scaling-stroke" />
-              <text x={PAD_L - 5} y={yy + 3} textAnchor="end" fontSize="9" fill="#666"
-                    style={{ fontVariantNumeric: 'tabular-nums' }}>
-                {v.toFixed(1)}
-              </text>
-            </g>
-          )
-        })}
-        {withData.map(({ pts, color, key }) => {
-          const lo = Math.min(...pts.map((p) => p.value))
-          const hi = Math.max(...pts.map((p) => p.value))
-          const span = Math.max(1e-9, hi - lo)
-          const y = (v: number) => PAD_T + (1 - (v - lo) / span) * (H - PAD_T - PAD_B)
-          const d = pts.map((p, i) => `${i === 0 ? 'M' : 'L'} ${x(p.seq)} ${y(p.value)}`).join(' ')
-          return <path key={key} d={d} fill="none" stroke={color} strokeWidth={1.2}
-                       vectorEffect="non-scaling-stroke" />
-        })}
-        <line x1={x(cursorSeq)} x2={x(cursorSeq)} y1={0} y2={H}
+        {/* What the axis is, for a reader who cannot see it - and for a check, which is
+            how the pane's normalisation stopped being unassertable. */}
+        <desc>{geom.axisDesc}</desc>
+        {geom.ticks.map((t, i) => (
+          <g key={i}>
+            <line x1={frame.padL} x2={frame.w - frame.padR} y1={t.y} y2={t.y} stroke="#ececf0"
+                  vectorEffect="non-scaling-stroke" />
+            <text x={frame.padL - 5} y={t.y + 3} textAnchor="end" fontSize="9" fill="#666"
+                  style={{ fontVariantNumeric: 'tabular-nums' }}>
+              {t.label}
+            </text>
+          </g>
+        ))}
+        {geom.traces.map((t) => (
+          <path key={t.key} className="trace" d={t.d} fill="none" stroke={t.color}
+                strokeWidth={1.2} vectorEffect="non-scaling-stroke" />
+        ))}
+        <line x1={geom.cursorX} x2={geom.cursorX} y1={0} y2={frame.h}
               stroke="var(--cursor)" strokeWidth={1} vectorEffect="non-scaling-stroke" />
       </svg>
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, padding: '4px 10px 8px' }}>
-        {withData.map(({ s, pts, color, key }) => {
-          const lo = Math.min(...pts.map((p) => p.value))
-          const hi = Math.max(...pts.map((p) => p.value))
-          const at = pts.find((p) => p.seq >= cursorSeq) ?? pts[pts.length - 1]
-          return (
-            <span key={key} style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-              <span style={{ width: 10, height: 3, background: color }} />
-              <b>{s!.displayName}</b>
-              <span style={{ color: '#666' }}>
-                {at.value.toFixed(1)}{s!.unit ? ` ${s!.unit}` : ''}
-                {' '}(range {lo.toFixed(1)}…{hi.toFixed(1)})
-              </span>
-            </span>
-          )
-        })}
+        {geom.traces.map((t) => (
+          <span key={t.key} style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+            <span style={{ width: 10, height: 3, background: t.color }} />
+            <b>{t.displayName}</b>
+            <span style={{ color: '#666' }}>{t.atText} ({t.rangeText})</span>
+          </span>
+        ))}
       </div>
     </div>
   )
 }
-
-/** A sample that actually carries a reading. */
-type Reading = SeriesPoint & { value: number }
-function hasValue(p: SeriesPoint): p is Reading { return p.value != null }

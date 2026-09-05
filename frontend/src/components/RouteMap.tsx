@@ -7,7 +7,9 @@ import type {
   CellEstimate, ServingLine,
 } from '../api/types'
 import type { ColorBy } from '../view/paint'
-import { buildPciColors, paint } from '../view/paint'
+import {
+  breakClass, breakColor, breakDash, composeRuns,
+} from '../view/geom/routeruns'
 
 interface Props {
   track: TrackPoint[]
@@ -344,106 +346,42 @@ export function RouteMap({
     if (!map || !layer || track.length === 0) return
     layer.clearLayers()
 
-    // A rejected fix must not frame the map either. Leaving it in fitBounds squashes the
-    // entire real drive into a few pixels so the outlier can stay on screen - the map
-    // ends up unreadable in order to show the one position we have already decided not
-    // to believe. Excluding it here is the same judgement the distance query makes.
-    const believable = track.filter((p) => p.breakBefore !== 2)
-    const frame = (believable.length > 1 ? believable : track)
-      .map((p) => [p.latitude, p.longitude] as [number, number])
+    // Where the runs and the breaks ARE is view/geom/routeruns.ts, not here. This effect
+    // owns only the Leaflet calls: what a run is, where it ends, which step is a break and
+    // which points may frame the map are arithmetic, and arithmetic that lives inside a
+    // drawing effect cannot be read by anything else - including the export that has to
+    // put this same route in a document.
+    const { runs, breaks, frame } = composeRuns(track, { colorBy, isolate, kpiName })
 
     if (bins && bins.length > 0) {
       fitOnce(map, frame)
       return
     }
 
-    // Group consecutive same-colour samples into one polyline per run.
-    //
-    // Drawing a polyline per segment creates a layer, an SVG node and a tooltip for
-    // every sample: on an eight-hour drive that is thousands of objects and the map
-    // takes tens of seconds to appear. The colour only changes where the KPI crosses
-    // a bin boundary, so a run is the natural unit and there are usually a few dozen.
-    //
-    // A run also ends at a discontinuity. Carrying a coloured line across one would
-    // state that we measured ground we have nothing from (a gap) or that the vehicle
-    // went somewhere it did not (a bad fix) - the map's only two ways of asserting
-    // something false. The server classifies these; see RouteContinuity.
-    // Painted once here, so the run boundaries and the drawn colour cannot disagree.
-    // Under 'pci' this makes every handover a run boundary, which is the whole point of
-    // that mode: the boundary IS the finding.
-    const rule = { colorBy, isolate, pciColors: buildPciColors(track) }
-    const painted = track.map((p) => paint(p, rule))
-
-    let runStart = 0
-    for (let i = 1; i <= track.length; i++) {
-      const broken = i < track.length && track[i].breakBefore > 0
-      const endOfRun = i === track.length || broken
-        || painted[i].color !== painted[runStart].color
-      if (!endOfRun) continue
-
-      const head = track[runStart]
-      const ink = painted[runStart]
-      // Extend one sample past the run so adjacent runs join without a visible gap -
-      // but never across a break, which is the one place the gap is the point.
-      const end = broken ? i - 1 : Math.min(i, track.length - 1)
-      const coords = track.slice(runStart, end + 1)
-        .map((p) => [p.latitude, p.longitude] as [number, number])
-
-      if (coords.length > 1) {
-        L.polyline(coords, {
-          // Classed, not identified by stroke width. Cell markers and the cursor are
-          // circleMarkers drawn at width 3, which is also the width a muted run uses, so
-          // a width-based selector counts map furniture as route.
-          className: 'route-run',
-          color: ink.color, weight: ink.weight,
-          opacity: ink.emphasised ? 0.95 : 0.5,
-          lineCap: 'butt', lineJoin: 'round',
-        })
-          .on('click', () => onCursorChange(head.seq))
-          .bindTooltip(
-            `${new Date(head.ts).toISOString().slice(11, 19)}<br/>${kpiName}: ${head.value ?? '-'}`
-            + `<br/>${head.binLabel}`
-            + (colorBy === 'pci' ? `<br/>serving PCI ${head.servingPci ?? '-'}` : '')
-            + `<br/>${coords.length} samples`,
-            { sticky: true },
-          )
-          .addTo(layer)
-      }
-      runStart = i
+    for (const run of runs) {
+      L.polyline(run.coords, {
+        // Classed, not identified by stroke width. Cell markers and the cursor are
+        // circleMarkers drawn at width 3, which is also the width a muted run uses, so
+        // a width-based selector counts map furniture as route.
+        className: 'route-run',
+        color: run.color, weight: run.weight,
+        opacity: run.emphasised ? 0.95 : 0.5,
+        lineCap: 'butt', lineJoin: 'round',
+      })
+        .on('click', () => onCursorChange(run.headSeq))
+        .bindTooltip(run.tooltipLines.join('<br/>'), { sticky: true })
+        .addTo(layer)
     }
 
-    // Then draw the breaks themselves. Omitting them entirely would leave the route
-    // looking as though it simply ended and resumed elsewhere, which is a different
-    // false impression. A thin dashed line says "the vehicle went this way and we have
-    // nothing from it" - visibly not a measurement, and it cannot be mistaken for one
-    // because it carries no bin colour and its own tooltip says so.
-    for (let i = 1; i < track.length; i++) {
-      const kind = track[i].breakBefore
-      if (!kind) continue
-      const a = track[i - 1]
-      const b = track[i]
-      const seconds = Math.round(
-        (new Date(b.ts).getTime() - new Date(a.ts).getTime()) / 1000,
-      )
-      const gap = kind === 1
-      L.polyline(
-        [[a.latitude, a.longitude], [b.latitude, b.longitude]],
-        {
-          className: gap ? 'route-gap' : 'route-glitch',
-          color: gap ? '#8a8a95' : '#b00020',
-          weight: 2,
-          opacity: 0.85,
-          dashArray: gap ? '5 7' : '3 5',
-        },
-      )
-        .bindTooltip(
-          gap
-            ? `No measurement<br/>${seconds}s with no position fix`
-                + `<br/>seq ${a.seq} \u2192 ${b.seq}`
-            : `Implausible position fix<br/>excluded from distance travelled`
-                + `<br/>seq ${a.seq} \u2192 ${b.seq}`,
-          { sticky: true },
-        )
+    for (const br of breaks) {
+      L.polyline(br.coords, {
+        className: breakClass(br.kind),
+        color: breakColor(br.kind),
+        weight: 2,
+        opacity: 0.85,
+        dashArray: breakDash(br.kind),
+      })
+        .bindTooltip(br.tooltipLines.join('<br/>'), { sticky: true })
         .addTo(layer)
     }
 

@@ -64,4 +64,112 @@ export const DEFECTS = [
     find: `      {dist.bins.map((b) => (`,
     replace: `      {dist.bins.slice(0, dist.bins[9999].count).map((b) => (`,
   },
+
+  // ── the workbook export (2026-09-05). Each of these produces a file that OPENS, has a
+  //    header, has panes, and is wrong in a way no reader could detect from the file.
+  {
+    id: 'D7-pane-width-drifts',
+    kind: 'two-callers-one-module',
+    describes: 'The screen asks the geometry module for a 900-unit pane while the document '
+      + 'asks for the default 1000, so every x differs and both pictures look right.',
+    file: 'frontend/src/components/ComposedWorkbook.tsx',
+    find: `    traces: series.map((x) => ({ key: x.key, color: x.color, series: x.s })),
+    cursorSeq,
+  })`,
+    replace: `    traces: series.map((x) => ({ key: x.key, color: x.color, series: x.s })),
+    cursorSeq,
+    w: 900,
+  })`,
+  },
+  {
+    id: 'D8-doc-exports-hidden-layers',
+    kind: 'logic-without-view',
+    describes: 'The document draws every layer on a pane instead of the visible ones, so a '
+      + 'trace the user unticked reappears in the file.',
+    file: 'frontend/src/view/doc/build.ts',
+    find: `      traces: visible.map((l) => ({`,
+    replace: `      traces: pane.layers.map((l) => ({`,
+  },
+  {
+    id: 'D9-doc-drops-last-pane',
+    kind: 'silent-truncation',
+    describes: 'The document omits the last pane. The file is complete-looking and every '
+      + '"more than zero" assertion still passes.',
+    file: 'frontend/src/view/doc/build.ts',
+    find: `  const panes: DocPane[] = workbook.panes.map((pane) => {`,
+    replace: `  const panes: DocPane[] = workbook.panes.slice(0, -1).map((pane) => {`,
+  },
+  {
+    id: 'D10-doc-tokens-unresolved',
+    kind: 'invisible-loss',
+    describes: 'The exported SVG keeps var(--cursor) with no :root to resolve it, so every '
+      + 'pane opens with correct traces and no time cursor at all.',
+    file: 'frontend/src/view/doc/build.ts',
+    find: `    tokens: resolvedTokens(),`,
+    replace: `    tokens: {},`,
+  },
+  {
+    id: 'D11-pane-svg-no-xmlns',
+    kind: 'plausible-empty-file',
+    describes: 'The per-pane picture loses its namespace, so the file downloads at the '
+      + 'right size and renders as nothing.',
+    file: 'frontend/src/view/doc/workbookdoc.ts',
+    find: `    \`<svg xmlns="http://www.w3.org/2000/svg" width="\${w}" height="\${h}"\`,`,
+    replace: `    \`<svg width="\${w}" height="\${h}"\`,`,
+  },
+  {
+    id: 'D12-doc-preamble-only',
+    kind: 'provenance-loss',
+    describes: 'Provenance is written above the document but not on each pane, so a pane '
+      + 'pasted into a deck carries no measurement and no condition.',
+    file: 'frontend/src/view/doc/workbookdoc.ts',
+    find: `      \`<figcaption>measurement: \${esc(pane.measurement)}\``,
+    replace: `      \`<figcaption>\${esc('')}\``,
+  },
+  {
+    id: 'D13-doc-writes-own-condition',
+    kind: 'rule-in-two-places',
+    describes: 'The document phrases the global filter itself instead of printing the '
+      + "server's sentence, becoming the fourth author of one rule.",
+    file: 'frontend/src/view/doc/build.ts',
+    find: `      condition = d.text || 'none'`,
+    replace: `      condition = filterSpec.replace(/^kpi:/, '').replace(/:/g, ' ')`,
+  },
+  {
+    id: 'D14-doc-claims-saved',
+    kind: 'false-provenance',
+    describes: 'The document says it matches the stored workbook whether or not it does, so '
+      + 'a picture of unsaved edits presents itself as the saved arrangement.',
+    file: 'frontend/src/view/doc/build.ts',
+    find: `    .file('saved', dirty`,
+    replace: `    .file('saved', false`,
+  },
+  {
+    id: 'D15-map-facts-dropped',
+    kind: 'invisible-loss',
+    describes: 'The map page keeps its picture and loses the run table, so every time, '
+      + 'value, bin and sample count the hover carried is gone with nothing to show it.',
+    file: 'frontend/src/view/doc/workbookdoc.ts',
+    find: `    if (pane.form.runs.length === 0) return ''`,
+    replace: `    if (pane.form.runs.length >= 0) return ''`,
+  },
+  {
+    id: 'D16-document-name-without-id',
+    kind: 'silent-overwrite',
+    describes: 'The document is named from the workbook name alone. Every workbook is '
+      + "created as 'New workbook', so the second download replaces the first.",
+    file: 'frontend/src/view/doc/naming.ts',
+    find: `  return \`\${book}-\${id}-\${drive}.\${ext}\``,
+    replace: `  return \`\${book}-\${drive}.\${ext}\``,
+  },
+  {
+    id: 'D17-pane-cursor-full-width',
+    kind: 'inverse-of-nothing',
+    describes: 'The click handler maps across the full pane width again, ignoring the left '
+      + 'pad the plot is inset by - the cursor lands where the trace is not.',
+    file: 'frontend/src/components/ComposedWorkbook.tsx',
+    find: `             onCursorChange(seqAtFraction(geom, (e.clientX - r.left) / r.width))`,
+    replace: `             onCursorChange(Math.round(Math.max(0, Math.min(1,
+               (e.clientX - r.left) / r.width)) * geom.maxSeq))`,
+  },
 ]
