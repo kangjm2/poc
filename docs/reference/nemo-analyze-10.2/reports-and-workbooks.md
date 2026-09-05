@@ -154,4 +154,5 @@ beforehand in Nemo Analyze"* — 원시 Ec/N0 수만 행을 Excel로 보내 평�
 | `{?identifier?}` 입력 변수, `MapFilter` | 없음 | 리포트 파라미터화 |
 | `Create separate map for each parameter value` | 없음 | 셀별 · 채널별 지도 격자 |
 | 워크북 `Create Copy for Measurement`, 레이아웃 프리셋, 공유 경로 | 서버 저장 워크북 | 복사해 고치기 · 프리셋(브리프 ④ 남은 일) |
+| **`File | Workbook to File`(PDF·Word·PowerPoint)** · **`File | Page Image to clipboard | Workbook images to file`**(페이지별 이미지) · `Export ratio`(% 또는 640×480) | **2026-09-05**: 워크북 헤더의 `Export document`(인쇄용 HTML 한 장, 브라우저 인쇄로 PDF)와 `pane N`(페인별 SVG) | **세 오피스 포맷 자체** · **`Export ratio`와 페이지 `Fixed size`** — 우리 그림은 페인 종류마다 고정 치수(차트 1000×200, 지도 1000×560)이고 고르는 자리가 없습니다 · **페이지 단위**(우리 워크북에 페이지가 없어 페인으로 냄) |
 | 해상도 1920×1080 제약 | 없음 | — |
