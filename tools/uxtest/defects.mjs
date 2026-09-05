@@ -104,9 +104,9 @@ export const DEFECTS = [
     kind: 'invisible-loss',
     describes: 'The exported SVG keeps var(--cursor) with no :root to resolve it, so every '
       + 'pane opens with correct traces and no time cursor at all.',
-    file: 'frontend/src/view/doc/build.ts',
-    find: `    tokens: resolvedTokens(),`,
-    replace: `    tokens: {},`,
+    file: 'frontend/src/view/doc/tokens.ts',
+    find: `  if (typeof document === 'undefined') return out`,
+    replace: `  return out`,
   },
   {
     id: 'D11-pane-svg-no-xmlns',

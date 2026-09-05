@@ -1113,6 +1113,19 @@ check('푸트프린트를 끄면 폴리곤이 사라짐',
   await page.locator('.leaflet-overlay-pane path[fill-opacity="0.1"]').count() === 0)
 
 // ------------------------------------------------------- composed workbooks
+//
+// Cleared FIRST, not only at the end. The cleanup at the bottom of this block runs only if
+// the block finishes, so one crashed run left three workbooks called 'UI check workbook'
+// behind and every following run failed '구성한 워크북이 새로고침을 견딤' - a check about
+// persistence going red because of the run before it. Worse than a false red: the tab
+// selector then matched three buttons and the checks after it drove whichever one Playwright
+// picked. A suite whose colour depends on how the last run ended is not reporting on the code.
+for (const b of await (await page.request.get(`${API_BASE}/api/workbooks`)).json()) {
+  await page.request.delete(`${API_BASE}/api/workbooks/${b.id}`)
+}
+await page.reload({ waitUntil: 'domcontentloaded' })
+await page.waitForTimeout(2500)
+
 const tabsBefore = await page.locator('.workbook-tabs button').count()
 await page.locator('.workbook-tabs button', { hasText: /^\+$/ }).click()
 await page.waitForTimeout(2000)
@@ -1341,20 +1354,26 @@ const parts = docParts(doc.text)
 // Exact counts, both sides. '>0' would pass on a document that dropped a pane, which is
 // the defect a well-formed file hides best.
 const panesOnScreen = await page.locator('.dock-section:has(h3:text-is("Layers"))').count()
+// Indexed defensively, because a document that DROPPED a pane is exactly the defect this
+// check is aimed at - and `parts.runs[1].length` on a one-section file throws rather than
+// returning false. A thrown check aborts the whole run, and the run then reports zero
+// failures, which reads precisely like green. Measured: injecting the dropped pane made
+// this script exit mid-way with no FAIL line at all.
+const at = (rows, i) => rows[i] ?? (typeof rows[0] === 'number' ? -1 : [])
 check('문서가 화면의 페인 수와 트레이스를 그대로 실음',
   parts.sections.length === panesOnScreen
-  && parts.traces[0].length === 1 && parts.runs[1].length > 0,
+  && at(parts.traces, 0).length === 1 && at(parts.runs, 1).length > 0,
   `${parts.sections.length} sections vs ${panesOnScreen} panes,`
-  + ` ${parts.traces[0].length} trace, ${parts.runs[1].length} route runs`)
+  + ` ${at(parts.traces, 0).length} trace, ${at(parts.runs, 1).length} route runs`)
 
 // The document's trace must be the SCREEN's trace, not a redraw that happens to look the
 // same. Same string, or the document is a second plotter.
 const screenDs = await page.locator('svg[aria-label^="Composed pane"] path.trace')
   .evaluateAll((ps) => ps.map((x) => x.getAttribute('d')))
 check('문서의 트레이스가 화면의 트레이스와 문자까지 같음',
-  parts.traces[0].length === screenDs.length
-  && parts.traces[0].every((d, i) => d === screenDs[i]),
-  `${parts.traces[0].length} in file, ${screenDs.length} on screen`)
+  at(parts.traces, 0).length === screenDs.length
+  && at(parts.traces, 0).every((d, i) => d === screenDs[i]),
+  `${at(parts.traces, 0).length} in file, ${screenDs.length} on screen`)
 
 // A hidden layer is absent from the picture AND named as absent. Both halves: counts alone
 // pass on a file that leaked one and dropped another, and a colour ban alone passes on a
@@ -1422,16 +1441,16 @@ check('페인 그림이 홀로 열리는 SVG',
   `parsed=${svgFacts.parsed} ns=${!!svgFacts.ns} ${svgFacts.w}x${svgFacts.h}`
   + ` title=${svgFacts.hasTitle}`)
 check('페인 그림과 문서 속 그림이 같은 기하',
-  svgFacts.traces.length === parts.traces[0].length
-  && svgFacts.traces.every((d, i) => d === parts.traces[0][i]),
-  `${svgFacts.traces.length} in the .svg, ${parts.traces[0].length} in the document`)
+  svgFacts.traces.length === at(parts.traces, 0).length
+  && svgFacts.traces.every((d, i) => d === at(parts.traces, 0)[i]),
+  `${svgFacts.traces.length} in the .svg, ${at(parts.traces, 0).length} in the document`)
 
 // The map picture drops every hover, and the hover is the only place a run's time, value,
 // bin and sample count are ever stated. A table row per run is what keeps them.
 const domRuns = await page.locator('.leaflet-overlay-pane path.route-run').count()
 check('지도 그림이 사실을 조용히 삼키지 않음',
-  parts.factsRows[1] === parts.runs[1].length && parts.factsRows[1] > 0,
-  `${parts.factsRows[1]} table rows, ${parts.runs[1].length} runs in the file,`
+  at(parts.factsRows, 1) === at(parts.runs, 1).length && at(parts.factsRows, 1) > 0,
+  `${at(parts.factsRows, 1)} table rows, ${at(parts.runs, 1).length} runs in the file,`
   + ` ${domRuns} on screen`)
 
 // The filename carries the workbook id, and the measurement's slug is the SERVER's slug -
