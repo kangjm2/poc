@@ -23,6 +23,7 @@ VDT 장비·소프트웨어 자체는 별도 저장소에서 개발되었으며,
 | [`docs/requirements-analysis.md`](docs/requirements-analysis.md) | 기능 인벤토리(FR-xx), 추가 기능(NEW-xx), 화면 명세, 데이터 모델, 검증 기준 |
 | [`docs/assets/MANIFEST.md`](docs/assets/MANIFEST.md) | 참고 자료 출처·취득 방법 |
 | [`docs/architecture-and-scale.md`](docs/architecture-and-scale.md) | 데이터 수집, 가상 채널 + 실제 DU 시나리오, 대용량 처리 설계와 측정 결과 |
+| [`docs/ux-audit.md`](docs/ux-audit.md) | **UI/UX 동작 점검.** 실행 중인 툴을 세 사용자 시나리오로 조작해 찾은 결함을 심각도순으로, 원인(파일:줄)과 수정 규모까지 |
 | [`docs/ui-ux-backlog.md`](docs/ui-ux-backlog.md) | **UI/UX 백로그.** 격차 중 화면에 닿는 것만, 코드 대조로 확인하고 세 사용자 관점의 독립 순위로 순서를 매긴 실행 계획 |
 | [`docs/gap-analysis.md`](docs/gap-analysis.md) | Keysight 매뉴얼 및 경쟁 솔루션(VIAVI 등) 대비 기능 격차와 우선순위 |
 | [`docs/verification.md`](docs/verification.md) | 검증 기록 |
